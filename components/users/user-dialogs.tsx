@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Loader2Icon, SaveIcon, UserPlusIcon } from "lucide-react"
+import { Loader2Icon, SaveIcon, UserPlusIcon, EyeIcon, EyeOffIcon } from "lucide-react"
 
 import {
   createInternalUser,
@@ -128,6 +128,56 @@ function UsernameWithDomainInput({
   )
 }
 
+/** Input de contraseña con botón para mostrar/ocultar. */
+function PasswordInput({
+  id,
+  name,
+  placeholder,
+  value,
+  onChange,
+  required = false,
+  disabled = false,
+  autoComplete = "new-password",
+}: {
+  id: string
+  name: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  required?: boolean
+  disabled?: boolean
+  autoComplete?: string
+}) {
+  const [show, setShow] = useState(false)
+
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        name={name}
+        type={show ? "text" : "password"}
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        disabled={disabled}
+        className="pr-10"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="absolute right-0 top-0 h-full"
+        onClick={() => setShow(!show)}
+        aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+      >
+        {show ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+      </Button>
+    </div>
+  )
+}
+
 /** Separa el nombre guardado en nombre de pila y apellido (conserva mayúsculas). */
 function splitDisplayName(name: string): { first: string; surname: string } {
   const trimmed = name.trim()
@@ -191,6 +241,8 @@ export function CreateUserDialog({
     onClose()
     router.refresh()
   })
+
+  const [password, setPassword] = useState("")
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -268,13 +320,12 @@ export function CreateUserDialog({
 
             <Field>
               <FieldLabel htmlFor="new-password">Contraseña inicial</FieldLabel>
-              <Input
+              <PasswordInput
                 id="new-password"
                 name="password"
-                type="text"
-                autoComplete="new-password"
-                minLength={8}
                 placeholder="Letras y números, mínimo 8"
+                value={password}
+                onChange={setPassword}
                 required
               />
             </Field>
@@ -331,6 +382,7 @@ export function EditUserDialog({
   const [surname, setSurname] = useState(initialName.surname)
   const [roles, setRoles] = useState<RoleCode[]>(user.roles)
   const [active, setActive] = useState(user.isActive)
+  const [password, setPassword] = useState("")
   const { pending, error, run } = useActionForm(() => {
     onClose()
     router.refresh()
@@ -388,31 +440,17 @@ export function EditUserDialog({
                 />
               </Field>
             </div>
-            <Field>
-              <FieldLabel htmlFor="edit-username">ID</FieldLabel>
-              <Input
-                id="edit-username"
-                value={user.username ?? ""}
-                readOnly
-                disabled
-                className="font-mono"
-              />
-              <FieldDescription>
-                El ID se genera automáticamente y no se puede modificar.
-              </FieldDescription>
-            </Field>
 
             <Field>
               <FieldLabel htmlFor="edit-password">
                 Nueva contraseña (opcional)
               </FieldLabel>
-              <Input
+              <PasswordInput
                 id="edit-password"
                 name="password"
-                type="text"
-                autoComplete="new-password"
-                minLength={8}
                 placeholder="Déjalo vacío para conservarla"
+                value={password}
+                onChange={setPassword}
               />
             </Field>
 
