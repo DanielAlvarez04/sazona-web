@@ -180,3 +180,15 @@ export async function deleteEquivalence(
     INVENTORY_PATHS
   )
 }
+
+/** Importa ingredientes desde CSV. */
+export async function importIngredientsFromCsv(
+  csv: string
+): Promise<ActionResult> {
+  return mutateApi(
+    "/inventory/ingredients/import-csv",
+    "POST",
+    { csv },
+    INVENTORY_PATHS
+  )
+}

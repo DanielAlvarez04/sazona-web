@@ -154,7 +154,7 @@ export function BulkIngredientsSheet({
         </SheetHeader>
 
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4">
-          <div className="hidden gap-2 pb-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_8rem_7rem_7rem_2rem]">
+          <div className="grid gap-2 pb-1 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_8rem_7rem_7rem_2rem]">
             <span>Nombre</span>
             <span>Unidad</span>
             <span>Stock inicial</span>

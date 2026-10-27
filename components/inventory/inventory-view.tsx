@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import {
   ArrowLeftRightIcon,
+  FileTextIcon,
   ListPlusIcon,
   Loader2Icon,
   PackageIcon,
@@ -17,6 +18,7 @@ import { deactivateIngredient, getEquivalences } from "@/app/(app)/inventory/act
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog"
 import { BulkIngredientsSheet } from "@/components/inventory/bulk-ingredients-sheet"
 import { EquivalencesDialog } from "@/components/inventory/equivalences-dialog"
+import { ImportCsvSheet } from "@/components/inventory/import-csv-sheet"
 import { IngredientDialog } from "@/components/inventory/ingredient-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -75,6 +77,7 @@ export function InventoryView({
   const [status, setStatus] = useState(STATUS_ALL)
   const [creating, setCreating] = useState(false)
   const [bulkCreating, setBulkCreating] = useState(false)
+  const [importingCsv, setImportingCsv] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
   const [adjusting, setAdjusting] = useState<Ingredient | null>(null)
   const [equivalences, setEquivalences] = useState<{
@@ -157,6 +160,10 @@ export function InventoryView({
 
         {canManage ? (
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setImportingCsv(true)}>
+              <FileTextIcon />
+              Importar CSV
+            </Button>
             <Button variant="outline" onClick={() => setBulkCreating(true)}>
               <ListPlusIcon />
               Añadir varios
@@ -517,6 +524,15 @@ export function InventoryView({
 
       {canManage ? (
         <>
+          {importingCsv ? (
+            <ImportCsvSheet
+              open
+              onOpenChange={(open) => {
+                if (!open) setImportingCsv(false)
+              }}
+            />
+          ) : null}
+
           {bulkCreating ? (
             <BulkIngredientsSheet
               open
