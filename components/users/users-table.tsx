@@ -15,9 +15,12 @@ import {
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  PencilIcon,
   SearchIcon,
   Trash2Icon,
+  UserCheckIcon,
   UserPlusIcon,
+  UserXIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -39,6 +42,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuGroupLabel,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -476,18 +488,66 @@ export function UsersTable({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      <FlexRender cell={cell} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const user = row.original
+                const isSelf = user.id === currentUserId
+                const pending = pendingIds.includes(user.id)
+
+                return (
+                  <ContextMenu key={row.id}>
+                    <ContextMenuTrigger>
+                      <TableRow
+                        data-state={row.getIsSelected() ? "selected" : undefined}
+                        className="data-[open]:bg-accent"
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            <FlexRender cell={cell} />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent align="end" className="w-48">
+                      <ContextMenuGroup>
+                        <ContextMenuGroupLabel>Acciones</ContextMenuGroupLabel>
+                        <ContextMenuItem
+                          onClick={() => handleEdit(user)}
+                          disabled={pending}
+                        >
+                          <PencilIcon />
+                          Editar
+                        </ContextMenuItem>
+                        {user.isActive ? (
+                          <ContextMenuItem
+                            onClick={() => handleToggleActive(user)}
+                            disabled={isSelf || pending}
+                          >
+                            <UserXIcon />
+                            Desactivar
+                          </ContextMenuItem>
+                        ) : (
+                          <ContextMenuItem
+                            onClick={() => handleToggleActive(user)}
+                            disabled={pending}
+                          >
+                            <UserCheckIcon />
+                            Activar
+                          </ContextMenuItem>
+                        )}
+                      </ContextMenuGroup>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        variant="destructive"
+                        onClick={() => handleRequestDelete([user])}
+                        disabled={isSelf || pending}
+                      >
+                        <Trash2Icon />
+                        Eliminar
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell
