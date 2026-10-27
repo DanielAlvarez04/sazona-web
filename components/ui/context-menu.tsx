@@ -26,6 +26,18 @@ function ContextMenuTrigger({
         e.preventDefault()
         ;(props.onContextMenu as ((e: React.MouseEvent) => void) | undefined)?.(e)
       },
+      onTouchStart: (e: React.TouchEvent) => {
+        ;(props.onTouchStart as ((e: React.TouchEvent) => void) | undefined)?.(e)
+      },
+      onTouchMove: (e: React.TouchEvent) => {
+        ;(props.onTouchMove as ((e: React.TouchEvent) => void) | undefined)?.(e)
+      },
+      onTouchEnd: (e: React.TouchEvent) => {
+        ;(props.onTouchEnd as ((e: React.TouchEvent) => void) | undefined)?.(e)
+      },
+      onTouchCancel: (e: React.TouchEvent) => {
+        ;(props.onTouchCancel as ((e: React.TouchEvent) => void) | undefined)?.(e)
+      },
     }
 
     return React.cloneElement(child, mergedProps as React.HTMLAttributes<HTMLElement>)
