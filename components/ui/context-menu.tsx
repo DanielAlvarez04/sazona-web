@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu"
-import { Slot } from "@/components/ui/slot"
 import { cn } from "cn"
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
@@ -18,11 +17,18 @@ function ContextMenuTrigger({
   children?: React.ReactNode
 }) {
   if (asChild) {
-    return (
-      <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props}>
-        <Slot>{children}</Slot>
-      </ContextMenuPrimitive.Trigger>
-    )
+    const child = React.Children.only(children) as React.ReactElement
+
+    const mergedProps: Record<string, unknown> = {
+      ...(child.props as Record<string, unknown>),
+      ...props,
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault()
+        ;(props.onContextMenu as ((e: React.MouseEvent) => void) | undefined)?.(e)
+      },
+    }
+
+    return React.cloneElement(child, mergedProps as React.HTMLAttributes<HTMLElement>)
   }
 
   return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props}>{children}</ContextMenuPrimitive.Trigger>
