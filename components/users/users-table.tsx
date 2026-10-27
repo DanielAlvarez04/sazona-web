@@ -495,7 +495,7 @@ export function UsersTable({
 
                 return (
                   <ContextMenu key={row.id}>
-                    <ContextMenuTrigger>
+                    <ContextMenuTrigger asChild>
                       <TableRow
                         data-state={row.getIsSelected() ? "selected" : undefined}
                         className="data-[open]:bg-accent"

@@ -8,7 +8,23 @@ function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />
 }
 
-function ContextMenuTrigger({ ...props }: ContextMenuPrimitive.Trigger.Props) {
+function ContextMenuTrigger({
+  asChild,
+  children,
+  ...props
+}: ContextMenuPrimitive.Trigger.Props & {
+  asChild?: boolean
+  children?: React.ReactNode
+}) {
+  if (asChild) {
+    const child = React.Children.only(children) as React.ReactElement
+    const { ref, ...restProps } = props
+    return React.cloneElement(child, {
+      ...(child.props as Record<string, unknown>),
+      ...restProps,
+    })
+  }
+
   return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />
 }
 
