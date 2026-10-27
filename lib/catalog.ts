@@ -204,13 +204,36 @@ export interface ProductDetail extends ProductListItem {
 export interface Ingredient {
   id: string
   name: string
+  sku: string | null
   baseUnit: UnitCode
   currentStock: string
   minStock: string
+  maxStock: string | null
+  unitCost: string | null
   isActive: boolean
   isLowStock: boolean
   deficit: string
+  category: { id: string; name: string; isCore: boolean } | null
+  location: { id: string; name: string; isCore: boolean } | null
   _count?: { recipeIngredients: number }
+}
+
+export interface IngredientCategory {
+  id: string
+  name: string
+  description: string | null
+  isCore: boolean
+  isActive: boolean
+  sortOrder: number
+}
+
+export interface IngredientLocation {
+  id: string
+  name: string
+  description: string | null
+  isCore: boolean
+  isActive: boolean
+  sortOrder: number
 }
 
 export interface StockAlert {

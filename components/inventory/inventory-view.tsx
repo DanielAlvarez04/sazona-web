@@ -1,7 +1,5 @@
-"use client"
-
 import { useRouter } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
   ArrowLeftRightIcon,
   FileTextIcon,
@@ -14,7 +12,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 
-import { deactivateIngredient, getEquivalences } from "@/app/(app)/inventory/actions"
+import { deactivateIngredient, getEquivalences, listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog"
 import { BulkIngredientsSheet } from "@/components/inventory/bulk-ingredients-sheet"
 import { EquivalencesDialog } from "@/components/inventory/equivalences-dialog"
@@ -53,6 +51,8 @@ import {
   unitLabel,
   type Equivalence,
   type Ingredient,
+  type IngredientCategory,
+  type IngredientLocation,
   type InventoryMovement,
   type StockAlert,
 } from "@/lib/catalog"
@@ -90,7 +90,30 @@ export function InventoryView({
   const [equivalencesError, setEquivalencesError] = useState<string | null>(
     null
   )
+  const [categories, setCategories] = useState<IngredientCategory[]>([])
+  const [locations, setLocations] = useState<IngredientLocation[]>([])
   const rowForm = useActionForm(() => router.refresh())
+
+  // Cargar categorías y ubicaciones al montar
+  useEffect(() => {
+    async function loadCategoriesAndLocations() {
+      try {
+        const [catsResult, locsResult] = await Promise.all([
+          listIngredientCategories(),
+          listIngredientLocations(),
+        ])
+        if (catsResult.ok && catsResult.data) {
+          setCategories(catsResult.data)
+        }
+        if (locsResult.ok && locsResult.data) {
+          setLocations(locsResult.data)
+        }
+      } catch {
+        // Silencioso - si falla, los selects simplemente estarán vacíos
+      }
+    }
+    loadCategoriesAndLocations()
+  }, [])
 
   async function openEquivalences(ingredient: Ingredient) {
     setEquivalencesError(null)
@@ -549,6 +572,8 @@ export function InventoryView({
                 if (!open) setCreating(false)
               }}
               ingredient={null}
+              categories={categories}
+              locations={locations}
             />
           ) : null}
 
@@ -559,6 +584,8 @@ export function InventoryView({
                 if (!open) setEditing(null)
               }}
               ingredient={editing}
+              categories={categories}
+              locations={locations}
             />
           ) : null}
 

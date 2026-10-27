@@ -30,7 +30,12 @@ export async function createIngredient(
     "POST",
     {
       name: text(formData, "name"),
+      sku: text(formData, "sku"),
       baseUnit: text(formData, "baseUnit") as UnitCode,
+      categoryId: text(formData, "categoryId"),
+      locationId: text(formData, "locationId"),
+      unitCost: numeric(formData, "unitCost"),
+      maxStock: numeric(formData, "maxStock"),
       currentStock: numeric(formData, "currentStock") ?? 0,
       minStock: numeric(formData, "minStock") ?? 0,
     },
@@ -40,7 +45,12 @@ export async function createIngredient(
 
 export interface BulkIngredientInput {
   name: string
+  sku?: string
   baseUnit: UnitCode
+  categoryId?: string
+  locationId?: string
+  unitCost?: number
+  maxStock?: number
   currentStock: number
   minStock: number
 }
@@ -66,7 +76,12 @@ export async function updateIngredient(
     "PATCH",
     {
       name: text(formData, "name"),
+      sku: text(formData, "sku"),
       baseUnit: text(formData, "baseUnit") as UnitCode,
+      categoryId: text(formData, "categoryId"),
+      locationId: text(formData, "locationId"),
+      unitCost: numeric(formData, "unitCost"),
+      maxStock: numeric(formData, "maxStock"),
       minStock: numeric(formData, "minStock"),
       isActive: formData.get("isActive") === "on",
     },
@@ -191,4 +206,56 @@ export async function importIngredientsFromCsv(
     { csv },
     INVENTORY_PATHS
   )
+}
+
+/** Lista categorías de ingredientes de la organización. */
+export async function listIngredientCategories(): Promise<
+  ActionResult<Array<{ id: string; name: string; description: string | null; isCore: boolean; isActive: boolean; sortOrder: number }>>
+> {
+  await requireUser()
+  try {
+    const response = await apiFetch("/inventory/ingredient-categories")
+    const text = await response.text()
+    let payload: unknown = null
+    try {
+      payload = text ? JSON.parse(text) : null
+    } catch {
+      payload = null
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: "No se pudieron cargar las categorías de ingredientes",
+      }
+    }
+    return { ok: true, data: payload as Array<{ id: string; name: string; description: string | null; isCore: boolean; isActive: boolean; sortOrder: number }> }
+  } catch {
+    return { ok: false, message: "No se pudo contactar con la API" }
+  }
+}
+
+/** Lista ubicaciones de ingredientes de la organización. */
+export async function listIngredientLocations(): Promise<
+  ActionResult<Array<{ id: string; name: string; description: string | null; isCore: boolean; isActive: boolean; sortOrder: number }>>
+> {
+  await requireUser()
+  try {
+    const response = await apiFetch("/inventory/ingredient-locations")
+    const text = await response.text()
+    let payload: unknown = null
+    try {
+      payload = text ? JSON.parse(text) : null
+    } catch {
+      payload = null
+    }
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: "No se pudieron cargar las ubicaciones de ingredientes",
+      }
+    }
+    return { ok: true, data: payload as Array<{ id: string; name: string; description: string | null; isCore: boolean; isActive: boolean; sortOrder: number }> }
+  } catch {
+    return { ok: false, message: "No se pudo contactar con la API" }
+  }
 }

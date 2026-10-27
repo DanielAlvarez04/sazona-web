@@ -29,7 +29,12 @@ import { UNIT_SELECT_ITEMS, type UnitCode } from "@/lib/catalog"
 interface BulkRow {
   key: string
   name: string
+  sku: string
   baseUnit: UnitCode
+  categoryId: string
+  locationId: string
+  unitCost: string
+  maxStock: string
   currentStock: string
   minStock: string
 }
@@ -41,7 +46,12 @@ function emptyRow(): BulkRow {
   return {
     key: `row-${rowCounter}`,
     name: "",
+    sku: "",
     baseUnit: "UNIT",
+    categoryId: "",
+    locationId: "",
+    unitCost: "",
+    maxStock: "",
     currentStock: "",
     minStock: "",
   }
@@ -154,9 +164,14 @@ export function BulkIngredientsSheet({
         </SheetHeader>
 
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4">
-          <div className="grid gap-2 pb-1 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_8rem_7rem_7rem_2rem]">
+          <div className="grid gap-2 pb-1 text-xs font-medium text-muted-foreground sm:grid-cols-[1fr_6rem_6rem_6rem_6rem_6rem_6rem_7rem_7rem_2rem]">
             <span>Nombre</span>
+            <span>SKU</span>
             <span>Unidad</span>
+            <span>Categoría</span>
+            <span>Ubicación</span>
+            <span>Costo unit.</span>
+            <span>Máx.</span>
             <span>Stock inicial</span>
             <span>Mínimo</span>
             <span className="sr-only">Acciones</span>
@@ -165,7 +180,7 @@ export function BulkIngredientsSheet({
           {rows.map((row, index) => (
             <div
               key={row.key}
-              className="grid gap-2 rounded-lg border p-2 sm:grid-cols-[1fr_8rem_7rem_7rem_2rem] sm:items-center sm:border-0 sm:p-0"
+              className="grid gap-2 rounded-lg border p-2 sm:grid-cols-[1fr_6rem_6rem_6rem_6rem_6rem_6rem_7rem_7rem_2rem] sm:items-center sm:border-0 sm:p-0"
             >
               <Input
                 value={row.name}
@@ -175,6 +190,16 @@ export function BulkIngredientsSheet({
                 placeholder={`Ingrediente ${index + 1}`}
                 maxLength={120}
                 aria-label={`Nombre del ingrediente ${index + 1}`}
+              />
+
+              <Input
+                value={row.sku}
+                onChange={(event) =>
+                  updateRow(row.key, { sku: event.target.value })
+                }
+                placeholder="SKU"
+                maxLength={60}
+                aria-label={`SKU del ingrediente ${index + 1}`}
               />
 
               <Select
@@ -194,6 +219,68 @@ export function BulkIngredientsSheet({
                   <UnitOptions />
                 </SelectContent>
               </Select>
+
+              <Select
+                value={row.categoryId}
+                onValueChange={(value) =>
+                  updateRow(row.key, { categoryId: value ?? "" })
+                }
+                items={[
+                  { value: "", label: "Sin categoría" },
+                  ...UNIT_SELECT_ITEMS, // Placeholder - will need actual categories
+                ]}
+              >
+                <SelectTrigger className="w-full" aria-label={`Categoría del ingrediente ${index + 1}`}>
+                  <SelectValue placeholder="Categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <option value="">Sin categoría</option>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={row.locationId}
+                onValueChange={(value) =>
+                  updateRow(row.key, { locationId: value ?? "" })
+                }
+                items={[
+                  { value: "", label: "Sin ubicación" },
+                  ...UNIT_SELECT_ITEMS, // Placeholder - will need actual locations
+                ]}
+              >
+                <SelectTrigger className="w-full" aria-label={`Ubicación del ingrediente ${index + 1}`}>
+                  <SelectValue placeholder="Ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  <option value="">Sin ubicación</option>
+                </SelectContent>
+              </Select>
+
+              <Input
+                value={row.unitCost}
+                onChange={(event) =>
+                  updateRow(row.key, { unitCost: event.target.value })
+                }
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                inputMode="decimal"
+                aria-label={`Costo unitario del ingrediente ${index + 1}`}
+              />
+
+              <Input
+                value={row.maxStock}
+                onChange={(event) =>
+                  updateRow(row.key, { maxStock: event.target.value })
+                }
+                type="number"
+                min="0"
+                step="0.0001"
+                inputMode="decimal"
+                placeholder="0"
+                aria-label={`Stock máximo del ingrediente ${index + 1}`}
+              />
 
               <Input
                 value={row.currentStock}

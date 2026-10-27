@@ -18,21 +18,23 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 
-const CSV_EXAMPLE = `nombre,unidad,stockInicial,stockMinimo
-Tomate,KG,10,2
-Cebolla,KG,5,1
-Lechuga,UNIT,20,5
-Aceite de oliva,ML,1000,200
-Sal,G,500,100`
+const CSV_EXAMPLE = `nombre,sku,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
+Tomate,,KG,Frutas y verduras,Refrigerador,25,50,10,2
+Cebolla,,KG,Frutas y verduras,Almacén seco,15,30,5,1
+Lechuga,,UNIT,Frutas y verduras,Refrigerador,8,20,20,5
+Aceite de oliva,,ML,Aceites salsas y condimentos,Almacén seco,45,200,1000,200
+Sal,,G,Aceites salsas y condimentos,Almacén seco,5,100,500,100`
 
 /**
  * Sheet para importar ingredientes desde CSV.
  *
  * Formato esperado:
- * nombre,unidad,stockInicial,stockMinimo
+ * nombre,sku,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
  *
+ * - sku: opcional, código interno (máx 60 chars)
  * - unidad: código de unidad (G, KG, ML, L, UNIT, etc.)
- * - stockInicial/minimo: números (0 por defecto)
+ * - categoria/ubicacion: nombre de la categoría/ubicación (debe existir en el sistema)
+ * - costoUnitario/stockMaximo/stockInicial/stockMinimo: números (0 por defecto)
  * - La primera línea puede ser cabecera (se ignora si contiene "nombre" o "unidad")
  */
 export function ImportCsvSheet({
@@ -175,7 +177,12 @@ export function ImportCsvSheet({
 
           <p className="text-xs text-muted-foreground">
             Columnas: <code className="font-mono">nombre</code>,
+            <code className="font-mono">sku</code>,
             <code className="font-mono">unidad</code>,
+            <code className="font-mono">categoria</code>,
+            <code className="font-mono">ubicacion</code>,
+            <code className="font-mono">costoUnitario</code>,
+            <code className="font-mono">stockMaximo</code>,
             <code className="font-mono">stockInicial</code>,
             <code className="font-mono">stockMinimo</code>. Unidades válidas:
             G, KG, ML, L, UNIT, TSP, TBSP, CUP, etc.
@@ -191,7 +198,12 @@ export function ImportCsvSheet({
                   <tr className="text-left text-muted-foreground">
                     <th className="pb-1">#</th>
                     <th className="pb-1">Nombre</th>
+                    <th className="pb-1">SKU</th>
                     <th className="pb-1">Unidad</th>
+                    <th className="pb-1">Categoría</th>
+                    <th className="pb-1">Ubicación</th>
+                    <th className="pb-1">Costo Unit.</th>
+                    <th className="pb-1">Máx.</th>
                     <th className="pb-1">Stock Inicial</th>
                     <th className="pb-1">Stock Mínimo</th>
                   </tr>
@@ -201,14 +213,19 @@ export function ImportCsvSheet({
                     <tr key={i} className="border-t">
                       <td className="py-1 text-muted-foreground">{i + 1}</td>
                       <td className="py-1 font-medium">{row[0] ?? ""}</td>
-                      <td className="py-1">{row[1] ?? "UNIT"}</td>
-                      <td className="py-1 tabular-nums">{row[2] ?? "0"}</td>
-                      <td className="py-1 tabular-nums">{row[3] ?? "0"}</td>
+                      <td className="py-1">{row[1] ?? ""}</td>
+                      <td className="py-1">{row[2] ?? "UNIT"}</td>
+                      <td className="py-1">{row[3] ?? ""}</td>
+                      <td className="py-1">{row[4] ?? ""}</td>
+                      <td className="py-1 tabular-nums">{row[5] ?? "0"}</td>
+                      <td className="py-1 tabular-nums">{row[6] ?? "0"}</td>
+                      <td className="py-1 tabular-nums">{row[7] ?? "0"}</td>
+                      <td className="py-1 tabular-nums">{row[8] ?? "0"}</td>
                     </tr>
                   ))}
                   {preview.length > 20 && (
                     <tr>
-                      <td colSpan={5} className="py-1 text-center text-muted-foreground">
+                      <td colSpan={10} className="py-1 text-center text-muted-foreground">
                         … y {preview.length - 20} más
                       </td>
                     </tr>
