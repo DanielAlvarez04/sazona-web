@@ -17,30 +17,15 @@ function ContextMenuTrigger({
   children?: React.ReactNode
 }) {
   if (asChild) {
-    const child = React.Children.only(children) as React.ReactElement
-
-    const mergedProps: Record<string, unknown> = {
-      ...(child.props as Record<string, unknown>),
-      ...props,
-      onContextMenu: (e: React.MouseEvent) => {
-        e.preventDefault()
-        ;(props.onContextMenu as ((e: React.MouseEvent) => void) | undefined)?.(e)
-      },
-      onTouchStart: (e: React.TouchEvent) => {
-        ;(props.onTouchStart as ((e: React.TouchEvent) => void) | undefined)?.(e)
-      },
-      onTouchMove: (e: React.TouchEvent) => {
-        ;(props.onTouchMove as ((e: React.TouchEvent) => void) | undefined)?.(e)
-      },
-      onTouchEnd: (e: React.TouchEvent) => {
-        ;(props.onTouchEnd as ((e: React.TouchEvent) => void) | undefined)?.(e)
-      },
-      onTouchCancel: (e: React.TouchEvent) => {
-        ;(props.onTouchCancel as ((e: React.TouchEvent) => void) | undefined)?.(e)
-      },
-    }
-
-    return React.cloneElement(child, mergedProps as React.HTMLAttributes<HTMLElement>)
+    return (
+      <ContextMenuPrimitive.Trigger
+        data-slot="context-menu-trigger"
+        {...props}
+        style={{ display: "contents" }}
+      >
+        {children}
+      </ContextMenuPrimitive.Trigger>
+    )
   }
 
   return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props}>{children}</ContextMenuPrimitive.Trigger>
