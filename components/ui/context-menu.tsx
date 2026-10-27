@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu"
+import { Slot } from "@/components/ui/slot"
 import { cn } from "cn"
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
@@ -17,15 +18,14 @@ function ContextMenuTrigger({
   children?: React.ReactNode
 }) {
   if (asChild) {
-    const child = React.Children.only(children) as React.ReactElement
-    const { ref, ...restProps } = props
-    return React.cloneElement(child, {
-      ...(child.props as Record<string, unknown>),
-      ...restProps,
-    })
+    return (
+      <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props}>
+        <Slot>{children}</Slot>
+      </ContextMenuPrimitive.Trigger>
+    )
   }
 
-  return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />
+  return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props}>{children}</ContextMenuPrimitive.Trigger>
 }
 
 function ContextMenuPortal({ ...props }: ContextMenuPrimitive.Portal.Props) {
