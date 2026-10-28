@@ -126,7 +126,7 @@ export function ProductGeneralForm({
                 name="price"
                 type="number"
                 min="0"
-                step="0.01"
+               
                 defaultValue={product.price}
                 required
                 disabled={!canManage}

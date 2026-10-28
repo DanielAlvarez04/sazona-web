@@ -20,7 +20,15 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useActionForm } from "@/hooks/use-action-form"
+import type { Branch } from "@/lib/branches"
 import {
   ROLE_OPTIONS,
   type InternalUser,
@@ -178,6 +186,60 @@ function PasswordInput({
   )
 }
 
+/** Selector de sucursal principal. Vacío = acceso a todas. */
+function BranchPicker({
+  id,
+  branches,
+  value,
+  onChange,
+}: {
+  id: string
+  branches: Branch[]
+  value: string
+  onChange: (value: string) => void
+}) {
+  const activeBranches = branches.filter((branch) => branch.isActive)
+
+  if (activeBranches.length === 0) {
+    return null
+  }
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>Sucursal principal (opcional)</FieldLabel>
+      <Select
+        value={value || "all"}
+        onValueChange={(next) =>
+          onChange(!next || next === "all" ? "" : next)
+        }
+        items={[
+          { label: "Todas las sucursales", value: "all" },
+          ...activeBranches.map((branch) => ({
+            label: branch.name,
+            value: branch.id,
+          })),
+        ]}
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder="Todas las sucursales" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas las sucursales</SelectItem>
+          {activeBranches.map((branch) => (
+            <SelectItem key={branch.id} value={branch.id}>
+              {branch.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <input type="hidden" name="branchId" value={value} />
+      <FieldDescription>
+        Déjalo en «Todas» para que el usuario pueda atender cualquier local.
+      </FieldDescription>
+    </Field>
+  )
+}
+
 /** Separa el nombre guardado en nombre de pila y apellido (conserva mayúsculas). */
 function splitDisplayName(name: string): { first: string; surname: string } {
   const trimmed = name.trim()
@@ -189,12 +251,15 @@ function splitDisplayName(name: string): { first: string; surname: string } {
 export function CreateUserDialog({
   onClose,
   organizationDomain,
+  branches,
 }: {
   onClose: () => void
   organizationDomain: string
+  branches: Branch[]
 }) {
   const router = useRouter()
   const [roles, setRoles] = useState<RoleCode[]>(["WAITER"])
+  const [branchId, setBranchId] = useState("")
   const [name, setName] = useState("")
   const [surname, setSurname] = useState("")
   const [manualUsernameLocalPart, setManualUsernameLocalPart] = useState("")
@@ -300,7 +365,7 @@ export function CreateUserDialog({
             <Field>
               <AvailabilityLabel
                 htmlFor="new-username"
-                label="ID"
+                label="ID de usuario"
                 status={usernameStatus}
               />
               <UsernameWithDomainInput
@@ -310,11 +375,9 @@ export function CreateUserDialog({
                 placeholder="elizabeth"
                 onChange={setManualUsernameLocalPart}
                 required
-                readOnly
               />
               <FieldDescription>
-                Se genera automáticamente a partir del nombre. No se puede
-                editar.
+                Se genera a partir del nombre; puedes editarlo.
               </FieldDescription>
             </Field>
 
@@ -339,6 +402,13 @@ export function CreateUserDialog({
                 </p>
               ) : null}
             </div>
+
+            <BranchPicker
+              id="new-branch"
+              branches={branches}
+              value={branchId}
+              onChange={setBranchId}
+            />
 
             {error ? <FieldError>{error}</FieldError> : null}
 
@@ -371,16 +441,19 @@ export function EditUserDialog({
   user,
   isSelf,
   onClose,
+  branches,
 }: {
   user: InternalUser
   isSelf: boolean
   onClose: () => void
+  branches: Branch[]
 }) {
   const router = useRouter()
   const initialName = splitDisplayName(user.name ?? "")
   const [name, setName] = useState(initialName.first)
   const [surname, setSurname] = useState(initialName.surname)
   const [roles, setRoles] = useState<RoleCode[]>(user.roles)
+  const [branchId, setBranchId] = useState(user.branchId ?? "")
   const [active, setActive] = useState(user.isActive)
   const [password, setPassword] = useState("")
   const { pending, error, run } = useActionForm(() => {
@@ -463,6 +536,13 @@ export function EditUserDialog({
                 </p>
               ) : null}
             </div>
+
+            <BranchPicker
+              id="edit-branch"
+              branches={branches}
+              value={branchId}
+              onChange={setBranchId}
+            />
 
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <Checkbox

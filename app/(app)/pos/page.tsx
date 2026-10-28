@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
+import { getActiveBranch } from "@/lib/branch-server"
 import type { Category, ProductListItem } from "@/lib/catalog"
 import {
   canConfirmPayments,
@@ -22,11 +23,12 @@ import { requireUser } from "@/lib/session"
 export default async function PointOfSalePage() {
   const user = await requireUser()
 
-  const [productsResponse, categoriesResponse, ordersResponse] =
+  const [productsResponse, categoriesResponse, ordersResponse, branch] =
     await Promise.all([
       apiFetch("/catalog/products"),
       apiFetch("/catalog/categories"),
       apiFetch("/orders?status=OPEN"),
+      getActiveBranch(),
     ])
 
   if (
@@ -66,6 +68,7 @@ export default async function PointOfSalePage() {
       canRegister={canRegisterPayments(user.roles)}
       canConfirm={canConfirmPayments(user.roles)}
       canRefund={canRefundPayments(user.roles)}
+      branch={branch}
     />
   )
 }

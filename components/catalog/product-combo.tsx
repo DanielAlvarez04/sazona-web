@@ -226,7 +226,7 @@ export function ProductCombo({
                     aria-label="Cantidad del componente"
                     type="number"
                     min="1"
-                    step="1"
+                   
                     value={row.quantity}
                     disabled={!canManage}
                     onChange={(event) =>

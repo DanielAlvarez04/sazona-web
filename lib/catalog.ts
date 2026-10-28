@@ -46,15 +46,15 @@ export const UNIT_DEFINITIONS: UnitDefinition[] = [
   // Volumen (base: mililitro)
   { code: "ML", symbol: "ml", name: "mililitro", dimension: "VOLUME", factor: 1 },
   { code: "L", symbol: "L", name: "litro", dimension: "VOLUME", factor: 1000 },
-  { code: "TSP", symbol: "tsp", name: "cucharadita estándar", dimension: "VOLUME", factor: 5 },
-  { code: "TBSP", symbol: "tbsp", name: "cucharada estándar", dimension: "VOLUME", factor: 15 },
-  { code: "CUP", symbol: "cup", name: "taza métrica", dimension: "VOLUME", factor: 250 },
-  { code: "FL_OZ", symbol: "fl oz", name: "onza líquida estadounidense", dimension: "VOLUME", factor: 29.5735295625 },
-  { code: "GAL", symbol: "gal", name: "galón estadounidense", dimension: "VOLUME", factor: 3785.411784 },
+  { code: "TSP", symbol: "tsp", name: "cucharadita", dimension: "VOLUME", factor: 5 },
+  { code: "TBSP", symbol: "tbsp", name: "cucharada", dimension: "VOLUME", factor: 15 },
+  { code: "CUP", symbol: "cup", name: "taza", dimension: "VOLUME", factor: 250 },
+  { code: "FL_OZ", symbol: "fl oz", name: "onza líquida", dimension: "VOLUME", factor: 29.5735295625 },
+  { code: "GAL", symbol: "gal", name: "galón", dimension: "VOLUME", factor: 3785.411784 },
 
   // Conteo (base: pieza)
-  { code: "UNIT", symbol: "pieza", name: "pieza", dimension: "COUNT", factor: 1 },
-  { code: "HALF_PIECE", symbol: "½ pieza", name: "media pieza", dimension: "COUNT", factor: 0.5 },
+  { code: "UNIT", symbol: "pz", name: "pieza", dimension: "COUNT", factor: 1 },
+  { code: "HALF_PIECE", symbol: "½ pz", name: "media pieza", dimension: "COUNT", factor: 0.5 },
   { code: "PAIR", symbol: "par", name: "par", dimension: "COUNT", factor: 2 },
   { code: "HALF_DOZEN", symbol: "½ docena", name: "media docena", dimension: "COUNT", factor: 6 },
   { code: "DOZEN", symbol: "docena", name: "docena", dimension: "COUNT", factor: 12 },
@@ -206,7 +206,12 @@ export interface Ingredient {
   name: string
   sku: string | null
   baseUnit: UnitCode
+  /** Existencia en la sucursal activa (o el total si no hay sucursal). */
   currentStock: string
+  /** Existencia total de la organización (sólo con sucursal activa). */
+  organizationStock?: string
+  /** Sucursal de la vista actual; `null` = consolidado. */
+  branchId?: string | null
   minStock: string
   maxStock: string | null
   unitCost: string | null
@@ -216,6 +221,17 @@ export interface Ingredient {
   category: { id: string; name: string; isCore: boolean } | null
   location: { id: string; name: string; isCore: boolean } | null
   _count?: { recipeIngredients: number }
+}
+
+export interface IngredientVariant {
+  id: string
+  name: string
+  sku: string
+  sequence: number
+  unitCost: string | null
+  minStock: string
+  maxStock: string | null
+  isActive: boolean
 }
 
 export interface IngredientCategory {
@@ -264,6 +280,8 @@ export interface InventoryMovement {
   referenceType: string | null
   createdAt: string
   ingredient: { id: string; name: string; baseUnit: UnitCode }
+  /** Sucursal afectada; `null` = movimiento consolidado de la organización. */
+  branch?: { id: string; name: string } | null
   /** `null` cuando la cuenta que registró el movimiento ya no existe. */
   user: { id: string; name: string | null; email: string | null } | null
 }

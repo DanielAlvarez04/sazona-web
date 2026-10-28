@@ -18,6 +18,8 @@ export interface InternalUser {
   twoFactorEnabled: boolean
   googleLinked: boolean
   roles: RoleCode[]
+  branchId: string | null
+  branchName: string | null
   createdAt: string
 }
 

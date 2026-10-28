@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { OrganizationCard } from "@/components/settings/organization-card"
+import { BranchesCard } from "@/components/settings/branches-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { TaxSettingsCard } from "@/components/settings/tax-settings-card"
 import { UnitsCard } from "@/components/settings/units-card"
@@ -24,7 +25,9 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { API_BASE_URL } from "@/lib/api-base"
+import { apiFetch } from "@/lib/api"
 import { googleLinkNotice } from "@/lib/auth-errors"
+import type { Branch } from "@/lib/branches"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
 import { cn } from "cn"
@@ -59,6 +62,11 @@ export default async function SettingsPage({
   const params = await searchParams
   const notice = googleLinkNotice(first(params.google))
   const admin = isAdmin(user)
+
+  const branchesResponse = admin ? await apiFetch("/branches") : null
+  const branches: Branch[] = branchesResponse?.ok
+    ? ((await branchesResponse.json()) as Branch[])
+    : []
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-6 px-4 py-6 lg:px-6">
@@ -293,6 +301,8 @@ export default async function SettingsPage({
                 </div>
               </CardContent>
             </Card>
+
+            <BranchesCard branches={branches} canManage={admin} />
           </>
         }
         personalization={

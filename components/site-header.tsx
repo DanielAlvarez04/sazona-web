@@ -16,16 +16,20 @@ const pageTitles: Record<string, string> = {
   "/settings": "Configuración",
 }
 
-export function SiteHeader() {
+export function SiteHeader({ branchName }: { branchName?: string | null }) {
   const pathname = usePathname()
 
-  const title =
+  const pageTitle =
     pageTitles[pathname] ??
     pageTitles[
       Object.keys(pageTitles).find((path) => pathname.startsWith(`${path}/`)) ??
         ""
     ] ??
     "Naranja Pimienta"
+
+  // El alcance de la vista siempre está a la vista: si hay sucursal activa el
+  // título lo dice explícitamente ("Inventario de Centro").
+  const title = branchName ? `${pageTitle} de ${branchName}` : pageTitle
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
@@ -36,7 +40,9 @@ export function SiteHeader() {
           className="mx-2 h-4 data-vertical:self-auto"
         />
         <h1 className="text-base font-medium">{title}</h1>
-        <OfflineStatus />
+        <div className="ml-auto flex items-center gap-2">
+          <OfflineStatus />
+        </div>
       </div>
     </header>
   )

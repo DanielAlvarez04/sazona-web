@@ -221,7 +221,7 @@ export function EquivalencesDialog({
                     name="factor"
                     type="number"
                     min="0.0001"
-                    step="0.0001"
+                   
                     required
                     placeholder="1.2"
                   />

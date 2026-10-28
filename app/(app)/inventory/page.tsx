@@ -1,6 +1,4 @@
-import { TriangleAlertIcon } from "lucide-react"
-
-import { InventoryView } from "@/components/inventory/inventory-view"
+import { InventoryClient } from "./inventory-client"
 import {
   Card,
   CardDescription,
@@ -8,29 +6,20 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
-import {
-  canManageInventory,
-  type Ingredient,
-  type InventoryMovement,
-  type StockAlert,
-} from "@/lib/catalog"
+import { getActiveBranch } from "@/lib/branch-server"
+import { TriangleAlertIcon } from "lucide-react"
+import { canManageInventory, type Ingredient } from "@/lib/catalog"
 import { requireUser } from "@/lib/session"
 
 export default async function InventoryPage() {
   const user = await requireUser()
 
-  const [ingredientsResponse, alertsResponse, movementsResponse] =
-    await Promise.all([
-      apiFetch("/inventory/ingredients?includeInactive=true"),
-      apiFetch("/inventory/alerts"),
-      apiFetch("/inventory/movements?limit=50"),
-    ])
+  const [ingredientsResponse, branch] = await Promise.all([
+    apiFetch("/inventory/ingredients?includeInactive=true"),
+    getActiveBranch(),
+  ])
 
-  if (
-    !ingredientsResponse.ok ||
-    !alertsResponse.ok ||
-    !movementsResponse.ok
-  ) {
+  if (!ingredientsResponse.ok) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <Card className="max-w-md text-center">
@@ -47,18 +36,13 @@ export default async function InventoryPage() {
     )
   }
 
-  const [ingredients, alerts, movements] = await Promise.all([
-    ingredientsResponse.json() as Promise<Ingredient[]>,
-    alertsResponse.json() as Promise<StockAlert[]>,
-    movementsResponse.json() as Promise<InventoryMovement[]>,
-  ])
+  const ingredients = (await ingredientsResponse.json()) as Ingredient[]
 
   return (
-    <InventoryView
-      ingredients={ingredients}
-      alerts={alerts}
-      movements={movements}
+    <InventoryClient
+      initialIngredients={ingredients}
       canManage={canManageInventory(user.roles)}
+      initialBranch={branch}
     />
   )
 }

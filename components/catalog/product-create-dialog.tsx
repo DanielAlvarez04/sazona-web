@@ -287,7 +287,7 @@ export function ProductCreateDialog({
                     name="price"
                     type="number"
                     min="0"
-                    step="0.01"
+                   
                     required
                     placeholder="55.00"
                   />
@@ -389,7 +389,7 @@ export function ProductCreateDialog({
                           aria-label={`Cantidad del ingrediente ${index + 1}`}
                           type="number"
                           min="0.0001"
-                          step="0.0001"
+                         
                           placeholder="Cantidad"
                           value={row.quantity}
                           onChange={(event) =>

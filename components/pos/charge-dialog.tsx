@@ -253,7 +253,7 @@ export function ChargeDialog({
                     id="payment-amount"
                     type="number"
                     inputMode="decimal"
-                    step="0.01"
+                   
                     min="0"
                     value={amount}
                     onChange={(event) => setAmountInput(event.target.value)}

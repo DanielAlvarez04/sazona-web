@@ -260,7 +260,7 @@ function RecipeEditor({
                 aria-label="Cantidad"
                 type="number"
                 min="0.0001"
-                step="0.0001"
+               
                 placeholder="Cantidad"
                 value={row.quantity}
                 disabled={!canManage}

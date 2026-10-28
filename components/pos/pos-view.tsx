@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { PageHeader } from "@/components/page-header"
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,7 @@ import {
   type ProductListItem,
 } from "@/lib/catalog"
 import { createOrder, sendRound, type RoundItemInput } from "@/lib/order-actions"
+import type { Branch } from "@/lib/branches"
 import { orderLabel, type Order } from "@/lib/orders"
 
 import { ChargeDialog } from "./charge-dialog"
@@ -95,6 +97,7 @@ export function PosView({
   canRegister,
   canConfirm,
   canRefund,
+  branch,
 }: {
   products: ProductListItem[]
   categories: Category[]
@@ -104,6 +107,8 @@ export function PosView({
   canRegister: boolean
   canConfirm: boolean
   canRefund: boolean
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
 }) {
   const router = useRouter()
   const offline = useOfflineSync()
@@ -291,49 +296,50 @@ export function PosView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Punto de venta</h2>
-          <p className="text-sm text-muted-foreground">
-            Toma la comanda y envíala a cocina.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Label htmlFor="order-select" className="sr-only">
-            Cuenta abierta
-          </Label>
-          <Select
-            value={orderId || "new"}
-            onValueChange={(value) =>
-              selectOrder(value === "new" ? "" : (value ?? ""))
-            }
-            items={[
-              { value: "new", label: "Nueva cuenta" },
-              ...orders.map((order) => ({
-                value: order.id,
-                label: `${orderLabel(order)} · ${formatMoney(order.total)}`,
-              })),
-            ]}
-          >
-            <SelectTrigger
-              id="order-select"
-              className="w-64"
-              aria-label="Cuenta abierta"
+      <PageHeader
+        title="Punto de venta"
+        description="Toma la comanda y envíala a cocina."
+        branch={branch}
+        actions={
+          <>
+            <Label htmlFor="order-select" className="sr-only">
+              Cuenta abierta
+            </Label>
+            <Select
+              value={orderId || "new"}
+              onValueChange={(value) =>
+                selectOrder(value === "new" ? "" : (value ?? ""))
+              }
+              items={[
+                { value: "new", label: "Nueva cuenta" },
+                ...orders.map((order) => ({
+                  value: order.id,
+                  label: `${orderLabel(order)} · ${formatMoney(order.total)}${
+                    branch || !order.branch ? "" : ` · ${order.branch.name}`
+                  }`,
+                })),
+              ]}
             >
-              <SelectValue placeholder="Nueva cuenta" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">Nueva cuenta</SelectItem>
-              {orders.map((order) => (
-                <SelectItem key={order.id} value={order.id}>
-                  {orderLabel(order)} · {formatMoney(order.total)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+              <SelectTrigger
+                id="order-select"
+                className="w-64"
+                aria-label="Cuenta abierta"
+              >
+                <SelectValue placeholder="Nueva cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">Nueva cuenta</SelectItem>
+                {orders.map((order) => (
+                  <SelectItem key={order.id} value={order.id}>
+                    {orderLabel(order)} · {formatMoney(order.total)}
+                    {branch || !order.branch ? "" : ` · ${order.branch.name}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-3">
@@ -417,7 +423,12 @@ export function PosView({
               Comanda
             </h3>
             {activeOrder ? (
-              <Badge variant="secondary">{orderLabel(activeOrder)}</Badge>
+              <div className="flex items-center gap-1.5">
+                {branch || !activeOrder.branch ? null : (
+                  <Badge variant="outline">{activeOrder.branch.name}</Badge>
+                )}
+                <Badge variant="secondary">{orderLabel(activeOrder)}</Badge>
+              </div>
             ) : null}
           </div>
 

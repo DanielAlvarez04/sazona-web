@@ -13,12 +13,37 @@ function text(formData: FormData, key: string): string | undefined {
   return trimmed === "" ? undefined : trimmed
 }
 
-/** Paso 1: nombre del negocio y dominio de los usuarios del equipo. */
+function textArray(formData: FormData, key: string): string[] {
+  const value = formData.get(key)
+  if (typeof value !== "string") return []
+  return value.split(",").map((v) => v.trim()).filter(Boolean)
+}
+
+/** Paso 1: giro principal del negocio. */
+export async function updateOnboardingBusinessType(
+  formData: FormData
+): Promise<ActionResult> {
+  const businessType = text(formData, "businessType")
+
+  if (!businessType) {
+    return { ok: false, message: "Selecciona el giro principal de tu negocio." }
+  }
+
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { businessType },
+    ["/onboarding", "/dashboard", "/settings"]
+  )
+}
+
+/** Paso 2: datos del negocio (nombre, dominio, sucursales). */
 export async function updateOnboardingBusiness(
   formData: FormData
 ): Promise<ActionResult> {
   const name = text(formData, "name")
   const domain = text(formData, "domain")
+  const hasBranches = formData.get("hasBranches") === "true"
 
   if (!name || name.length < 2) {
     return { ok: false, message: "Escribe el nombre de tu negocio." }
@@ -31,7 +56,7 @@ export async function updateOnboardingBusiness(
   return mutateApi(
     "/organizations/current",
     "PATCH",
-    { name, domain },
+    { name, domain, hasBranches },
     ["/onboarding", "/dashboard", "/settings"]
   )
 }
@@ -58,30 +83,65 @@ export async function checkDomainAvailability(
   return (await response.json()) as DomainAvailability
 }
 
-/** Paso 2: nombre visible y nombre de usuario del administrador. */
+/** Paso 3: datos del usuario (nombre, apellido, usuario). */
 export async function updateOnboardingProfile(
   formData: FormData
 ): Promise<ActionResult> {
-  const name = text(formData, "name")
+  const firstName = text(formData, "firstName")
+  const lastName = text(formData, "lastName")
   const username = text(formData, "username")
 
-  if (!name) {
+  if (!firstName) {
     return { ok: false, message: "Escribe tu nombre." }
+  }
+
+  if (!lastName) {
+    return { ok: false, message: "Escribe tu apellido." }
   }
 
   if (!username) {
     return { ok: false, message: "Elige un nombre de usuario." }
   }
 
+  const fullName = `${firstName} ${lastName}`.trim()
+
   return mutateApi(
     "/auth/me",
     "PATCH",
-    { name, username },
+    { name: fullName, username },
     ["/onboarding"]
   )
 }
 
-/** Paso 3: marca el onboarding como completado. */
+/** Paso 4: tipo de servicio (skippable, multiple). */
+export async function updateOnboardingServiceTypes(
+  formData: FormData
+): Promise<ActionResult> {
+  const serviceTypes = textArray(formData, "serviceTypes")
+
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { serviceTypes },
+    ["/onboarding", "/dashboard", "/settings"]
+  )
+}
+
+/** Paso 5: objetivos del negocio (skippable, multiple). */
+export async function updateOnboardingGoals(
+  formData: FormData
+): Promise<ActionResult> {
+  const goals = textArray(formData, "goals")
+
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { goals },
+    ["/onboarding", "/dashboard", "/settings"]
+  )
+}
+
+/** Paso final: marca el onboarding como completado. */
 export async function finishOnboarding(): Promise<ActionResult> {
   return mutateApi("/auth/onboarding/complete", "POST", undefined, [
     "/onboarding",

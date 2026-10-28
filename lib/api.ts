@@ -6,6 +6,14 @@ import { API_BASE_URL } from "./api-base"
 const SERVER_API_URL = process.env.API_URL ?? API_BASE_URL
 
 /**
+ * Cookie con la sucursal activa.
+ *
+ * Viaja a la API como cabecera `x-branch-id`; sin ella las peticiones se
+ * resuelven contra toda la organización (vista consolidada).
+ */
+export const BRANCH_COOKIE = "np_branch"
+
+/**
  * `fetch` hacia la API reenviando las cookies de la sesión.
  *
  * Sólo puede usarse en el servidor (Server Components, Server Actions o Route
@@ -21,6 +29,13 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers)
   if (cookieHeader) {
     headers.set("cookie", cookieHeader)
+  }
+
+  // La sucursal activa sólo aplica a datos de negocio: `/auth/*` debe seguir
+  // funcionando aunque la cookie apunte a una sucursal ya desactivada.
+  const branchId = cookieStore.get(BRANCH_COOKIE)?.value
+  if (branchId && !path.startsWith("/auth")) {
+    headers.set("x-branch-id", branchId)
   }
 
   return fetch(`${API_BASE_URL}${path}`, {

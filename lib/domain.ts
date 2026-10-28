@@ -1,4 +1,4 @@
-/** Dominio del negocio: `naranjapimienta.cafe`. */
+/** Dominio del negocio: `naranjapimienta.com`. */
 export const DOMAIN_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 
@@ -16,14 +16,23 @@ export interface DomainAvailability {
   reason?: "taken" | "invalid"
 }
 
-/** Dominio propuesto a partir del nombre del negocio: «Naranja Pimienta» → `naranjapimienta.cafe`. */
-export function domainFromName(name: string): string {
-  const slug = name
+/** Convierte un texto libre en la parte editable de un dominio (sin TLD). */
+export function domainBase(value: string): string {
+  return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "")
+    // Si pegan `negocio.com` o `negocio.cualquier-tld`, conservamos solo la
+    // primera etiqueta: el TLD siempre es `.com`.
+    .split(".")[0]
+    .replace(/[^a-z0-9-]+/g, "")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 60)
+}
 
-  return slug ? `${slug}.cafe` : ""
+/** Dominio propuesto a partir del nombre del negocio: «Naranja Pimienta» → `naranjapimienta.com`. */
+export function domainFromName(name: string): string {
+  const slug = domainBase(name)
+
+  return slug ? `${slug}.com` : ""
 }

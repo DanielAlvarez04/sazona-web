@@ -8,13 +8,30 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
+import { getActiveBranch } from "@/lib/branch-server"
 import type { DashboardOverview } from "@/lib/dashboard"
 import { displayName, requireUser } from "@/lib/session"
 
-export default async function Page() {
-  const user = await requireUser()
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
-  const response = await apiFetch("/dashboard?days=7")
+/** Periodos ofrecidos por el selector del panel. */
+const PERIODS = [7, 30, 90] as const
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const user = await requireUser()
+  const params = await searchParams
+  const rawDays = Array.isArray(params.days) ? params.days[0] : params.days
+  const parsed = Number(rawDays)
+  const days = PERIODS.find((value) => value === parsed) ?? 7
+
+  const [response, branch] = await Promise.all([
+    apiFetch(`/dashboard?days=${days}`),
+    getActiveBranch(),
+  ])
 
   if (!response.ok) {
     return (
@@ -35,5 +52,12 @@ export default async function Page() {
 
   const data = (await response.json()) as DashboardOverview
 
-  return <DashboardView data={data} userName={displayName(user)} />
+  return (
+    <DashboardView
+      data={data}
+      userName={displayName(user)}
+      branch={branch}
+      days={days}
+    />
+  )
 }

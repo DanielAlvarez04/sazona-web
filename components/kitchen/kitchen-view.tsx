@@ -7,7 +7,9 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/page-header"
 import { API_BASE_URL } from "@/lib/api-base"
+import type { Branch } from "@/lib/branches"
 import { formatDateTime, formatMoney, formatTime } from "@/lib/catalog"
 import { transitionRound } from "@/lib/order-actions"
 import {
@@ -81,9 +83,12 @@ function RoundTimeline({ round }: { round: KitchenRound }) {
 export function KitchenView({
   rounds,
   canWork,
+  branch,
 }: {
   rounds: KitchenRound[]
   canWork: boolean
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
 }) {
   const router = useRouter()
   const [pendingId, setPendingId] = React.useState<string | null>(null)
@@ -166,30 +171,34 @@ export function KitchenView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Cocina</h2>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        title="Cocina"
+        description={
+          <>
             {rounds.length} comanda(s) activa(s)
-            {lastEvent ? ` · última actualización ${formatDateTime(lastEvent)}` : ""}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Badge variant={connected ? "secondary" : "outline"}>
-            {connected ? (
-              <WifiIcon data-icon="inline-start" />
-            ) : (
-              <WifiOffIcon data-icon="inline-start" />
-            )}
-            {connected ? "Tiempo real" : "Sondeo cada 15 s"}
-          </Badge>
-          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
-            <RefreshCwIcon />
-            Actualizar
-          </Button>
-        </div>
-      </div>
+            {lastEvent
+              ? ` · última actualización ${formatDateTime(lastEvent)}`
+              : ""}
+          </>
+        }
+        branch={branch}
+        actions={
+          <>
+            <Badge variant={connected ? "secondary" : "outline"}>
+              {connected ? (
+                <WifiIcon data-icon="inline-start" />
+              ) : (
+                <WifiOffIcon data-icon="inline-start" />
+              )}
+              {connected ? "Tiempo real" : "Sondeo cada 15 s"}
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => router.refresh()}>
+              <RefreshCwIcon />
+              Actualizar
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-3 lg:grid-cols-3">
         {COLUMNS.map((status) => {
@@ -228,9 +237,16 @@ export function KitchenView({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <p className="font-medium">
-                              {orderLabel(round.order)}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="font-medium">
+                                {orderLabel(round.order)}
+                              </p>
+                              {branch ? null : round.order.branch ? (
+                                <Badge variant="outline">
+                                  {round.order.branch.name}
+                                </Badge>
+                              ) : null}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               {round.order.tableNumber
                                 ? formatMoney(round.order.total)

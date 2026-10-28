@@ -30,7 +30,6 @@ export async function createIngredient(
     "POST",
     {
       name: text(formData, "name"),
-      sku: text(formData, "sku"),
       baseUnit: text(formData, "baseUnit") as UnitCode,
       categoryId: text(formData, "categoryId"),
       locationId: text(formData, "locationId"),
@@ -45,9 +44,9 @@ export async function createIngredient(
 
 export interface BulkIngredientInput {
   name: string
-  sku?: string
   baseUnit: UnitCode
-  categoryId?: string
+  /** Obligatoria: define el prefijo del SKU generado. */
+  categoryId: string
   locationId?: string
   unitCost?: number
   maxStock?: number
@@ -76,7 +75,6 @@ export async function updateIngredient(
     "PATCH",
     {
       name: text(formData, "name"),
-      sku: text(formData, "sku"),
       baseUnit: text(formData, "baseUnit") as UnitCode,
       categoryId: text(formData, "categoryId"),
       locationId: text(formData, "locationId"),
@@ -94,6 +92,24 @@ export async function deactivateIngredient(id: string): Promise<ActionResult> {
     `/inventory/ingredients/${id}`,
     "DELETE",
     undefined,
+    INVENTORY_PATHS
+  )
+}
+
+/**
+ * Reactiva un insumo desactivado.
+ *
+ * El PATCH del API pone `locationId` a `null` cuando no se envía, así que hay
+ * que reenviar la ubicación actual para no perderla.
+ */
+export async function activateIngredient(
+  id: string,
+  locationId?: string | null
+): Promise<ActionResult> {
+  return mutateApi(
+    `/inventory/ingredients/${id}`,
+    "PATCH",
+    { isActive: true, locationId: locationId ?? "" },
     INVENTORY_PATHS
   )
 }

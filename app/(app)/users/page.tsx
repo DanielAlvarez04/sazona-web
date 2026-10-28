@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { UsersTable } from "@/components/users/users-table"
 import { apiFetch } from "@/lib/api"
+import type { Branch } from "@/lib/branches"
 import { isAdmin, requireUser } from "@/lib/session"
 import type { InternalUser } from "@/lib/users"
 
@@ -30,9 +31,15 @@ export default async function UsersPage() {
 
   const users = (await response.json()) as InternalUser[]
 
+  const branchesResponse = await apiFetch("/branches")
+  const branches: Branch[] = branchesResponse.ok
+    ? ((await branchesResponse.json()) as Branch[])
+    : []
+
   return (
     <UsersTable
       users={users}
+      branches={branches}
       currentUserId={user.id}
       organizationDomain={user.organizationDomain ?? ""}
     />

@@ -144,6 +144,8 @@ export interface Order {
   taxTotal: string
   total: string
   createdAt: string
+  /** Sucursal donde se abrió la cuenta; `null` en cuentas antiguas. */
+  branch?: { id: string; name: string } | null
   user: { id: string; name: string | null; username: string | null } | null
   rounds: (OrderRound | OrderSummaryRound)[]
   payments?: Payment[]
@@ -159,6 +161,7 @@ export interface KitchenRound extends OrderRound {
     status: OrderStatus
     total: string
     createdAt: string
+    branch?: { id: string; name: string } | null
   }
 }
 

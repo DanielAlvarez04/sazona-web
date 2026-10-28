@@ -18,31 +18,34 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 
-const CSV_EXAMPLE = `nombre,sku,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
-Tomate,,KG,Frutas y verduras,Refrigerador,25,50,10,2
-Cebolla,,KG,Frutas y verduras,Almacén seco,15,30,5,1
-Lechuga,,UNIT,Frutas y verduras,Refrigerador,8,20,20,5
-Aceite de oliva,,ML,Aceites salsas y condimentos,Almacén seco,45,200,1000,200
-Sal,,G,Aceites salsas y condimentos,Almacén seco,5,100,500,100`
+const CSV_EXAMPLE = `nombre,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
+Tomate,KG,Frutas y verduras,Refrigerador,25,50,10,2
+Cebolla,KG,Frutas y verduras,Almacén seco,15,30,5,1
+Lechuga,UNIT,Frutas y verduras,Refrigerador,8,20,20,5
+Aceite de oliva,ML,"Aceites, salsas y condimentos",Almacén seco,45,200,1000,200
+Sal,G,"Aceites, salsas y condimentos",Almacén seco,5,100,500,100`
 
 /**
  * Sheet para importar ingredientes desde CSV.
  *
  * Formato esperado:
- * nombre,sku,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
+ * nombre,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
  *
- * - sku: opcional, código interno (máx 60 chars)
  * - unidad: código de unidad (G, KG, ML, L, UNIT, etc.)
- * - categoria/ubicacion: nombre de la categoría/ubicación (debe existir en el sistema)
+ * - categoria: obligatoria; debe existir en el sistema (el SKU se genera solo)
+ * - ubicacion: nombre de la ubicación (opcional)
  * - costoUnitario/stockMaximo/stockInicial/stockMinimo: números (0 por defecto)
  * - La primera línea puede ser cabecera (se ignora si contiene "nombre" o "unidad")
  */
 export function ImportCsvSheet({
   open,
   onOpenChange,
+  branchName = null,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Sucursal donde se registra el stock inicial; `null` = organización. */
+  branchName?: string | null
 }) {
   const router = useRouter()
   const [csv, setCsv] = useState(CSV_EXAMPLE)
@@ -51,15 +54,52 @@ export function ImportCsvSheet({
   const [preview, setPreview] = useState<string[][]>([])
   const [showPreview, setShowPreview] = useState(false)
 
+  /** Divide una línea respetando comillas (categorías con comas). */
+  function parseCsvLine(line: string): string[] {
+    const values: string[] = []
+    let current = ""
+    let quoted = false
+
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i]
+
+      if (char === '"') {
+        if (quoted && line[i + 1] === '"') {
+          current += '"'
+          i += 1
+        } else {
+          quoted = !quoted
+        }
+        continue
+      }
+
+      if (char === "," && !quoted) {
+        values.push(current.trim())
+        current = ""
+        continue
+      }
+
+      current += char
+    }
+
+    values.push(current.trim())
+    return values
+  }
+
   function parseCsv(text: string): string[][] {
     const lines = text
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
 
-    return lines.map((line) =>
-      line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""))
+    if (lines.length === 0) return []
+
+    // Misma heurística que la API: si la primera fila es cabecera, no se muestra.
+    const hasHeader = /nombre|name|unidad|baseunit|stock|min|category|categoria|location|ubicacion|cost|costo/i.test(
+      lines[0]
     )
+
+    return lines.slice(hasHeader ? 1 : 0).map(parseCsvLine)
   }
 
   function updatePreview() {
@@ -90,8 +130,8 @@ export function ImportCsvSheet({
 
         toast.success(
           result.data && Array.isArray(result.data)
-            ? `${result.data.length} ingredientes importados`
-            : "Ingredientes importados"
+            ? `${result.data.length} insumos importados`
+            : "Insumos importados"
         )
         setCsv(CSV_EXAMPLE)
         updatePreview()
@@ -134,10 +174,14 @@ export function ImportCsvSheet({
     >
       <SheetContent side="right" className="data-[side=right]:sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle>Importar ingredientes (CSV)</SheetTitle>
+          <SheetTitle>Importar insumos (CSV)</SheetTitle>
           <SheetDescription>
-            Pega o sube un CSV con los ingredientes. La primera fila puede ser
-            cabecera (se ignora automáticamente).
+            Pega o sube un CSV con los insumos. La primera fila puede ser
+            cabecera (se ignora automáticamente). La categoría es obligatoria y
+            el SKU se genera automáticamente.
+            {branchName
+              ? ` El stock inicial se registra en ${branchName}.`
+              : ""}
           </SheetDescription>
         </SheetHeader>
 
@@ -177,15 +221,19 @@ export function ImportCsvSheet({
 
           <p className="text-xs text-muted-foreground">
             Columnas: <code className="font-mono">nombre</code>,
-            <code className="font-mono">sku</code>,
             <code className="font-mono">unidad</code>,
-            <code className="font-mono">categoria</code>,
+            <code className="font-mono">categoria</code> (obligatoria),
             <code className="font-mono">ubicacion</code>,
             <code className="font-mono">costoUnitario</code>,
             <code className="font-mono">stockMaximo</code>,
             <code className="font-mono">stockInicial</code>,
             <code className="font-mono">stockMinimo</code>. Unidades válidas:
-            G, KG, ML, L, UNIT, TSP, TBSP, CUP, etc.
+            G, KG, ML, L, UNIT, TSP, TBSP, CUP, etc. Si el nombre de la
+            categoría lleva comas, escríbelo entre comillas (ej.{" "}
+            <code className="font-mono">
+              &quot;Aceites, salsas y condimentos&quot;
+            </code>
+            ).
           </p>
 
           {showPreview && preview.length > 0 && (
@@ -197,8 +245,7 @@ export function ImportCsvSheet({
                 <thead>
                   <tr className="text-left text-muted-foreground">
                     <th className="pb-1">#</th>
-                    <th className="pb-1">Nombre</th>
-                    <th className="pb-1">SKU</th>
+                    <th className="pb-1">Insumo</th>
                     <th className="pb-1">Unidad</th>
                     <th className="pb-1">Categoría</th>
                     <th className="pb-1">Ubicación</th>
@@ -213,19 +260,18 @@ export function ImportCsvSheet({
                     <tr key={i} className="border-t">
                       <td className="py-1 text-muted-foreground">{i + 1}</td>
                       <td className="py-1 font-medium">{row[0] ?? ""}</td>
-                      <td className="py-1">{row[1] ?? ""}</td>
-                      <td className="py-1">{row[2] ?? "UNIT"}</td>
+                      <td className="py-1">{row[1] ?? "UNIT"}</td>
+                      <td className="py-1">{row[2] ?? ""}</td>
                       <td className="py-1">{row[3] ?? ""}</td>
-                      <td className="py-1">{row[4] ?? ""}</td>
+                      <td className="py-1 tabular-nums">{row[4] ?? "0"}</td>
                       <td className="py-1 tabular-nums">{row[5] ?? "0"}</td>
                       <td className="py-1 tabular-nums">{row[6] ?? "0"}</td>
                       <td className="py-1 tabular-nums">{row[7] ?? "0"}</td>
-                      <td className="py-1 tabular-nums">{row[8] ?? "0"}</td>
                     </tr>
                   ))}
                   {preview.length > 20 && (
                     <tr>
-                      <td colSpan={10} className="py-1 text-center text-muted-foreground">
+                      <td colSpan={9} className="py-1 text-center text-muted-foreground">
                         … y {preview.length - 20} más
                       </td>
                     </tr>

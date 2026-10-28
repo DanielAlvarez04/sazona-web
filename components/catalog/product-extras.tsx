@@ -184,7 +184,7 @@ function ExtraCreateForm({
             name="price"
             type="number"
             min="0"
-            step="0.01"
+           
             required
             placeholder="12.00"
           />
@@ -229,7 +229,7 @@ function ExtraCreateForm({
             name="quantity"
             type="number"
             min="0"
-            step="0.0001"
+           
             placeholder="8"
           />
         </Field>

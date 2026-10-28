@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { ReportsView } from "@/components/reports/reports-view"
 import { apiFetch } from "@/lib/api"
+import { getActiveBranch } from "@/lib/branch-server"
 import type {
   InventoryReport,
   KitchenReport,
@@ -14,6 +15,9 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 const OPERATIONS_ROLES = ["ADMIN", "WAITER", "KITCHEN", "INVENTORY_MANAGER"]
 
+/** Periodos ofrecidos por el selector de reportes. */
+const PERIODS = [7, 30, 90] as const
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -22,7 +26,8 @@ export default async function ReportsPage({
   const user = await requireUser()
   const params = await searchParams
   const rawDays = Array.isArray(params.days) ? params.days[0] : params.days
-  const days = rawDays === "30" ? 30 : 7
+  const parsed = Number(rawDays)
+  const days = PERIODS.find((value) => value === parsed) ?? 7
 
   const money = canReadMoney(user.roles)
   const operations =
@@ -35,7 +40,7 @@ export default async function ReportsPage({
 
   const { from, to } = range(days)
 
-  const [salesResponse, inventoryResponse, kitchenResponse] =
+  const [salesResponse, inventoryResponse, kitchenResponse, branch] =
     await Promise.all([
       money
         ? apiFetch(`/reports/sales?from=${from}&to=${to}`)
@@ -46,6 +51,7 @@ export default async function ReportsPage({
       operations
         ? apiFetch(`/reports/kitchen?from=${from}&to=${to}`)
         : Promise.resolve(null),
+      getActiveBranch(),
     ])
 
   const sales =
@@ -67,6 +73,7 @@ export default async function ReportsPage({
       sales={sales}
       inventory={inventory}
       kitchen={kitchen}
+      branch={branch}
     />
   )
 }

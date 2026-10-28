@@ -4,6 +4,7 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { PageHeader } from "@/components/page-header"
 import {
   Card,
   CardContent,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatMoney, formatQuantity } from "@/lib/catalog"
+import type { Branch } from "@/lib/branches"
 import type {
   InventoryReport,
   KitchenReport,
@@ -47,39 +49,40 @@ export function ReportsView({
   sales,
   inventory,
   kitchen,
+  branch,
 }: {
   days: number
   sales: SalesReport | null
   inventory: InventoryReport | null
   kitchen: KitchenReport | null
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
 }) {
   const defaultTab = sales ? "sales" : inventory ? "inventory" : "kitchen"
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Reportes</h2>
-          <p className="text-sm text-muted-foreground">
-            Periodo: últimos {days} días.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {[7, 30].map((value) => (
-            <Link
-              key={value}
-              href={`/reports?days=${value}`}
-              className={buttonVariants({
-                size: "sm",
-                variant: value === days ? "default" : "outline",
-              })}
-            >
-              {value} días
-            </Link>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        title="Reportes"
+        description={`Periodo: últimos ${days} días.`}
+        branch={branch}
+        actions={
+          <>
+            {[7, 30, 90].map((value) => (
+              <Link
+                key={value}
+                href={`/reports?days=${value}`}
+                className={buttonVariants({
+                  size: "sm",
+                  variant: value === days ? "default" : "outline",
+                })}
+              >
+                {value} días
+              </Link>
+            ))}
+          </>
+        }
+      />
 
       <Tabs defaultValue={defaultTab}>
         <TabsList>

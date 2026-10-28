@@ -57,6 +57,8 @@ export interface DashboardOverview {
     createdAt: string
     rounds: number
     user: string | null
+    /** Sucursal de la cuenta; `null` si se creó antes de activar sucursales. */
+    branch: string | null
   }[]
 }
 

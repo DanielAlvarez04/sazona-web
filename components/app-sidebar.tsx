@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 
+import { BranchCombobox } from "@/components/branch-combobox"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser, type NavUserData } from "@/components/nav-user"
@@ -10,11 +11,15 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import type { Branch } from "@/lib/branches"
 import {
   ChartBarIcon,
   ChefHatIcon,
@@ -73,11 +78,17 @@ export function AppSidebar({
   user,
   organizationName,
   isAdmin = false,
+  branches = [],
+  activeBranchId = null,
+  lockedBranch = false,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   user: NavUserData
   organizationName?: string | null
   isAdmin?: boolean
+  branches?: Branch[]
+  activeBranchId?: string | null
+  lockedBranch?: boolean
 }) {
   const navSecondary = React.useMemo(
     () => [
@@ -113,7 +124,17 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <SidebarGroup>
+          <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <BranchCombobox
+              branches={branches}
+              activeBranchId={activeBranchId}
+              locked={lockedBranch}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <NavMain items={data.navMain} label="Aplicación" />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

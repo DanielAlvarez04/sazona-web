@@ -14,6 +14,8 @@ export interface SessionUser {
   googleLinked: boolean
   roles: string[]
   organizationId: string | null
+  /** Sucursal fija del miembro; `null` = puede operar en toda la organización. */
+  branchId: string | null
   organizationName: string | null
   organizationDomain: string | null
   /** IVA por defecto del negocio como fracción (`0.16` = 16 %). */
@@ -31,6 +33,7 @@ interface MeResponse {
   googleLinked?: boolean
   roles: string[]
   organizationId?: string | null
+  branchId?: string | null
   organization?: {
     id: string
     name: string
@@ -66,6 +69,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       googleLinked: data.googleLinked ?? false,
       roles: data.roles ?? [],
       organizationId: data.organizationId ?? data.organization?.id ?? null,
+      branchId: data.branchId ?? null,
       organizationName: data.organization?.name ?? null,
       organizationDomain: data.organization?.domain ?? null,
       organizationTaxRate: data.organization?.taxRate ?? "0.16",

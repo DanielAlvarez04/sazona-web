@@ -122,6 +122,7 @@ export async function createInternalUser(
       surname: text(formData, "surname"),
       password: text(formData, "password"),
       roles: roles(formData),
+      branchId: text(formData, "branchId"),
     },
     USER_PATHS
   )
@@ -143,6 +144,12 @@ export async function updateInternalUser(
 
   const password = text(formData, "password")
   if (password !== undefined) payload.password = password
+
+  // Cadena vacía = acceso a todas las sucursales. Solo se envía si el
+  // formulario tiene el selector (organizaciones con sucursales activas).
+  if (formData.has("branchId")) {
+    payload.branchId = text(formData, "branchId") ?? ""
+  }
 
   payload.isActive = formData.get("isActive") === "on"
 

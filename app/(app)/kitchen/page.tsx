@@ -8,13 +8,17 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
+import { getActiveBranch } from "@/lib/branch-server"
 import { canWorkKitchen, type KitchenRound } from "@/lib/orders"
 import { requireUser } from "@/lib/session"
 
 export default async function KitchenPage() {
   const user = await requireUser()
 
-  const response = await apiFetch("/kitchen/rounds")
+  const [response, branch] = await Promise.all([
+    apiFetch("/kitchen/rounds"),
+    getActiveBranch(),
+  ])
 
   if (!response.ok) {
     return (
@@ -35,5 +39,11 @@ export default async function KitchenPage() {
 
   const rounds = (await response.json()) as KitchenRound[]
 
-  return <KitchenView rounds={rounds} canWork={canWorkKitchen(user.roles)} />
+  return (
+    <KitchenView
+      rounds={rounds}
+      canWork={canWorkKitchen(user.roles)}
+      branch={branch}
+    />
+  )
 }

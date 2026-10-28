@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -13,17 +14,21 @@ import {
 
 export function NavMain({
   items,
+  label,
 }: {
   items: {
     title: string
     url: string
     icon?: React.ReactNode
   }[]
+  /** Título del grupo en el sidebar (p. ej. "Aplicación"). */
+  label?: string
 }) {
   const pathname = usePathname()
 
   return (
     <SidebarGroup>
+      {label ? <SidebarGroupLabel>{label}</SidebarGroupLabel> : null}
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (

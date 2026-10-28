@@ -1,10 +1,15 @@
+"use client"
+
 import { useRouter } from "next/navigation"
 import { useMemo, useState, useEffect } from "react"
+import { toast } from "sonner"
 import {
   ArrowLeftRightIcon,
+  ChevronDownIcon,
   FileTextIcon,
   ListPlusIcon,
   Loader2Icon,
+  MinusIcon,
   PackageIcon,
   PencilIcon,
   PlusIcon,
@@ -12,14 +17,17 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 
-import { deactivateIngredient, getEquivalences, listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
+import { adjustStock, deactivateIngredient, getEquivalences, listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog"
 import { BulkIngredientsSheet } from "@/components/inventory/bulk-ingredients-sheet"
 import { EquivalencesDialog } from "@/components/inventory/equivalences-dialog"
 import { ImportCsvSheet } from "@/components/inventory/import-csv-sheet"
 import { IngredientDialog } from "@/components/inventory/ingredient-dialog"
+import { IngredientsTable } from "@/components/inventory/ingredients-table"
+import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import {
   Card,
   CardContent,
@@ -27,6 +35,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -44,6 +58,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useActionForm } from "@/hooks/use-action-form"
+import type { Branch } from "@/lib/branches"
 import {
   formatDateTime,
   formatQuantity,
@@ -55,6 +70,7 @@ import {
   type IngredientLocation,
   type InventoryMovement,
   type StockAlert,
+  type UnitCode,
 } from "@/lib/catalog"
 
 const STATUS_ALL = "all"
@@ -66,11 +82,14 @@ export function InventoryView({
   alerts,
   movements,
   canManage,
+  branch,
 }: {
   ingredients: Ingredient[]
   alerts: StockAlert[]
   movements: InventoryMovement[]
   canManage: boolean
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
 }) {
   const router = useRouter()
   const [search, setSearch] = useState("")
@@ -79,7 +98,8 @@ export function InventoryView({
   const [bulkCreating, setBulkCreating] = useState(false)
   const [importingCsv, setImportingCsv] = useState(false)
   const [editing, setEditing] = useState<Ingredient | null>(null)
-  const [adjusting, setAdjusting] = useState<Ingredient | null>(null)
+  const [adjusting, setAdjusting] = useState<{ ingredient: Ingredient; type: "add" | "subtract" } | null>(null)
+  const [adjustingPending, setAdjustingPending] = useState(false)
   const [equivalences, setEquivalences] = useState<{
     ingredient: Ingredient
     items: Equivalence[]
@@ -133,6 +153,31 @@ export function InventoryView({
     setEquivalences({ ingredient, items: result.data ?? [] })
   }
 
+  async function handleAdjustSubmit(quantity: string, reason: string, unit?: UnitCode) {
+    if (!adjusting?.ingredient || !quantity || !reason) return
+
+    setAdjustingPending(true)
+    try {
+      const result = await adjustStock({
+        ingredientId: adjusting.ingredient.id,
+        quantity,
+        unit,
+        reason,
+      })
+
+      if (result?.ok) {
+        toast.success("Stock ajustado correctamente")
+        setAdjusting(null)
+      } else {
+        toast.error(result?.message ?? "No se pudo ajustar el stock")
+      }
+    } catch {
+      toast.error("No se pudo ajustar el stock")
+    } finally {
+      setAdjustingPending(false)
+    }
+  }
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
 
@@ -172,32 +217,56 @@ export function InventoryView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Inventario</h2>
-          <p className="text-sm text-muted-foreground">
-            {ingredients.length} ingrediente(s) ·{" "}
-            {alerts.length} bajo mínimo
-          </p>
-        </div>
-
-        {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setImportingCsv(true)}>
-              <FileTextIcon />
-              Importar CSV
-            </Button>
-            <Button variant="outline" onClick={() => setBulkCreating(true)}>
-              <ListPlusIcon />
-              Añadir varios
-            </Button>
-            <Button onClick={() => setCreating(true)}>
-              <PlusIcon />
-              Nuevo ingrediente
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Inventario"
+        description={
+          <>
+            {ingredients.length} insumo(s) · {alerts.length} bajo mínimo
+            {branch
+              ? ` · Stock de ${branch.name}`
+              : " · Stock consolidado de la organización"}
+          </>
+        }
+        branch={branch}
+        actions={
+          canManage ? (
+            <ButtonGroup>
+              <Button onClick={() => setCreating(true)}>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Nuevo insumo
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button className="pl-2 pr-2">
+                      <ChevronDownIcon className="h-4 w-4" />
+                    </Button>
+                  }
+                >
+                  <ChevronDownIcon className="h-4 w-4" />
+                  <span className="sr-only">Más opciones</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-max">
+                  <DropdownMenuItem
+                    onClick={() => setBulkCreating(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <ListPlusIcon className="h-4 w-4" />
+                    Añadir varios
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setImportingCsv(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <FileTextIcon className="h-4 w-4" />
+                    Importar CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
+          ) : null
+        }
+      />
 
       {alerts.length > 0 ? (
         <Card className="border-destructive/40 bg-destructive/5">
@@ -207,7 +276,9 @@ export function InventoryView({
               Stock bajo mínimo
             </CardTitle>
             <CardDescription>
-              Estos ingredientes pueden agotarse antes del siguiente pedido.
+              {branch
+                ? `Estos ingredientes pueden agotarse en ${branch.name} antes del siguiente pedido.`
+                : "Estos ingredientes pueden agotarse antes del siguiente pedido."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -233,178 +304,18 @@ export function InventoryView({
         </Card>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar ingrediente"
-            className="pl-8"
-            aria-label="Buscar ingredientes"
-          />
-        </div>
-        <Select
-          value={status}
-          onValueChange={(value) => setStatus(value ?? STATUS_ALL)}
-          items={[
-            { value: STATUS_ALL, label: "Todos" },
-            { value: STATUS_LOW, label: "Solo bajo mínimo" },
-            { value: STATUS_INACTIVE, label: "Solo inactivos" },
-          ]}
-        >
-          <SelectTrigger className="w-52" aria-label="Filtrar por estado">
-            <SelectValue placeholder="Todos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={STATUS_ALL}>Todos</SelectItem>
-            <SelectItem value={STATUS_LOW}>Solo bajo mínimo</SelectItem>
-            <SelectItem value={STATUS_INACTIVE}>Solo inactivos</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {rowForm.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {rowForm.error}
-        </p>
-      ) : null}
-
-      {equivalencesError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {equivalencesError}
-        </p>
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingredientes</CardTitle>
-          <CardDescription>
-            El stock se modifica solo con ajustes auditables desde el kardex.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-              <PackageIcon className="size-8" />
-              No hay ingredientes que coincidan con el filtro.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ingrediente</TableHead>
-                  <TableHead>Unidad</TableHead>
-                  <TableHead className="text-right">Stock</TableHead>
-                  <TableHead className="text-right">Mínimo</TableHead>
-                  <TableHead className="text-center">Recetas</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((ingredient) => (
-                  <TableRow key={ingredient.id}>
-                    <TableCell>
-                      <span className="font-medium">{ingredient.name}</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {unitLabel(ingredient.baseUnit)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatQuantity(ingredient.currentStock)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {formatQuantity(ingredient.minStock)}
-                    </TableCell>
-                    <TableCell className="text-center tabular-nums">
-                      {ingredient._count?.recipeIngredients ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {ingredient.isLowStock ? (
-                          <Badge variant="destructive">Bajo stock</Badge>
-                        ) : (
-                          <Badge variant="secondary">Suficiente</Badge>
-                        )}
-                        {ingredient.isActive ? null : (
-                          <Badge variant="outline">Inactivo</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={loadingEquivalencesId === ingredient.id}
-                          onClick={() => void openEquivalences(ingredient)}
-                        >
-                          {loadingEquivalencesId === ingredient.id ? (
-                            <Loader2Icon className="animate-spin" />
-                          ) : (
-                            <ArrowLeftRightIcon />
-                          )}
-                          Equivalencias
-                        </Button>
-
-                        {canManage ? (
-                          <>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setAdjusting(ingredient)}
-                            >
-                              Ajustar
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Editar ${ingredient.name}`}
-                              onClick={() => setEditing(ingredient)}
-                            >
-                              <PencilIcon />
-                            </Button>
-                          </>
-                        ) : null}
-
-                        {canManage && ingredient.isActive ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={rowForm.pending}
-                            onClick={() => {
-                              if (
-                                !window.confirm(
-                                  `¿Desactivar "${ingredient.name}"? Dejará de estar disponible para recetas y ajustes.`
-                                )
-                              ) {
-                                return
-                              }
-                              rowForm.run(() =>
-                                deactivateIngredient(ingredient.id)
-                              )
-                            }}
-                          >
-                            {rowForm.pending ? (
-                              <Loader2Icon className="animate-spin" />
-                            ) : null}
-                            Desactivar
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <IngredientsTable
+        idPrefix="ingredients"
+        ingredients={ingredients}
+        branch={branch}
+        canManage={canManage}
+        onCreate={() => setCreating(true)}
+        onBulkCreate={() => setBulkCreating(true)}
+        onImportCsv={() => setImportingCsv(true)}
+        onEdit={(ingredient) => setEditing(ingredient)}
+        categories={categories}
+        locations={locations}
+      />
 
       <Card>
         <CardHeader>
@@ -486,6 +397,7 @@ export function InventoryView({
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Ingrediente</TableHead>
+                  {branch ? null : <TableHead>Sucursal</TableHead>}
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-right">Cantidad</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
@@ -503,6 +415,11 @@ export function InventoryView({
                         {formatDateTime(movement.createdAt)}
                       </TableCell>
                       <TableCell>{movement.ingredient.name}</TableCell>
+                      {branch ? null : (
+                        <TableCell className="text-muted-foreground">
+                          {movement.branch?.name ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Badge
                           variant={
@@ -553,6 +470,7 @@ export function InventoryView({
               onOpenChange={(open) => {
                 if (!open) setImportingCsv(false)
               }}
+              branchName={branch?.name ?? null}
             />
           ) : null}
 
@@ -562,6 +480,9 @@ export function InventoryView({
               onOpenChange={(open) => {
                 if (!open) setBulkCreating(false)
               }}
+              categories={categories}
+              locations={locations}
+              branchName={branch?.name ?? null}
             />
           ) : null}
 
@@ -574,6 +495,7 @@ export function InventoryView({
               ingredient={null}
               categories={categories}
               locations={locations}
+              branchName={branch?.name ?? null}
             />
           ) : null}
 
@@ -586,6 +508,7 @@ export function InventoryView({
               ingredient={editing}
               categories={categories}
               locations={locations}
+              branchName={branch?.name ?? null}
             />
           ) : null}
 
@@ -595,7 +518,10 @@ export function InventoryView({
               onOpenChange={(open) => {
                 if (!open) setAdjusting(null)
               }}
-              ingredient={adjusting}
+              ingredient={adjusting.ingredient}
+              onSubmit={handleAdjustSubmit}
+              pending={adjustingPending}
+              type={adjusting.type}
             />
           ) : null}
         </>

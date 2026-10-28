@@ -1,10 +1,8 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Loader2Icon, SaveIcon } from "lucide-react"
+import { Loader2Icon } from "lucide-react"
 
-import { adjustStock } from "@/app/(app)/inventory/actions"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,170 +12,186 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { Field, FieldLabel } from "@/components/ui/field"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group"
 import {
   Select,
   SelectContent,
+  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { UnitOptions } from "@/components/ui/unit-options"
-import { useActionForm } from "@/hooks/use-action-form"
-import {
-  formatQuantity,
-  UNIT_SELECT_ITEMS,
-  unitLabel,
-  type Ingredient,
-  type UnitCode,
-} from "@/lib/catalog"
 
-function newDedupeKey() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID()
-  }
+import { unitLabel, type Ingredient } from "@/lib/catalog"
 
-  return `adjust-${Date.now()}-${Math.random().toString(36).slice(2)}`
+const ADD_MOTIVES = [
+  "Restock",
+  "Conteo físico",
+  "Entrada no registrada",
+  "Otro motivo",
+]
+
+const SUBTRACT_MOTIVES = [
+  "Conteo físico",
+  "Caducidad o vencimiento",
+  "Deterioro o descomposición",
+  "Merma de preparación",
+  "Desperdicio operativo",
+  "Daño o rotura",
+  "Salida no registrada",
+  "Otro motivo",
+]
+
+export type AdjustmentType = "add" | "subtract"
+
+interface AdjustStockDialogProps {
+  ingredient: Ingredient | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (quantity: string, reason: string) => void
+  pending: boolean
+  type: AdjustmentType
 }
 
 export function AdjustStockDialog({
+  ingredient,
   open,
   onOpenChange,
-  ingredient,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  ingredient: Ingredient
-}) {
-  const router = useRouter()
-  const { pending, error, run } = useActionForm(() => {
-    onOpenChange(false)
-    router.refresh()
-  })
-
-  // La clave de idempotencia evita duplicar el ajuste si se reintenta el envío.
-  // El diálogo se monta de nuevo en cada apertura, así que la clave es nueva.
-  const [dedupeKey, setDedupeKey] = useState(newDedupeKey)
-  const [unit, setUnit] = useState<UnitCode>(ingredient.baseUnit)
-
+  onSubmit,
+  pending,
+  type,
+}: AdjustStockDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Ajustar stock de {ingredient.name}</DialogTitle>
-          <DialogDescription>
-            Usa cantidades positivas para entradas y negativas para salidas
-            (mermas, correcciones). Todo ajuste queda en el kardex.
-          </DialogDescription>
-        </DialogHeader>
-
-        <p className="text-sm text-muted-foreground">
-          Stock actual:{" "}
-          <span className="font-medium text-foreground">
-            {formatQuantity(ingredient.currentStock)}{" "}
-            {unitLabel(ingredient.baseUnit)}
-          </span>
-        </p>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            const form = event.currentTarget
-            const formData = new FormData(form)
-            const quantity = String(formData.get("quantity") ?? "").trim()
-            const reason = String(formData.get("reason") ?? "").trim()
-
-            run(async () => {
-              const result = await adjustStock({
-                ingredientId: ingredient.id,
-                quantity,
-                unit,
-                reason,
-                dedupeKey,
-              })
-
-              if (result.ok) {
-                form.reset()
-                setUnit(ingredient.baseUnit)
-                setDedupeKey(newDedupeKey())
-              }
-
-              return result
-            })
-          }}
-        >
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <Field>
-                <FieldLabel htmlFor="adjust-quantity">
-                  Cantidad (+ entra / − sale)
-                </FieldLabel>
-                <Input
-                  id="adjust-quantity"
-                  name="quantity"
-                  type="number"
-                  step="0.0001"
-                  required
-                  placeholder="-250"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="adjust-unit">Unidad</FieldLabel>
-                <Select
-                  value={unit}
-                  onValueChange={(value) =>
-                    setUnit((value ?? ingredient.baseUnit) as UnitCode)
-                  }
-                  items={UNIT_SELECT_ITEMS}
-                >
-                  <SelectTrigger
-                    id="adjust-unit"
-                    className="w-full"
-                    aria-label="Unidad"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <UnitOptions />
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-
-            <Field>
-              <FieldLabel htmlFor="adjust-reason">Motivo</FieldLabel>
-              <Input
-                id="adjust-reason"
-                name="reason"
-                required
-                maxLength={200}
-                placeholder="Merma por caducidad"
-              />
-            </Field>
-
-            {error ? <FieldError>{error}</FieldError> : null}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? (
-                  <Loader2Icon className="animate-spin" />
-                ) : (
-                  <SaveIcon />
-                )}
-                Registrar ajuste
-              </Button>
-            </DialogFooter>
-          </div>
-        </form>
+        {ingredient ? (
+          <AdjustStockForm
+            // Remontar el formulario al abrir (o al cambiar de insumo/tipo)
+            // deja el diálogo siempre limpio, sin arrastrar valores previos.
+            key={`${ingredient.id}-${type}-${open ? "open" : "closed"}`}
+            ingredient={ingredient}
+            onSubmit={onSubmit}
+            pending={pending}
+            type={type}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function AdjustStockForm({
+  ingredient,
+  onSubmit,
+  pending,
+  type,
+}: {
+  ingredient: Ingredient
+  onSubmit: (quantity: string, reason: string) => void
+  pending: boolean
+  type: AdjustmentType
+}) {
+  const [quantity, setQuantity] = useState("")
+  const [reason, setReason] = useState("")
+  const unit = unitLabel(ingredient.baseUnit)
+  const motives = type === "add" ? ADD_MOTIVES : SUBTRACT_MOTIVES
+
+  // La cantidad siempre es positiva: el signo lo pone el tipo de ajuste.
+  const amount = Number(quantity.replace(",", "."))
+  const validAmount = Number.isFinite(amount) && amount > 0
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          {type === "add"
+            ? `Añadir stock a ${ingredient.name}`
+            : `Restar stock a ${ingredient.name}`}
+        </DialogTitle>
+        <DialogDescription>
+          {type === "add"
+            ? `Escribe cuánto vas a añadir. El número se sumará al stock actual (en ${unit}).`
+            : `Escribe cuánto vas a restar. El número se restará al stock actual (en ${unit}).`}
+        </DialogDescription>
+      </DialogHeader>
+
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!validAmount || !reason) return
+          onSubmit(
+            type === "subtract"
+              ? `-${quantity.replace(",", ".").trim()}`
+              : quantity.replace(",", ".").trim(),
+            reason
+          )
+        }}
+      >
+        <Field>
+          <FieldLabel htmlFor="adjust-quantity">
+            Cantidad <span className="text-destructive">*</span>
+          </FieldLabel>
+          <InputGroup>
+            <InputGroupInput
+              id="adjust-quantity"
+              type="number"
+              min="0"
+              inputMode="decimal"
+              value={quantity}
+              onChange={(event) =>
+                // Sin signos: aquí solo se escriben cantidades positivas.
+                setQuantity(event.target.value.replace(/^[+-]+/, ""))
+              }
+              placeholder="Ej: 10"
+              disabled={pending}
+              required
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupText>{unit}</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="adjust-reason">
+            Motivo <span className="text-destructive">*</span>
+          </FieldLabel>
+          <Select
+            value={reason}
+            onValueChange={(value) => setReason((value as string) ?? "")}
+            disabled={pending}
+            items={motives.map((motive) => ({ value: motive, label: motive }))}
+          >
+            <SelectTrigger
+              id="adjust-reason"
+              className="w-full"
+              aria-label="Motivo del ajuste"
+            >
+              <SelectValue placeholder="Selecciona un motivo" />
+            </SelectTrigger>
+            <SelectContent>
+              {motives.map((motive) => (
+                <SelectItem key={motive} value={motive}>
+                  {motive}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <DialogFooter>
+          <Button type="submit" disabled={pending || !validAmount || !reason}>
+            {pending ? <Loader2Icon className="animate-spin" /> : null}
+            {type === "add" ? "Añadir stock" : "Restar stock"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   )
 }

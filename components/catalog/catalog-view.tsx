@@ -16,6 +16,7 @@ import { deactivateProduct } from "@/app/(app)/catalog/actions"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
 import { ImportDialog } from "@/components/catalog/import-dialog"
 import { ProductCreateDialog } from "@/components/catalog/product-create-dialog"
+import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -42,6 +43,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useActionForm } from "@/hooks/use-action-form"
+import type { Branch } from "@/lib/branches"
 import {
   formatMoney,
   formatPercent,
@@ -56,12 +58,15 @@ export function CatalogView({
   ingredients,
   organizationTaxRate,
   canManage,
+  branch,
 }: {
   products: ProductListItem[]
   categories: Category[]
   ingredients: Ingredient[]
   organizationTaxRate: string
   canManage: boolean
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
 }) {
   const router = useRouter()
   const [search, setSearch] = useState("")
@@ -89,32 +94,32 @@ export function CatalogView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Catálogo</h2>
-          <p className="text-sm text-muted-foreground">
-            {products.length} producto(s) · {activeCount} activo(s) ·{" "}
-            {categories.length} categoría(s)
-          </p>
-        </div>
-
-        {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
-              <TagsIcon />
-              Categorías
-            </Button>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <UploadIcon />
-              Importar CSV
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>
-              <PlusIcon />
-              Nuevo producto
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Catálogo"
+        description={`${products.length} producto(s) · ${activeCount} activo(s) · ${categories.length} categoría(s) · Compartido por todas las sucursales`}
+        branch={branch}
+        actions={
+          canManage ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setCategoriesOpen(true)}
+              >
+                <TagsIcon />
+                Categorías
+              </Button>
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadIcon />
+                Importar CSV
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <PlusIcon />
+                Nuevo producto
+              </Button>
+            </>
+          ) : null
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">

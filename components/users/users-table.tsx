@@ -71,6 +71,7 @@ import {
 import { CreateUserDialog, EditUserDialog } from "@/components/users/user-dialogs"
 import { usersTableFeatures } from "@/components/users/data-table-features"
 import { createUserColumns } from "@/components/users/users-columns"
+import type { Branch } from "@/lib/branches"
 import { ROLE_OPTIONS, type InternalUser } from "@/lib/users"
 import {
   activateInternalUser,
@@ -87,6 +88,7 @@ const COLUMN_LABELS: Record<string, string> = {
   name: "Nombre",
   username: "ID / Usuario",
   roles: "Roles",
+  branch: "Sucursal",
   isActive: "Estado",
 }
 
@@ -96,10 +98,12 @@ function userName(user: InternalUser) {
 
 export function UsersTable({
   users,
+  branches,
   currentUserId,
   organizationDomain,
 }: {
   users: InternalUser[]
+  branches: Branch[]
   currentUserId: string
   organizationDomain: string
 }) {
@@ -282,6 +286,7 @@ export function UsersTable({
         <CreateUserDialog
           onClose={() => setCreating(false)}
           organizationDomain={organizationDomain}
+          branches={branches}
         />
       ) : null}
       {editing ? (
@@ -289,6 +294,7 @@ export function UsersTable({
           user={editing}
           isSelf={editing.id === currentUserId}
           onClose={() => setEditing(null)}
+          branches={branches}
         />
       ) : null}
 

@@ -76,7 +76,7 @@ export function TaxSettingsCard({
                 type="number"
                 min="0"
                 max="100"
-                step="0.01"
+               
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 disabled={!canManage || pending}

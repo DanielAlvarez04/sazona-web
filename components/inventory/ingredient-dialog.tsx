@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Loader2Icon, SaveIcon } from "lucide-react"
 
 import {
@@ -21,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -39,21 +41,26 @@ export function IngredientDialog({
   ingredient,
   categories = [],
   locations = [],
+  branchName = null,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   ingredient?: Ingredient | null
   categories: IngredientCategory[]
   locations: IngredientLocation[]
+  /** Sucursal donde se registra el stock inicial; `null` = organización. */
+  branchName?: string | null
 }) {
   const router = useRouter()
   const isEdit = Boolean(ingredient)
+  const isOrgView = branchName === null
+  const [formError, setFormError] = useState<string | null>(null)
   const { pending, error, run } = useActionForm(() => {
     onOpenChange(false)
     router.refresh()
   })
 
-  // Cambiar la unidad de un ingrediente ya usado en recetas rompe las
+  // Cambiar la unidad de un insumo ya usado en recetas rompe las
   // cantidades guardadas; la API lo rechaza con 409.
   const unitLocked = Boolean(ingredient?._count?.recipeIngredients)
 
@@ -70,12 +77,14 @@ export function IngredientDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? `Editar ${ingredient?.name}` : "Nuevo ingrediente"}
+            {isEdit ? `Editar ${ingredient?.name}` : "Nuevo insumo"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "El stock solo cambia con ajustes auditables, no editando el ingrediente."
-              : "El stock inicial queda registrado como un movimiento de ajuste."}
+              ? "El stock solo cambia con ajustes auditables, no editando el insumo."
+              : branchName
+              ? `El stock inicial se registra en ${branchName} como un movimiento de ajuste.`
+              : "En la vista de organización no se puede definir stock inicial. Use una sucursal para dar de alta stock."}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,6 +93,24 @@ export function IngredientDialog({
           onSubmit={(event) => {
             event.preventDefault()
             const formData = new FormData(event.currentTarget)
+
+            const name = String(formData.get("name") ?? "").trim()
+            if (!name) {
+              setFormError("Escribe el nombre del insumo.")
+              return
+            }
+
+            if (!formData.get("baseUnit")) {
+              setFormError("Selecciona la unidad base.")
+              return
+            }
+
+            if (!formData.get("categoryId")) {
+              setFormError("Selecciona una categoría.")
+              return
+            }
+
+            setFormError(null)
             run(() =>
               ingredient
                 ? updateIngredient(ingredient.id, formData)
@@ -92,64 +119,63 @@ export function IngredientDialog({
           }}
         >
           <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="ingredient-name">Nombre</FieldLabel>
-              <Input
-                id="ingredient-name"
-                name="name"
-                defaultValue={ingredient?.name ?? ""}
-                required
-                maxLength={120}
-                placeholder="Leche entera"
-              />
-            </Field>
+            {/* Fila 1: Nombre y Unidad base */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="ingredient-name">
+                  Nombre <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  id="ingredient-name"
+                  name="name"
+                  defaultValue={ingredient?.name ?? ""}
+                  required
+                  maxLength={120}
+                  placeholder="Leche entera"
+                />
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="ingredient-sku">SKU</FieldLabel>
-              <Input
-                id="ingredient-sku"
-                name="sku"
-                defaultValue={ingredient?.sku ?? ""}
-                maxLength={60}
-                placeholder="SKU-001"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="ingredient-unit">Unidad base</FieldLabel>
-              <Select
-                name="baseUnit"
-                defaultValue={ingredient?.baseUnit ?? "UNIT"}
-                disabled={unitLocked}
-                items={UNIT_SELECT_ITEMS}
-              >
-                <SelectTrigger
-                  id="ingredient-unit"
-                  className="w-full"
-                  aria-label="Unidad base"
+              <Field>
+                <FieldLabel htmlFor="ingredient-unit">
+                  Unidad base <span className="text-destructive">*</span>
+                </FieldLabel>
+                <Select
+                  name="baseUnit"
+                  defaultValue={ingredient?.baseUnit ?? "UNIT"}
+                  disabled={unitLocked}
+                  items={UNIT_SELECT_ITEMS}
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="w-(--anchor-width)">
-                  <UnitOptions />
-                </SelectContent>
-              </Select>
-            </Field>
+                  <SelectTrigger
+                    id="ingredient-unit"
+                    className="w-full"
+                    aria-label="Unidad base"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="w-max">
+                    <UnitOptions />
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
             {unitLocked ? (
               <p className="text-xs text-muted-foreground">
-                La unidad base no se puede cambiar porque el ingrediente se usa
-                en recetas.
-              </p>
+                La unidad base no se puede cambiar porque el insumo se usa
+                en recetas.</p>
+              
             ) : null}
 
+            {/* Fila 2: Categoría y Ubicación */}
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <FieldLabel htmlFor="ingredient-category">Categoría</FieldLabel>
+                <FieldLabel htmlFor="ingredient-category">
+                  Categoría <span className="text-destructive">*</span>
+                </FieldLabel>
                 <Select
                   name="categoryId"
                   defaultValue={ingredient?.category?.id ?? ""}
-                  items={[{ value: "", label: "Sin categoría" }, ...categoryItems]}
+                  items={categoryItems}
                 >
                   <SelectTrigger
                     id="ingredient-category"
@@ -158,11 +184,11 @@ export function IngredientDialog({
                   >
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
-                  <SelectContent className="w-(--anchor-width)">
+                  <SelectContent className="w-max">
                     {categoryItems.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
+                      <SelectItem key={cat.value} value={cat.value}>
                         {cat.label}
-                      </option>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -182,18 +208,67 @@ export function IngredientDialog({
                   >
                     <SelectValue placeholder="Seleccionar ubicación" />
                   </SelectTrigger>
-                  <SelectContent className="w-(--anchor-width)">
+                  <SelectContent className="w-max">
                     {locationItems.map((loc) => (
-                      <option key={loc.value} value={loc.value}>
+                      <SelectItem key={loc.value} value={loc.value}>
                         {loc.label}
-                      </option>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Fila 3: Stock inicial (nuevo) / Stock actual (editar) y Costo unitario (ocultar en vista org) */}
+            {!isOrgView && (
+              <div className="grid grid-cols-2 gap-3">
+                {isEdit ? (
+                  <Field>
+                    <FieldLabel htmlFor="ingredient-current-stock">Stock actual</FieldLabel>
+                    <Input
+                      id="ingredient-current-stock"
+                      type="number"
+                      min="0"
+                     
+                      value={ingredient?.currentStock ?? "0"}
+                      readOnly
+                      className="bg-muted cursor-not-allowed"
+                    />
+                    
+                      
+                    
+                  </Field>
+                ) : (
+                  <Field>
+                    <FieldLabel htmlFor="ingredient-stock">Stock inicial</FieldLabel>
+                    <Input
+                      id="ingredient-stock"
+                      name="currentStock"
+                      type="number"
+                      min="0"
+                     
+                      placeholder="0"
+                    />
+                  </Field>
+                )}
+
+                <Field>
+                  <FieldLabel htmlFor="ingredient-unit-cost">Costo unitario</FieldLabel>
+                  <Input
+                    id="ingredient-unit-cost"
+                    name="unitCost"
+                    type="number"
+                    min="0"
+                   
+                    placeholder="0"
+                    defaultValue={ingredient?.unitCost ?? ""}
+                  />
+                </Field>
+              </div>
+            )}
+
+            {/* Fila 3 alternativa (vista org): solo Costo unitario (full width) */}
+            {isOrgView && (
               <Field>
                 <FieldLabel htmlFor="ingredient-unit-cost">Costo unitario</FieldLabel>
                 <Input
@@ -201,51 +276,42 @@ export function IngredientDialog({
                   name="unitCost"
                   type="number"
                   min="0"
-                  step="0.01"
+                 
                   placeholder="0"
                   defaultValue={ingredient?.unitCost ?? ""}
                 />
               </Field>
+            )}
 
-              <Field>
-                <FieldLabel htmlFor="ingredient-max-stock">Existencia máxima</FieldLabel>
-                <Input
-                  id="ingredient-max-stock"
-                  name="maxStock"
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  placeholder="0"
-                  defaultValue={ingredient?.maxStock ?? ""}
-                />
-              </Field>
-            </div>
+            {/* Fila 4: Stock mínimo y Stock máximo (ocultar en vista org) */}
+            {!isOrgView && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="ingredient-min">Stock mínimo</FieldLabel>
+                  <Input
+                    id="ingredient-min"
+                    name="minStock"
+                    type="number"
+                    min="0"
+                   
+                    placeholder="0"
+                  />
+                </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field>
-                <FieldLabel htmlFor="ingredient-min">Stock mínimo</FieldLabel>
-                <Input
-                  id="ingredient-min"
-                  name="minStock"
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  placeholder="0"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="ingredient-stock">Stock inicial</FieldLabel>
-                <Input
-                  id="ingredient-stock"
-                  name="currentStock"
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  placeholder="0"
-                />
-              </Field>
-            </div>
+                <Field>
+                  <FieldLabel htmlFor="ingredient-max-stock">Stock máximo</FieldLabel>
+                  <Input
+                    id="ingredient-max-stock"
+                    name="maxStock"
+                    type="number"
+                    min="0"
+                   
+                    placeholder="0"
+                    defaultValue={ingredient?.maxStock ?? ""}
+                  />
+                </Field>
+              </div>
+            )}
 
             {ingredient ? (
               <label className="flex items-center gap-2 text-sm">
@@ -259,6 +325,14 @@ export function IngredientDialog({
               </label>
             ) : null}
 
+            <p className="text-xs text-muted-foreground">
+              {isEdit
+                ? `SKU: ${ingredient?.sku ?? "—"}. Cambiar la categoría genera un SKU nuevo.`
+                : "El SKU se genera automáticamente según la categoría (ej. FVE100)."}
+            
+
+            </p>
+            {formError ? <FieldError>{formError}</FieldError> : null}
             {error ? <FieldError>{error}</FieldError> : null}
 
             <DialogFooter>
@@ -275,7 +349,7 @@ export function IngredientDialog({
                 ) : (
                   <SaveIcon />
                 )}
-                {isEdit ? "Guardar cambios" : "Crear ingrediente"}
+                {isEdit ? "Guardar cambios" : "Crear insumo"}
               </Button>
             </DialogFooter>
           </div>

@@ -101,7 +101,7 @@ function VariantRow({
             id={`variant-adjust-${variant.id}`}
             name="priceAdjust"
             type="number"
-            step="0.01"
+           
             defaultValue={variant.priceAdjust}
             disabled={!canManage}
           />
@@ -190,7 +190,7 @@ function VariantCreateForm({ productId }: { productId: string }) {
           id="new-variant-adjust"
           name="priceAdjust"
           type="number"
-          step="0.01"
+         
           defaultValue={0}
         />
       </Field>

@@ -282,6 +282,18 @@ export function createUserColumns(actions: UserRowActions) {
       enableSorting: false,
       enableGlobalFilter: false,
     }),
+    columnHelper.display({
+      id: "branch",
+      header: () => <span className="font-medium">Sucursal</span>,
+      cell: ({ row }) =>
+        row.original.branchName ? (
+          <span className="text-sm">{row.original.branchName}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Todas</span>
+        ),
+      enableSorting: false,
+      enableGlobalFilter: false,
+    }),
     columnHelper.accessor("isActive", {
       header: () => <span className="font-medium">Estado</span>,
       cell: ({ row }) => (

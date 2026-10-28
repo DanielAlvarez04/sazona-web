@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
+import { getActiveBranch } from "@/lib/branch-server"
 import {
   canManageCatalog,
   type Category,
@@ -19,11 +20,12 @@ import { requireUser } from "@/lib/session"
 export default async function CatalogPage() {
   const user = await requireUser()
 
-  const [productsResponse, categoriesResponse, ingredientsResponse] =
+  const [productsResponse, categoriesResponse, ingredientsResponse, branch] =
     await Promise.all([
       apiFetch("/catalog/products?includeInactive=true"),
       apiFetch("/catalog/categories?includeInactive=true"),
       apiFetch("/inventory/ingredients"),
+      getActiveBranch(),
     ])
 
   if (
@@ -60,6 +62,7 @@ export default async function CatalogPage() {
       ingredients={ingredients}
       organizationTaxRate={user.organizationTaxRate}
       canManage={canManageCatalog(user.roles)}
+      branch={branch}
     />
   )
 }

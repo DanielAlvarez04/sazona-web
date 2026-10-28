@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 
 export default async function AppLayout({
@@ -20,6 +21,11 @@ export default async function AppLayout({
     redirect("/onboarding")
   }
 
+  const [branches, activeBranch] = await Promise.all([
+    getBranches(),
+    getActiveBranch(),
+  ])
+
   return (
     <OfflineProvider userId={user.id}>
       <SidebarProvider
@@ -34,6 +40,9 @@ export default async function AppLayout({
           variant="inset"
           organizationName={user.organizationName}
           isAdmin={isAdmin(user)}
+          branches={branches}
+          activeBranchId={activeBranch?.id ?? user.branchId ?? null}
+          lockedBranch={Boolean(user.branchId)}
           user={{
             name: displayName(user),
             email: user.email,
@@ -42,7 +51,7 @@ export default async function AppLayout({
           }}
         />
         <SidebarInset>
-          <SiteHeader />
+          <SiteHeader branchName={activeBranch?.name ?? null} />
           <div className="flex flex-1 flex-col">{children}</div>
         </SidebarInset>
       </SidebarProvider>

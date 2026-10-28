@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { SalesChart } from "@/components/dashboard/sales-chart"
+import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import {
@@ -28,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import type { Branch } from "@/lib/branches"
 import { formatMoney, formatQuantity } from "@/lib/catalog"
 import type { DashboardOverview } from "@/lib/dashboard"
 import {
@@ -37,12 +39,21 @@ import {
 } from "@/lib/orders"
 import { cn } from "cn"
 
+/** Periodos que ofrece el selector del panel. */
+const PERIODS = [7, 30, 90] as const
+
 export function DashboardView({
   data,
   userName,
+  branch,
+  days,
 }: {
   data: DashboardOverview
   userName: string
+  /** Sucursal activa; `null` = vista consolidada. */
+  branch: Branch | null
+  /** Periodo seleccionado en días. */
+  days: number
 }) {
   const kitchenActive =
     data.kitchen.pending + data.kitchen.preparing + data.kitchen.ready
@@ -54,28 +65,38 @@ export function DashboardView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            Hola, {userName}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Resumen de hoy y de los últimos {data.days} días.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href="/pos" className={buttonVariants({ size: "sm" })}>
-            Ir al punto de venta
-          </Link>
-          <Link
-            href="/kitchen"
-            className={buttonVariants({ size: "sm", variant: "outline" })}
-          >
-            Ver cocina
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title={`Hola, ${userName}`}
+        description={`Resumen de hoy y de los últimos ${data.days} días.`}
+        branch={branch}
+        actions={
+          <>
+            <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
+              {PERIODS.map((value) => (
+                <Link
+                  key={value}
+                  href={`/dashboard?days=${value}`}
+                  className={buttonVariants({
+                    size: "sm",
+                    variant: value === days ? "default" : "ghost",
+                  })}
+                >
+                  {value} d
+                </Link>
+              ))}
+            </div>
+            <Link href="/pos" className={buttonVariants({ size: "sm" })}>
+              Ir al punto de venta
+            </Link>
+            <Link
+              href="/kitchen"
+              className={buttonVariants({ size: "sm", variant: "outline" })}
+            >
+              Ver cocina
+            </Link>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         <StatCard
@@ -321,6 +342,7 @@ export function DashboardView({
               <TableRow>
                 <TableHead>Cuenta</TableHead>
                 <TableHead>Estado</TableHead>
+                {branch ? null : <TableHead>Sucursal</TableHead>}
                 <TableHead>Comandas</TableHead>
                 <TableHead>Atendida por</TableHead>
                 <TableHead className="text-right">Total</TableHead>
@@ -331,7 +353,7 @@ export function DashboardView({
               {data.recentOrders.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={branch ? 6 : 7}
                     className="py-8 text-center text-sm text-muted-foreground"
                   >
                     Todavía no hay cuentas registradas.
@@ -356,6 +378,11 @@ export function DashboardView({
                         {ORDER_STATUS_LABELS[order.status]}
                       </Badge>
                     </TableCell>
+                    {branch ? null : (
+                      <TableCell className="text-muted-foreground">
+                        {order.branch ?? "—"}
+                      </TableCell>
+                    )}
                     <TableCell className="tabular-nums">
                       {order.rounds}
                     </TableCell>
