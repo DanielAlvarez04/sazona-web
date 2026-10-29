@@ -286,7 +286,6 @@ export function createIngredientColumns(actions: IngredientRowActions) {
         return (
           <Badge
             variant="secondary"
-            className="max-w-36 truncate"
             title={category ?? "Sin categoría"}
           >
             {category ?? "Sin categoría"}
@@ -304,11 +303,7 @@ export function createIngredientColumns(actions: IngredientRowActions) {
         const location = row.original.location?.name
         if (!location) return <span className="text-muted-foreground">—</span>
         return (
-          <Badge
-            variant="outline"
-            className="max-w-32 truncate"
-            title={location}
-          >
+          <Badge variant="outline" title={location}>
             {location}
           </Badge>
         )

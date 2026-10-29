@@ -320,7 +320,7 @@ export function BulkIngredientsSheet({
                     <TableHead className="w-20 text-right text-xs font-medium text-muted-foreground">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody className="divide-y divide-border/50">
+                <TableBody>
                   {rows.map((row, index) => (
                     <React.Fragment key={row.key}>
                       <TableRow

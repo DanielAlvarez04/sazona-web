@@ -9,22 +9,21 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
+  Columns3Icon,
+  EllipsisVerticalIcon,
   FileTextIcon,
   ListPlusIcon,
   MinusIcon,
   PencilIcon,
   PlusIcon,
+  PackageOpenIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -100,9 +99,11 @@ export function IngredientsTable({
   onBulkCreate: () => void
   onImportCsv: () => void
   onEdit: (ingredient: Ingredient) => void
-  /** Prefijo de los `id` del DOM (varias tablas en la misma página). */
+  /** Prefijo de los `id` del DOM (búsqueda y selector de filas por página). */
   idPrefix?: string
+  /** Categorías disponibles para el filtro. */
   categories?: { id: string; name: string }[]
+  /** Ubicaciones disponibles para el filtro. */
   locations?: { id: string; name: string }[]
 }) {
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -255,13 +256,30 @@ export function IngredientsTable({
     globalFilter.trim().length > 0 ||
     categoryFilter !== ALL_VALUE ||
     locationFilter !== ALL_VALUE
+  const activeFilterCount =
+    (globalFilter.trim().length > 0 ? 1 : 0) +
+    (categoryFilter !== ALL_VALUE ? 1 : 0) +
+    (locationFilter !== ALL_VALUE ? 1 : 0)
+  const selectedCategoryLabel =
+    categories.find((category) => category.id === categoryFilter)?.name ??
+    "Todas las categorías"
+  const selectedLocationLabel =
+    locations.find((location) => location.id === locationFilter)?.name ??
+    "Todas las ubicaciones"
 
   return (
     <>
       <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+        {/* Barra de herramientas: una sola fila con dos grupos. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            role="group"
+            aria-label="Filtros"
+            className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+          >
+            {/* Mismo rango de ancho que los `Select` de categoría/ubicación
+                (`min-w-40`–`max-w-64`), en lugar de un ancho fijo. */}
+            <div className="relative w-full sm:w-auto sm:min-w-40 sm:max-w-64">
               <Label htmlFor={`${idPrefix}-search`} className="sr-only">
                 Buscar insumo
               </Label>
@@ -269,13 +287,13 @@ export function IngredientsTable({
               <Input
                 id={`${idPrefix}-search`}
                 type="search"
-                placeholder="Buscar insumo..."
+                placeholder="Buscar por nombre o SKU..."
                 value={globalFilter}
                 onChange={(event) => {
                   setGlobalFilter(event.target.value)
                   setPagination((current) => ({ ...current, pageIndex: 0 }))
                 }}
-                className="h-8 w-[200px] pl-8"
+                className="pl-8"
               />
             </div>
 
@@ -295,12 +313,15 @@ export function IngredientsTable({
                 ]}
               >
                 <SelectTrigger
-                  className="h-8 w-[168px]"
+                  // `w-auto` deja que el disparador crezca con el nombre elegido;
+                  // así no se corta el texto de categorías largas.
+                  className="w-auto min-w-40 max-w-64"
                   aria-label="Filtrar por categoría"
+                  title={selectedCategoryLabel}
                 >
                   <SelectValue placeholder="Categoría" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-max max-w-[min(24rem,var(--available-width))]">
                   <SelectItem value={ALL_VALUE}>Todas las categorías</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
@@ -327,12 +348,13 @@ export function IngredientsTable({
                 ]}
               >
                 <SelectTrigger
-                  className="h-8 w-[168px]"
+                  className="w-auto min-w-40 max-w-64"
                   aria-label="Filtrar por ubicación"
+                  title={selectedLocationLabel}
                 >
                   <SelectValue placeholder="Ubicación" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-max max-w-[min(24rem,var(--available-width))]">
                   <SelectItem value={ALL_VALUE}>Todas las ubicaciones</SelectItem>
                   {locations.map((location) => (
                     <SelectItem key={location.id} value={location.id}>
@@ -346,8 +368,7 @@ export function IngredientsTable({
             {hasFilters ? (
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-8"
+                className="text-muted-foreground"
                 onClick={() => {
                   setGlobalFilter("")
                   setCategoryFilter(ALL_VALUE)
@@ -355,19 +376,28 @@ export function IngredientsTable({
                   setPagination((current) => ({ ...current, pageIndex: 0 }))
                 }}
               >
-                Limpiar filtros
+                <XIcon className="size-4" />
+                Limpiar
+                <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                  {activeFilterCount}
+                </Badge>
               </Button>
             ) : null}
-
           </div>
 
           {canManage ? (
-            <ButtonGroup>
+            <div
+              role="group"
+              aria-label="Acciones"
+              className="flex shrink-0 items-center gap-2"
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  render={<Button variant="outline" size="default" />}
+                  render={
+                    <Button variant="outline" aria-label="Mostrar u ocultar columnas" />
+                  }
                 >
-                  <ChevronDownIcon className="h-4 w-4" />
+                  <Columns3Icon className="size-4" />
                   <span>Columnas</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -391,44 +421,42 @@ export function IngredientsTable({
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+
               <Button onClick={onCreate}>
-                <PlusIcon className="mr-2 h-4 w-4" />
+                <PlusIcon className="size-4" />
                 Nuevo insumo
               </Button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  render={
-                    <Button className="pl-2 pr-2">
-                      <ChevronDownIcon className="h-4 w-4" />
-                    </Button>
-                  }
+                  render={<Button variant="outline" size="icon" />}
                 >
-                  <ChevronDownIcon className="h-4 w-4" />
-                  <span className="sr-only">Más opciones</span>
+                  <EllipsisVerticalIcon className="size-4" />
+                  <span className="sr-only">Más acciones</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-max">
                   <DropdownMenuItem
                     onClick={onBulkCreate}
                     className="flex items-center gap-2"
                   >
-                    <ListPlusIcon className="h-4 w-4" />
+                    <ListPlusIcon className="size-4" />
                     Añadir varios
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={onImportCsv}
                     className="flex items-center gap-2"
                   >
-                    <FileTextIcon className="h-4 w-4" />
+                    <FileTextIcon className="size-4" />
                     Importar CSV
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </ButtonGroup>
+            </div>
           ) : null}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-hidden rounded-lg border">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -502,11 +530,35 @@ export function IngredientsTable({
               <TableRow>
                 <TableCell
                   colSpan={table.getVisibleLeafColumns().length}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-32 text-center whitespace-normal"
                 >
-                  {ingredients.length === 0
-                    ? "Todavía no hay insumos. Crea el primero para empezar."
-                    : "No hay insumos que coincidan con la búsqueda."}
+                  {ingredients.length === 0 ? (
+                    <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                      <PackageOpenIcon className="size-6" />
+                      <p>Todavía no hay insumos. Crea el primero para empezar.</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <PackageOpenIcon className="size-6" />
+                      <p>No hay insumos que coincidan con los filtros.</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setGlobalFilter("")
+                          setCategoryFilter(ALL_VALUE)
+                          setLocationFilter(ALL_VALUE)
+                          setPagination((current) => ({
+                            ...current,
+                            pageIndex: 0,
+                          }))
+                        }}
+                      >
+                        <XIcon className="size-4" />
+                        Limpiar filtros
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             )}
@@ -564,41 +616,19 @@ export function IngredientsTable({
           <div className="ml-auto flex items-center gap-2 sm:ml-0">
             <Button
               variant="outline"
-              size="icon-sm"
-              className="hidden lg:flex"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">Ir a la primera página</span>
-              <ChevronsLeftIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
+              size="sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
-              <span className="sr-only">Ir a la página anterior</span>
-              <ChevronLeftIcon />
+              Anterior
             </Button>
             <Button
               variant="outline"
-              size="icon-sm"
+              size="sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
-              <span className="sr-only">Ir a la página siguiente</span>
-              <ChevronRightIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="hidden lg:flex"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">Ir a la última página</span>
-              <ChevronsRightIcon />
+              Siguiente
             </Button>
           </div>
         </div>
