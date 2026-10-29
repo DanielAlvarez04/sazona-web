@@ -416,7 +416,7 @@ export function BulkIngredientsSheet({
                             <SelectTrigger aria-label={`Categoría del insumo ${index + 1}`} className="w-full">
                               <SelectValue placeholder="Categoría *" />
                             </SelectTrigger>
-                            <SelectContent className="w-auto" side="top" align="end">
+                            <SelectContent side="top" align="end">
                               {categories.map((c) => (
                                 <SelectItem key={c.id} value={c.id}>
                                   {c.name}
@@ -439,7 +439,7 @@ export function BulkIngredientsSheet({
                             <SelectTrigger aria-label={`Ubicación del insumo ${index + 1}`} className="w-full">
                               <SelectValue placeholder="Ubicación" />
                             </SelectTrigger>
-                            <SelectContent className="w-auto" side="top" align="end">
+                            <SelectContent side="top" align="end">
                               <SelectItem value="">Sin ubicación</SelectItem>
                               {locations.map((l) => (
                                 <SelectItem key={l.id} value={l.id}>

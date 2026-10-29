@@ -152,7 +152,7 @@ export function IngredientDialog({
                   >
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="w-max">
+                  <SelectContent>
                     <UnitOptions />
                   </SelectContent>
                 </Select>
@@ -184,7 +184,7 @@ export function IngredientDialog({
                   >
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
-                  <SelectContent className="w-max">
+                  <SelectContent>
                     {categoryItems.map((cat) => (
                       <SelectItem key={cat.value} value={cat.value}>
                         {cat.label}
@@ -208,7 +208,7 @@ export function IngredientDialog({
                   >
                     <SelectValue placeholder="Seleccionar ubicación" />
                   </SelectTrigger>
-                  <SelectContent className="w-max">
+                  <SelectContent>
                     {locationItems.map((loc) => (
                       <SelectItem key={loc.value} value={loc.value}>
                         {loc.label}

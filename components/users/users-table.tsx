@@ -2,27 +2,14 @@
 
 import * as React from "react"
 import {
-  FlexRender,
-  useTable,
-  type ColumnFiltersState,
-  type ColumnVisibilityState,
-  type RowSelectionState,
-  type SortingState,
-} from "@tanstack/react-table"
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
   PencilIcon,
-  SearchIcon,
   Trash2Icon,
   UserCheckIcon,
   UserPlusIcon,
   UserXIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import type { RowSelectionState } from "@tanstack/react-table"
 
 import {
   AlertDialog,
@@ -34,42 +21,18 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  ContextMenu,
   ContextMenuContent,
   ContextMenuGroup,
   ContextMenuGroupLabel,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  DataTable,
+  DATA_TABLE_ALL,
+  type DataTableFilter,
+} from "@/components/data-table/data-table"
 import { CreateUserDialog, EditUserDialog } from "@/components/users/user-dialogs"
-import { usersTableFeatures } from "@/components/users/data-table-features"
 import { createUserColumns } from "@/components/users/users-columns"
 import type { Branch } from "@/lib/branches"
 import { ROLE_OPTIONS, type InternalUser } from "@/lib/users"
@@ -82,6 +45,7 @@ import {
 } from "@/app/(app)/users/actions"
 
 const PAGE_SIZES = [10, 20, 30, 40, 50]
+const DEFAULT_PAGE_SIZE = 10
 
 /** Etiquetas legibles para el selector de columnas. */
 const COLUMN_LABELS: Record<string, string> = {
@@ -109,17 +73,9 @@ export function UsersTable({
 }) {
   const [creating, setCreating] = React.useState(false)
   const [editing, setEditing] = React.useState<InternalUser | null>(null)
-
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<ColumnVisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
   const [globalFilter, setGlobalFilter] = React.useState("")
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 10,
-  })
+  const [roleFilter, setRoleFilter] = React.useState<string>(DATA_TABLE_ALL)
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
 
   /** Usuarios a eliminar, pendientes de confirmación. */
   const [deleteTargets, setDeleteTargets] = React.useState<InternalUser[] | null>(
@@ -183,48 +139,63 @@ export function UsersTable({
     ]
   )
 
-  const table = useTable({
-    features: usersTableFeatures,
-    data: users,
-    columns,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-      globalFilter,
-      pagination,
-    },
-    globalFilterFn: "includesString",
-    getRowId: (row) => row.id,
-    // El propio usuario no puede eliminarse ni desactivarse, así que tampoco se
-    // puede seleccionar para acciones en bloque.
-    enableRowSelection: (row) => row.original.id !== currentUserId,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: (value) => {
-      setGlobalFilter(value as string)
-      setPagination((current) => ({ ...current, pageIndex: 0 }))
-    },
-    onPaginationChange: setPagination,
-  })
+  /** Filtrado local: texto (nombre, usuario o correo) y rol. */
+  const filteredUsers = React.useMemo(() => {
+    const term = globalFilter.trim().toLowerCase()
 
-  const selectedUsers = table
-    .getFilteredSelectedRowModel()
-    .rows.map((row) => row.original)
+    return users.filter((user) => {
+      if (term) {
+        const haystack = [user.name, user.username, user.email]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+        if (!haystack.includes(term)) return false
+      }
+      if (
+        roleFilter !== DATA_TABLE_ALL &&
+        !user.roles.some((role) => role === roleFilter)
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [users, globalFilter, roleFilter])
+
+  const filters = React.useMemo<DataTableFilter[]>(
+    () => [
+      {
+        id: "role",
+        ariaLabel: "Filtrar por rol",
+        placeholder: "Todos los roles",
+        allLabel: "Todos los roles",
+        value: roleFilter,
+        onValueChange: setRoleFilter,
+        options: [
+          { value: DATA_TABLE_ALL, label: "Todos los roles" },
+          ...ROLE_OPTIONS.map((role) => ({
+            value: role.value,
+            label: role.label,
+          })),
+        ],
+      },
+    ],
+    [roleFilter]
+  )
+
+  const selectedUsers = React.useMemo(
+    () => filteredUsers.filter((user) => rowSelection[user.id]),
+    [filteredUsers, rowSelection]
+  )
   const selectedCount = selectedUsers.length
-  const roleFilter =
-    (table.getColumn("roles")?.getFilterValue() as string[] | undefined) ?? []
   const inactiveCount = users.filter((user) => !user.isActive).length
-  const filteredRowCount = table.getFilteredRowModel().rows.length
+  const activeFilterCount =
+    (globalFilter.trim().length > 0 ? 1 : 0) +
+    (roleFilter !== DATA_TABLE_ALL ? 1 : 0)
 
-  const handleRoleFilterChange = (value: string | null) => {
-    const next = !value || value === "all" ? [] : [value]
-    table.getColumn("roles")?.setFilterValue(next.length > 0 ? next : undefined)
-    setPagination((current) => ({ ...current, pageIndex: 0 }))
-  }
+  const clearFilters = React.useCallback(() => {
+    setGlobalFilter("")
+    setRoleFilter(DATA_TABLE_ALL)
+  }, [])
 
   const handleDeleteConfirm = async () => {
     if (!deleteTargets || deleteTargets.length === 0) return
@@ -250,7 +221,7 @@ export function UsersTable({
         }
       }
 
-      table.resetRowSelection()
+      setRowSelection({})
       setDeleteTargets(null)
     } catch {
       toast.error("No se pudieron eliminar los usuarios seleccionados")
@@ -266,7 +237,7 @@ export function UsersTable({
       if (result?.ok) {
         const deleted = result.data?.deletedCount ?? inactiveCount
         toast.success(`${deleted} usuario(s) inactivo(s) eliminados`)
-        table.resetRowSelection()
+        setRowSelection({})
       } else {
         toast.error(
           result?.message ?? "No se pudieron eliminar los usuarios inactivos"
@@ -325,7 +296,11 @@ export function UsersTable({
             >
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={busy}>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={busy}
+            >
               {busy ? "Eliminando…" : "Eliminar"}
             </Button>
           </AlertDialogFooter>
@@ -359,297 +334,123 @@ export function UsersTable({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Label htmlFor="users-search" className="sr-only">
-              Buscar usuario
-            </Label>
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="users-search"
-              type="search"
-              placeholder="Buscar usuario..."
-              value={globalFilter}
-              onChange={(event) => {
-                setGlobalFilter(event.target.value)
-                setPagination((current) => ({ ...current, pageIndex: 0 }))
-              }}
-              className="h-8 w-[220px] pl-8"
-            />
-          </div>
+      <DataTable
+        idPrefix="users"
+        data={filteredUsers}
+        columns={columns}
+        getRowId={(user) => user.id}
+        pageResetKey={`${globalFilter}|${roleFilter}`}
+        search={{
+          label: "Buscar usuario",
+          placeholder: "Buscar por nombre, usuario o correo...",
+          value: globalFilter,
+          onValueChange: setGlobalFilter,
+        }}
+        filters={filters}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        columnLabels={COLUMN_LABELS}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
+        // El propio usuario no puede eliminarse ni desactivarse, así que tampoco
+        // se puede seleccionar para acciones en bloque.
+        enableRowSelection={(user) => user.id !== currentUserId}
+        actions={
+          <>
+            {selectedCount > 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteTargets(selectedUsers)}
+                disabled={busy}
+              >
+                <Trash2Icon />
+                {busy
+                  ? "Eliminando…"
+                  : `Eliminar seleccionados (${selectedCount})`}
+              </Button>
+            ) : null}
 
-          <Label htmlFor="role-filter" className="sr-only">
-            Filtrar por rol
-          </Label>
-          <Select
-            id="role-filter"
-            value={roleFilter[0] ?? "all"}
-            onValueChange={handleRoleFilterChange}
-            items={[
-              { label: "Todos los roles", value: "all" },
-              ...ROLE_OPTIONS.map((role) => ({
-                label: role.label,
-                value: role.value,
-              })),
-            ]}
-          >
-            <SelectTrigger className="h-8 w-[180px]">
-              <SelectValue placeholder="Todos los roles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los roles</SelectItem>
-              {ROLE_OPTIONS.map((role) => (
-                <SelectItem key={role.value} value={role.value}>
-                  {role.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            {inactiveCount > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => setConfirmingPurge(true)}
+                disabled={busy}
+              >
+                <Trash2Icon />
+                {`Eliminar inactivos (${inactiveCount})`}
+              </Button>
+            ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {selectedCount > 0 ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setDeleteTargets(selectedUsers)}
-              disabled={busy}
-            >
-              <Trash2Icon />
-              {busy
-                ? "Eliminando…"
-                : `Eliminar seleccionados (${selectedCount})`}
+            <Button onClick={() => setCreating(true)}>
+              <UserPlusIcon />
+              <span className="hidden lg:inline">Añadir usuario</span>
             </Button>
-          ) : null}
+          </>
+        }
+        rowContextMenu={(user) => {
+          const isSelf = user.id === currentUserId
+          const pending = pendingIds.includes(user.id)
 
-          {inactiveCount > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmingPurge(true)}
-              disabled={busy}
-            >
-              <Trash2Icon />
-              {`Eliminar inactivos (${inactiveCount})`}
-            </Button>
-          ) : null}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="Mostrar u ocultar columnas"
-                />
-              }
-            >
-              <ChevronDownIcon />
-              <span className="hidden lg:inline">Columnas</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Columnas</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {table
-                  .getAllColumns()
-                  .filter((column) => column.getCanHide())
-                  .map((column) => (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {COLUMN_LABELS[column.id] ?? column.id}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button variant="default" size="sm" onClick={() => setCreating(true)}>
-            <UserPlusIcon />
-            <span className="hidden lg:inline">Añadir usuario</span>
-          </Button>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border">
-        <Table>
-          <TableHeader className="sticky top-0 z-10 bg-muted">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : (
-                      <FlexRender header={header} />
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => {
-                const user = row.original
-                const isSelf = user.id === currentUserId
-                const pending = pendingIds.includes(user.id)
-
-                return (
-                  <ContextMenu key={row.id}>
-                    <ContextMenuTrigger asChild>
-                      <TableRow
-                        data-state={row.getIsSelected() ? "selected" : undefined}
-                        className="data-[open]:bg-accent"
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            <FlexRender cell={cell} />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent align="end" className="w-48">
-                      <ContextMenuGroup>
-                        <ContextMenuGroupLabel>Acciones</ContextMenuGroupLabel>
-                        <ContextMenuItem
-                          onClick={() => handleEdit(user)}
-                          disabled={pending}
-                        >
-                          <PencilIcon />
-                          Editar
-                        </ContextMenuItem>
-                        {user.isActive ? (
-                          <ContextMenuItem
-                            onClick={() => handleToggleActive(user)}
-                            disabled={isSelf || pending}
-                          >
-                            <UserXIcon />
-                            Desactivar
-                          </ContextMenuItem>
-                        ) : (
-                          <ContextMenuItem
-                            onClick={() => handleToggleActive(user)}
-                            disabled={pending}
-                          >
-                            <UserCheckIcon />
-                            Activar
-                          </ContextMenuItem>
-                        )}
-                      </ContextMenuGroup>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem
-                        variant="destructive"
-                        onClick={() => handleRequestDelete([user])}
-                        disabled={isSelf || pending}
-                      >
-                        <Trash2Icon />
-                        Eliminar
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                )
-              })
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="h-24 text-center"
+          return (
+            <ContextMenuContent align="end">
+              <ContextMenuGroup>
+                <ContextMenuGroupLabel>Acciones</ContextMenuGroupLabel>
+                <ContextMenuItem
+                  onClick={() => handleEdit(user)}
+                  disabled={pending}
                 >
-                  {users.length === 0
-                    ? "Todavía no hay usuarios. Crea el primero para que tu equipo pueda entrar."
-                    : "No hay usuarios que coincidan con la búsqueda o los filtros."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {selectedCount} de {filteredRowCount} fila(s) seleccionada(s).
-        </p>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="hidden items-center gap-2 sm:flex">
-            <Label htmlFor="rows-per-page" className="text-sm font-medium">
-              Filas por página
-            </Label>
-            <Select
-              value={`${pagination.pageSize}`}
-              onValueChange={(value) => {
-                if (!value) return
-                table.setPageSize(Number(value))
-              }}
-              items={PAGE_SIZES.map((pageSize) => ({
-                label: `${pageSize}`,
-                value: `${pageSize}`,
-              }))}
-            >
-              <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                <SelectValue placeholder={`${pagination.pageSize}`} />
-              </SelectTrigger>
-              <SelectContent side="top">
-                {PAGE_SIZES.map((pageSize) => (
-                  <SelectItem key={pageSize} value={`${pageSize}`}>
-                    {pageSize}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex w-fit items-center justify-center text-sm font-medium">
-            Página {pagination.pageIndex + 1} de {table.getPageCount()}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2 sm:ml-0">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="hidden lg:flex"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">Ir a la primera página</span>
-              <ChevronsLeftIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">Ir a la página anterior</span>
-              <ChevronLeftIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">Ir a la página siguiente</span>
-              <ChevronRightIcon />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="hidden lg:flex"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">Ir a la última página</span>
-              <ChevronsRightIcon />
-            </Button>
-          </div>
-        </div>
-      </div>
+                  <PencilIcon />
+                  Editar
+                </ContextMenuItem>
+                {user.isActive ? (
+                  <ContextMenuItem
+                    onClick={() => handleToggleActive(user)}
+                    disabled={isSelf || pending}
+                  >
+                    <UserXIcon />
+                    Desactivar
+                  </ContextMenuItem>
+                ) : (
+                  <ContextMenuItem
+                    onClick={() => handleToggleActive(user)}
+                    disabled={pending}
+                  >
+                    <UserCheckIcon />
+                    Activar
+                  </ContextMenuItem>
+                )}
+              </ContextMenuGroup>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                variant="destructive"
+                onClick={() => handleRequestDelete([user])}
+                disabled={isSelf || pending}
+              >
+                <Trash2Icon />
+                Eliminar
+              </ContextMenuItem>
+            </ContextMenuContent>
+          )
+        }}
+        emptyState={
+          <p className="text-muted-foreground">
+            Todavía no hay usuarios. Crea el primero para que tu equipo pueda
+            entrar.
+          </p>
+        }
+        filteredEmptyState={
+          <p className="text-muted-foreground">
+            No hay usuarios que coincidan con la búsqueda o los filtros.
+          </p>
+        }
+        summary={
+          <>
+            {selectedCount} de {filteredUsers.length} fila(s) seleccionada(s).
+          </>
+        }
+        pageSizeOptions={PAGE_SIZES}
+        defaultPageSize={DEFAULT_PAGE_SIZE}
+      />
     </div>
   )
 }

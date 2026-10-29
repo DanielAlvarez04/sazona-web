@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { cn } from "cn"
 import { Loader2Icon, SaveIcon, UserPlusIcon, EyeIcon, EyeOffIcon } from "lucide-react"
 
 import {
@@ -18,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -44,12 +45,20 @@ import {
 function RolePicker({
   value,
   onChange,
+  columns = 2,
 }: {
   value: RoleCode[]
   onChange: (roles: RoleCode[]) => void
+  /** Roles por fila en pantallas grandes. */
+  columns?: 2 | 3
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div
+      className={cn(
+        "grid gap-2",
+        columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+      )}
+    >
       {ROLE_OPTIONS.map((option) => {
         const checked = value.includes(option.value)
 
@@ -206,7 +215,7 @@ function BranchPicker({
 
   return (
     <Field>
-      <FieldLabel htmlFor={id}>Sucursal principal (opcional)</FieldLabel>
+      <FieldLabel htmlFor={id}>Sucursal</FieldLabel>
       <Select
         value={value || "all"}
         onValueChange={(next) =>
@@ -233,9 +242,6 @@ function BranchPicker({
         </SelectContent>
       </Select>
       <input type="hidden" name="branchId" value={value} />
-      <FieldDescription>
-        Déjalo en «Todas» para que el usuario pueda atender cualquier local.
-      </FieldDescription>
     </Field>
   )
 }
@@ -311,7 +317,7 @@ export function CreateUserDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Nuevo usuario del equipo</DialogTitle>
           <DialogDescription>
@@ -334,7 +340,8 @@ export function CreateUserDialog({
           }}
         >
           <div className="flex flex-col gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* Fila 1: Nombre, Apellido e ID de usuario. */}
+            <div className="grid gap-3 sm:grid-cols-[2fr_2fr_3fr]">
               <Field>
                 <FieldLabel htmlFor="new-name">Nombre</FieldLabel>
                 <Input
@@ -360,55 +367,54 @@ export function CreateUserDialog({
                   onChange={(event) => setSurname(event.target.value)}
                 />
               </Field>
+              <Field>
+                <AvailabilityLabel
+                  htmlFor="new-username"
+                  label="ID de usuario"
+                  status={usernameStatus}
+                />
+                <UsernameWithDomainInput
+                  id="new-username"
+                  domain={domain}
+                  displayValue={displayUsername}
+                  placeholder="elizabeth"
+                  onChange={setManualUsernameLocalPart}
+                  required
+                />
+              </Field>
             </div>
 
-            <Field>
-              <AvailabilityLabel
-                htmlFor="new-username"
-                label="ID de usuario"
-                status={usernameStatus}
-              />
-              <UsernameWithDomainInput
-                id="new-username"
-                domain={domain}
-                displayValue={displayUsername}
-                placeholder="elizabeth"
-                onChange={setManualUsernameLocalPart}
-                required
-              />
-              <FieldDescription>
-                Se genera a partir del nombre; puedes editarlo.
-              </FieldDescription>
-            </Field>
+            {/* Fila 2: Contraseña y Sucursal. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="new-password">Contraseña inicial</FieldLabel>
+                <PasswordInput
+                  id="new-password"
+                  name="password"
+                  placeholder="Letras y números, mínimo 8"
+                  value={password}
+                  onChange={setPassword}
+                  required
+                />
+              </Field>
 
-            <Field>
-              <FieldLabel htmlFor="new-password">Contraseña inicial</FieldLabel>
-              <PasswordInput
-                id="new-password"
-                name="password"
-                placeholder="Letras y números, mínimo 8"
-                value={password}
-                onChange={setPassword}
-                required
+              <BranchPicker
+                id="new-branch"
+                branches={branches}
+                value={branchId}
+                onChange={setBranchId}
               />
-            </Field>
+            </div>
 
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium">Roles</span>
-              <RolePicker value={roles} onChange={setRoles} />
+              <RolePicker value={roles} onChange={setRoles} columns={3} />
               {roles.length === 0 ? (
                 <p className="text-sm text-destructive">
                   Elige al menos un rol.
                 </p>
               ) : null}
             </div>
-
-            <BranchPicker
-              id="new-branch"
-              branches={branches}
-              value={branchId}
-              onChange={setBranchId}
-            />
 
             {error ? <FieldError>{error}</FieldError> : null}
 

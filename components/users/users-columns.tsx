@@ -15,7 +15,6 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -28,6 +27,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { ROLE_OPTIONS, type InternalUser } from "@/lib/users"
 
 import type { UsersTableFeatures } from "./data-table-features"
@@ -46,28 +50,30 @@ function CopyIdButton({
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger>
-        <span
-          className="inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none transition-colors cursor-pointer"
-          onClick={handleCopy}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
-              handleCopy()
-            }
-          }}
-          aria-label={copied ? "ID copiado" : "Copiar ID de usuario"}
-        >
-          {copied ? <CheckIcon className="size-4 text-green-500" /> : <CopyIcon className="size-4" />}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">
+    <HoverCard>
+      <HoverCardTrigger
+        // El trigger de PreviewCard renderiza un `<a>` por defecto; aquí debe
+        // ser un botón para que el clic copie el ID.
+        delay={100}
+        render={
+          <button
+            type="button"
+            aria-label={copied ? "ID copiado" : "Copiar ID de usuario"}
+            onClick={handleCopy}
+            className="inline-flex cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+        }
+      >
+        {copied ? (
+          <CheckIcon className="size-4 text-green-500" />
+        ) : (
+          <CopyIcon className="size-4" />
+        )}
+      </HoverCardTrigger>
+      <HoverCardContent side="top" className="w-fit px-3 py-2 text-xs">
         {copied ? "ID copiado" : "Copiar ID de usuario"}
-      </TooltipContent>
-    </Tooltip>
+      </HoverCardContent>
+    </HoverCard>
   )
 }
 
@@ -157,7 +163,7 @@ function UserRowActionsMenu({
         <EllipsisVerticalIcon />
         <span className="sr-only">Abrir menú</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onEdit(user)}>

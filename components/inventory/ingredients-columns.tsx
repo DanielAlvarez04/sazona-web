@@ -31,9 +31,9 @@ import {
   type Ingredient,
 } from "@/lib/catalog"
 
-import type { InventoryTableFeatures } from "./data-table-features"
+import type { DataTableFeatures } from "@/components/data-table/data-table-features"
 
-const columnHelper = createColumnHelper<InventoryTableFeatures, Ingredient>()
+const columnHelper = createColumnHelper<DataTableFeatures, Ingredient>()
 
 /** Interfaz mínima de columna que necesitan los headers ordenables. */
 interface SortableColumn {
@@ -123,7 +123,7 @@ function IngredientRowActionsMenu({
         <EllipsisVerticalIcon />
         <span className="sr-only">Abrir menú</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onAddStock(ingredient)}>
