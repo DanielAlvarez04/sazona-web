@@ -1,7 +1,11 @@
 "use server"
 
 import { apiFetch } from "@/lib/api"
-import type { Equivalence, UnitCode } from "@/lib/catalog"
+import type {
+  Equivalence,
+  ImportIngredientsMode,
+  UnitCode,
+} from "@/lib/catalog"
 import { apiErrorMessage } from "@/lib/http-error"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 import { requireUser } from "@/lib/session"
@@ -30,7 +34,7 @@ export async function createIngredient(
     "POST",
     {
       name: text(formData, "name"),
-      baseUnit: text(formData, "baseUnit") as UnitCode,
+      displayUnit: text(formData, "displayUnit") as UnitCode,
       categoryId: text(formData, "categoryId"),
       locationId: text(formData, "locationId"),
       unitCost: numeric(formData, "unitCost"),
@@ -44,7 +48,7 @@ export async function createIngredient(
 
 export interface BulkIngredientInput {
   name: string
-  baseUnit: UnitCode
+  displayUnit: UnitCode
   /** Obligatoria: define el prefijo del SKU generado. */
   categoryId: string
   locationId?: string
@@ -70,19 +74,26 @@ export async function updateIngredient(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
+  const payload: Record<string, unknown> = {
+    name: text(formData, "name"),
+    displayUnit: text(formData, "displayUnit") as UnitCode,
+    categoryId: text(formData, "categoryId"),
+    locationId: text(formData, "locationId"),
+    unitCost: numeric(formData, "unitCost"),
+    maxStock: numeric(formData, "maxStock"),
+    minStock: numeric(formData, "minStock"),
+  }
+
+  // El estado del insumo no se edita desde el diálogo: se activa o desactiva
+  // desde las acciones de la fila. Solo se envía si el formulario lo incluye.
+  if (formData.has("isActive")) {
+    payload.isActive = formData.get("isActive") === "on"
+  }
+
   return mutateApi(
     `/inventory/ingredients/${id}`,
     "PATCH",
-    {
-      name: text(formData, "name"),
-      baseUnit: text(formData, "baseUnit") as UnitCode,
-      categoryId: text(formData, "categoryId"),
-      locationId: text(formData, "locationId"),
-      unitCost: numeric(formData, "unitCost"),
-      maxStock: numeric(formData, "maxStock"),
-      minStock: numeric(formData, "minStock"),
-      isActive: formData.get("isActive") === "on",
-    },
+    payload,
     INVENTORY_PATHS
   )
 }
@@ -92,6 +103,19 @@ export async function deactivateIngredient(id: string): Promise<ActionResult> {
     `/inventory/ingredients/${id}`,
     "DELETE",
     undefined,
+    INVENTORY_PATHS
+  )
+}
+
+/** Elimina insumos definitivamente (hard delete, incluye su kardex). */
+export async function deleteIngredients(
+  ids: string[],
+  coreIds: string[] = []
+): Promise<ActionResult<{ deletedCount: number }>> {
+  return mutateApi<{ deletedCount: number }>(
+    "/inventory/ingredients/bulk-delete",
+    "POST",
+    { ids, coreIds },
     INVENTORY_PATHS
   )
 }
@@ -214,12 +238,13 @@ export async function deleteEquivalence(
 
 /** Importa ingredientes desde CSV. */
 export async function importIngredientsFromCsv(
-  csv: string
+  csv: string,
+  mode: ImportIngredientsMode = "exclude"
 ): Promise<ActionResult> {
   return mutateApi(
     "/inventory/ingredients/import-csv",
     "POST",
-    { csv },
+    { csv, mode },
     INVENTORY_PATHS
   )
 }

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 
-import { BranchCombobox } from "@/components/branch-combobox"
+import { BranchSelect } from "@/components/branch-select"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser, type NavUserData } from "@/components/nav-user"
@@ -127,7 +127,7 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
           <SidebarGroupContent>
-            <BranchCombobox
+            <BranchSelect
               branches={branches}
               activeBranchId={activeBranchId}
               locked={lockedBranch}

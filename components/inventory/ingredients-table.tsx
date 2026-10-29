@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   EllipsisVerticalIcon,
   FileTextIcon,
@@ -9,27 +10,41 @@ import {
   PackageOpenIcon,
   PencilIcon,
   PlusIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import type { RowSelectionState } from "@tanstack/react-table"
 
 import {
-  activateIngredient,
   adjustStock,
-  deactivateIngredient,
+  deleteIngredients,
 } from "@/app/(app)/inventory/actions"
+import { isCoreProductName } from "@/lib/core-products"
 import {
   DataTable,
   DATA_TABLE_ALL,
   type DataTableFilter,
 } from "@/components/data-table/data-table"
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenuContent,
   ContextMenuGroup,
   ContextMenuGroupLabel,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
@@ -51,6 +66,7 @@ const DEFAULT_PAGE_SIZE = 15
 export function IngredientsTable({
   ingredients,
   branch,
+  global = false,
   canManage,
   onCreate,
   onBulkCreate,
@@ -61,8 +77,10 @@ export function IngredientsTable({
   locations = [],
 }: {
   ingredients: Ingredient[]
-  /** Sucursal activa; `null` = vista consolidada de la organización. */
+  /** Sucursal activa; `null` = Modo Global (todas las sucursales). */
   branch: Branch | null
+  /** Modo Global: stock total y sin columnas por sucursal. */
+  global?: boolean
   canManage: boolean
   onCreate: () => void
   onBulkCreate: () => void
@@ -81,44 +99,58 @@ export function IngredientsTable({
   const [locationFilter, setLocationFilter] =
     React.useState<string>(DATA_TABLE_ALL)
   const [pendingIds, setPendingIds] = React.useState<string[]>([])
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  /** Productos a eliminar, pendientes de confirmación. */
+  const [deleteTargets, setDeleteTargets] = React.useState<
+    Ingredient[] | null
+  >(null)
+  const [deleting, setDeleting] = React.useState(false)
   const [adjustingStock, setAdjustingStock] = React.useState<{
     ingredient: Ingredient
     type: "add" | "subtract"
   } | null>(null)
+  const router = useRouter()
 
   const isPending = React.useCallback(
     (ingredient: Ingredient) => pendingIds.includes(ingredient.id),
     [pendingIds]
   )
 
-  const handleToggleActive = React.useCallback(
-    async (ingredient: Ingredient) => {
-      setPendingIds((ids) => [...ids, ingredient.id])
-      try {
-        const result = ingredient.isActive
-          ? await deactivateIngredient(ingredient.id)
-          : await activateIngredient(
-              ingredient.id,
-              ingredient.location?.id ?? null
-            )
+  const handleRequestDelete = React.useCallback((targets: Ingredient[]) => {
+    setDeleteTargets(targets)
+  }, [])
 
-        if (result?.ok) {
-          toast.success(
-            ingredient.isActive ? "Insumo desactivado" : "Insumo activado"
-          )
-        } else {
-          toast.error(
-            result?.message ?? "No se pudo actualizar el estado del insumo"
-          )
-        }
-      } catch {
-        toast.error("No se pudo actualizar el estado del insumo")
-      } finally {
-        setPendingIds((ids) => ids.filter((id) => id !== ingredient.id))
+  const handleDeleteConfirm = React.useCallback(async () => {
+    if (!deleteTargets || deleteTargets.length === 0) return
+
+    setDeleting(true)
+    try {
+      const result = await deleteIngredients(
+        deleteTargets.map((ingredient) => ingredient.id),
+        deleteTargets
+          .filter((ingredient) => isCoreProductName(ingredient.name))
+          .map((ingredient) => ingredient.id)
+      )
+
+      if (result?.ok) {
+        const count = result.data?.deletedCount ?? deleteTargets.length
+        toast.success(
+          count === 1 ? "Producto eliminado" : `${count} productos eliminados`
+        )
+        setRowSelection({})
+        setDeleteTargets(null)
+        router.refresh()
+      } else {
+        toast.error(
+          result?.message ?? "No se pudieron eliminar los productos"
+        )
       }
-    },
-    []
-  )
+    } catch {
+      toast.error("No se pudieron eliminar los productos")
+    } finally {
+      setDeleting(false)
+    }
+  }, [deleteTargets, router])
 
   const handleAddStock = React.useCallback((ingredient: Ingredient) => {
     setAdjustingStock({ ingredient, type: "add" })
@@ -162,14 +194,26 @@ export function IngredientsTable({
 
   const columns = React.useMemo(
     () =>
-      createIngredientColumns({
-        onEdit,
-        onToggleActive: handleToggleActive,
-        onAddStock: handleAddStock,
-        onSubtractStock: handleSubtractStock,
-        isPending,
-      }),
-    [onEdit, handleToggleActive, handleAddStock, handleSubtractStock, isPending]
+      createIngredientColumns(
+        {
+          onEdit,
+          onAddStock: handleAddStock,
+          onSubtractStock: handleSubtractStock,
+          onRequestDelete: (ingredient) => handleRequestDelete([ingredient]),
+          canManage,
+          isPending,
+        },
+        { selectable: canManage, global }
+      ),
+    [
+      onEdit,
+      handleAddStock,
+      handleSubtractStock,
+      handleRequestDelete,
+      isPending,
+      canManage,
+      global,
+    ]
   )
 
   const filteredIngredients = React.useMemo(() => {
@@ -196,6 +240,13 @@ export function IngredientsTable({
       return true
     })
   }, [ingredients, globalFilter, categoryFilter, locationFilter])
+
+  const selectedIngredients = React.useMemo(
+    () =>
+      filteredIngredients.filter((ingredient) => rowSelection[ingredient.id]),
+    [filteredIngredients, rowSelection]
+  )
+  const selectedCount = selectedIngredients.length
 
   const filters = React.useMemo<DataTableFilter[]>(() => {
     const items: DataTableFilter[] = []
@@ -259,8 +310,14 @@ export function IngredientsTable({
         columns={columns}
         getRowId={(ingredient) => ingredient.id}
         pageResetKey={`${globalFilter}|${categoryFilter}|${locationFilter}`}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
+        enableRowSelection={canManage}
+        tableClassName="[&_td]:py-1.5"
+        // Lo más urgente (stock/mínimo más bajo) primero.
+        initialSorting={[{ id: "stock", desc: false }]}
         search={{
-          label: "Buscar insumo",
+          label: "Buscar producto",
           placeholder: "Buscar por nombre o SKU...",
           value: globalFilter,
           onValueChange: setGlobalFilter,
@@ -273,9 +330,22 @@ export function IngredientsTable({
         actions={
           canManage ? (
             <>
+              {selectedCount > 0 ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteTargets(selectedIngredients)}
+                  disabled={deleting}
+                >
+                  <Trash2Icon />
+                  {deleting
+                    ? "Eliminando…"
+                    : `Eliminar seleccionados (${selectedCount})`}
+                </Button>
+              ) : null}
+
               <Button onClick={onCreate}>
                 <PlusIcon className="size-4" />
-                Nuevo insumo
+                Nuevo producto
               </Button>
 
               <DropdownMenu>
@@ -304,10 +374,6 @@ export function IngredientsTable({
               </DropdownMenu>
             </>
           ) : null
-        }
-        onRowClick={canManage ? onEdit : undefined}
-        rowClassName={
-          canManage ? "cursor-pointer data-[open]:bg-accent" : undefined
         }
         rowContextMenu={(ingredient) => {
           const pending = pendingIds.includes(ingredient.id)
@@ -338,19 +404,34 @@ export function IngredientsTable({
                   Editar
                 </ContextMenuItem>
               </ContextMenuGroup>
+              {canManage ? (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuGroup>
+                    <ContextMenuItem
+                      variant="destructive"
+                      onClick={() => handleRequestDelete([ingredient])}
+                      disabled={pending}
+                    >
+                      <Trash2Icon />
+                      Eliminar
+                    </ContextMenuItem>
+                  </ContextMenuGroup>
+                </>
+              ) : null}
             </ContextMenuContent>
           )
         }}
         emptyState={
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <PackageOpenIcon className="size-6" />
-            <p>Todavía no hay insumos. Crea el primero para empezar.</p>
+            <p>Todavía no hay productos. Crea el primero para empezar.</p>
           </div>
         }
         filteredEmptyState={
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <PackageOpenIcon className="size-6" />
-            <p>No hay insumos que coincidan con los filtros.</p>
+            <p>No hay productos que coincidan con los filtros.</p>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               <XIcon className="size-4" />
               Limpiar filtros
@@ -359,8 +440,9 @@ export function IngredientsTable({
         }
         summary={
           <>
-            {filteredIngredients.length} insumo
+            {filteredIngredients.length} producto
             {filteredIngredients.length === 1 ? "" : "s"}
+            {selectedCount > 0 ? ` · ${selectedCount} seleccionado(s)` : ""}
             {branch
               ? ` · Stock de ${branch.name}`
               : " · Toda la organización"}
@@ -381,6 +463,44 @@ export function IngredientsTable({
         pending={pendingIds.includes(adjustingStock?.ingredient.id ?? "")}
         type={adjustingStock?.type ?? "add"}
       />
+
+      <AlertDialog
+        open={deleteTargets !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargets(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              {deleteTargets && deleteTargets.length > 1
+                ? `¿Eliminar ${deleteTargets.length} productos?`
+                : "¿Eliminar este producto?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTargets && deleteTargets.length === 1
+                ? `«${deleteTargets[0].name}» se eliminará definitivamente, junto con su historial de movimientos (kardex). También se quitará de recetas y extras que lo usen.`
+                : "Se eliminarán definitivamente junto con su historial de movimientos (kardex). También se quitarán de recetas y extras que los usen."}{" "}
+              Los productos del catálogo core que estén en recetas harán que
+              esas recetas queden inactivas. Los productos que aparecen en
+              pedidos no se pueden eliminar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? "Eliminando…" : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

@@ -104,7 +104,7 @@ function ExtraRow({
                 ?.map(
                   (item) =>
                     `${formatQuantity(item.quantity)} ${unitLabel(
-                      item.ingredient.baseUnit
+                      item.ingredient.displayUnit
                     )} de ${item.ingredient.name}`
                 )
                 .join(" · ")}
@@ -198,7 +198,7 @@ function ExtraCreateForm({
               { value: "none", label: "Sin consumo" },
               ...ingredients.map((ingredient) => ({
                 value: ingredient.id,
-                label: `${ingredient.name} (${UNIT_LABELS[ingredient.baseUnit]})`,
+                label: `${ingredient.name} (${UNIT_LABELS[ingredient.displayUnit]})`,
               })),
             ]}
           >
@@ -213,7 +213,7 @@ function ExtraCreateForm({
               <SelectItem value="none">Sin consumo</SelectItem>
               {ingredients.map((ingredient) => (
                 <SelectItem key={ingredient.id} value={ingredient.id}>
-                  {ingredient.name} ({UNIT_LABELS[ingredient.baseUnit]})
+                  {ingredient.name} ({UNIT_LABELS[ingredient.displayUnit]})
                 </SelectItem>
               ))}
             </SelectContent>

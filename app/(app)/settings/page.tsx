@@ -10,6 +10,7 @@ import {
 
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { BranchesCard } from "@/components/settings/branches-card"
+import { CoreProductsCard } from "@/components/settings/core-products-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { TaxSettingsCard } from "@/components/settings/tax-settings-card"
 import { UnitsCard } from "@/components/settings/units-card"
@@ -27,7 +28,14 @@ import {
 import { API_BASE_URL } from "@/lib/api-base"
 import { apiFetch } from "@/lib/api"
 import { googleLinkNotice } from "@/lib/auth-errors"
+import { getActiveBranch } from "@/lib/branch-server"
 import type { Branch } from "@/lib/branches"
+import {
+  canManageInventory,
+  type Ingredient,
+  type IngredientCategory,
+  type IngredientLocation,
+} from "@/lib/catalog"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
 import { cn } from "cn"
@@ -67,6 +75,33 @@ export default async function SettingsPage({
   const branches: Branch[] = branchesResponse?.ok
     ? ((await branchesResponse.json()) as Branch[])
     : []
+
+  // Inventario actual: sirve para marcar los productos core que ya existen y
+  // bloquear los que están en recetas.
+  const [
+    ingredientsResponse,
+    categoriesResponse,
+    locationsResponse,
+    activeBranch,
+  ] = await Promise.all([
+    apiFetch("/inventory/ingredients?includeInactive=true"),
+    apiFetch("/inventory/ingredient-categories"),
+    apiFetch("/inventory/ingredient-locations"),
+    getActiveBranch(),
+  ])
+  const ingredients: Ingredient[] = ingredientsResponse.ok
+    ? ((await ingredientsResponse.json()) as Ingredient[])
+    : []
+  const categories: IngredientCategory[] = categoriesResponse.ok
+    ? ((await categoriesResponse.json()) as IngredientCategory[])
+    : []
+  const locations: IngredientLocation[] = locationsResponse.ok
+    ? ((await locationsResponse.json()) as IngredientLocation[])
+    : []
+  const inventoryLoaded = ingredientsResponse.ok
+  const catalogLoaded =
+    inventoryLoaded && categoriesResponse.ok && locationsResponse.ok
+  const existingNames = ingredients.map((ingredient) => ingredient.name)
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-6 px-4 py-6 lg:px-6">
@@ -304,6 +339,16 @@ export default async function SettingsPage({
 
             <BranchesCard branches={branches} canManage={admin} />
           </>
+        }
+        inventory={
+          <CoreProductsCard
+            existingNames={existingNames}
+            categories={categories}
+            locations={locations}
+            branchName={activeBranch?.name ?? null}
+            storageKey={`np-core-presets:${user.organizationId ?? "default"}`}
+            canManage={catalogLoaded && canManageInventory(user.roles)}
+          />
         }
         personalization={
           <>

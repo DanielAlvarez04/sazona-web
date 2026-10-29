@@ -19,9 +19,9 @@ import {
 
 import { adjustStock, deactivateIngredient, getEquivalences, listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
 import { AdjustStockDialog } from "@/components/inventory/adjust-stock-dialog"
-import { BulkIngredientsSheet } from "@/components/inventory/bulk-ingredients-sheet"
+import { BulkIngredientsDialog } from "@/components/inventory/bulk-ingredients-dialog"
 import { EquivalencesDialog } from "@/components/inventory/equivalences-dialog"
-import { ImportCsvSheet } from "@/components/inventory/import-csv-sheet"
+import { ImportIngredientsDialog } from "@/components/inventory/import-ingredients-dialog"
 import { IngredientDialog } from "@/components/inventory/ingredient-dialog"
 import { IngredientsTable } from "@/components/inventory/ingredients-table"
 import { PageHeader } from "@/components/page-header"
@@ -205,7 +205,7 @@ export function InventoryView({
       movements.filter((movement) => {
         if (
           movementIngredientId &&
-          movement.ingredient.id !== movementIngredientId
+          movement.ingredient?.id !== movementIngredientId
         ) {
           return false
         }
@@ -221,7 +221,7 @@ export function InventoryView({
         title="Inventario"
         description={
           <>
-            {ingredients.length} insumo(s) · {alerts.length} bajo mínimo
+            {ingredients.length} producto(s) · {alerts.length} bajo mínimo
             {branch
               ? ` · Stock de ${branch.name}`
               : " · Stock consolidado de la organización"}
@@ -233,7 +233,7 @@ export function InventoryView({
             <ButtonGroup>
               <Button onClick={() => setCreating(true)}>
                 <PlusIcon className="mr-2 h-4 w-4" />
-                Nuevo insumo
+                Nuevo producto
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -292,9 +292,9 @@ export function InventoryView({
                   <span className="tabular-nums text-muted-foreground">
                     {formatQuantity(alert.currentStock)} /{" "}
                     {formatQuantity(alert.minStock)}{" "}
-                    {unitLabel(alert.baseUnit)} · faltan{" "}
+                    {unitLabel(alert.displayUnit)} · faltan{" "}
                     <span className="font-medium text-destructive">
-                      {formatQuantity(alert.deficit)} {unitLabel(alert.baseUnit)}
+                      {formatQuantity(alert.deficit)} {unitLabel(alert.displayUnit)}
                     </span>
                   </span>
                 </li>
@@ -414,7 +414,7 @@ export function InventoryView({
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(movement.createdAt)}
                       </TableCell>
-                      <TableCell>{movement.ingredient.name}</TableCell>
+                      <TableCell>{movement.ingredientName}</TableCell>
                       {branch ? null : (
                         <TableCell className="text-muted-foreground">
                           {movement.branch?.name ?? "—"}
@@ -438,7 +438,7 @@ export function InventoryView({
                       >
                         {amount > 0 ? "+" : ""}
                         {formatQuantity(movement.quantity)}{" "}
-                        {unitLabel(movement.ingredient.baseUnit)}
+                        {unitLabel(movement.displayUnit)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {movement.stockAfter === null
@@ -465,17 +465,18 @@ export function InventoryView({
       {canManage ? (
         <>
           {importingCsv ? (
-            <ImportCsvSheet
+            <ImportIngredientsDialog
               open
               onOpenChange={(open) => {
                 if (!open) setImportingCsv(false)
               }}
               branchName={branch?.name ?? null}
+              existingNames={ingredients.map((ingredient) => ingredient.name)}
             />
           ) : null}
 
           {bulkCreating ? (
-            <BulkIngredientsSheet
+            <BulkIngredientsDialog
               open
               onOpenChange={(open) => {
                 if (!open) setBulkCreating(false)

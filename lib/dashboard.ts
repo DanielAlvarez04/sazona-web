@@ -35,6 +35,7 @@ export interface DashboardOverview {
       id: string
       name: string
       baseUnit: string
+      displayUnit: string
       currentStock: number
       minStock: number
       deficit: number
@@ -81,11 +82,16 @@ export interface InventoryReport {
   from: string
   to: string
   movements: { type: string; count: number; quantity: number }[]
-  consumption: { name: string; baseUnit: string; quantity: number }[]
+  consumption: {
+    name: string
+    displayUnit: string
+    quantity: number
+  }[]
   lowStock: {
     id: string
     name: string
     baseUnit: string
+    displayUnit: string
     currentStock: number
     minStock: number
     deficit: number

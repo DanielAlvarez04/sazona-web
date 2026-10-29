@@ -58,14 +58,18 @@ export function AvailabilityLabel({
   htmlFor,
   label,
   status,
+  required = false,
 }: {
   htmlFor: string
   label: string
   status: AvailabilityStatus
+  required?: boolean
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
+      <FieldLabel htmlFor={htmlFor} required={required}>
+        {label}
+      </FieldLabel>
       <AvailabilityBadge status={status} />
     </div>
   )

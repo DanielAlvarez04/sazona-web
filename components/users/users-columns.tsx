@@ -153,7 +153,7 @@ function UserRowActionsMenu({
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             className="text-muted-foreground aria-expanded:bg-muted"
             disabled={pending}
             aria-label={`Acciones de ${user.name ?? user.username ?? "usuario"}`}
@@ -303,7 +303,7 @@ export function createUserColumns(actions: UserRowActions) {
     columnHelper.accessor("isActive", {
       header: () => <span className="font-medium">Estado</span>,
       cell: ({ row }) => (
-        <Badge variant={row.original.isActive ? "secondary" : "outline"}>
+        <Badge variant={row.original.isActive ? "success" : "secondary"}>
           {row.original.isActive ? "Activo" : "Inactivo"}
         </Badge>
       ),

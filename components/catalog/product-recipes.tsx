@@ -54,7 +54,7 @@ function rowsFrom(recipe: Recipe | undefined): RecipeRow[] {
     key: nextKey(),
     ingredientId: item.ingredient.id,
     quantity: item.quantity,
-    unit: item.ingredient.baseUnit,
+    unit: item.ingredient.displayUnit,
   }))
 }
 
@@ -232,14 +232,14 @@ function RecipeEditor({
                   )
                   updateRow(row.key, {
                     ingredientId: nextId,
-                    unit: ingredient?.baseUnit ?? "",
+                    unit: ingredient?.displayUnit ?? "",
                   })
                 }}
                 items={[
                   { value: "none", label: "Elige un ingrediente" },
                   ...ingredients.map((ingredient) => ({
                     value: ingredient.id,
-                    label: `${ingredient.name} (${unitLabel(ingredient.baseUnit)})`,
+                    label: `${ingredient.name} (${unitLabel(ingredient.displayUnit)})`,
                   })),
                 ]}
               >
@@ -250,7 +250,7 @@ function RecipeEditor({
                   <SelectItem value="none">Elige un ingrediente</SelectItem>
                   {ingredients.map((ingredient) => (
                     <SelectItem key={ingredient.id} value={ingredient.id}>
-                      {ingredient.name} ({unitLabel(ingredient.baseUnit)})
+                      {ingredient.name} ({unitLabel(ingredient.displayUnit)})
                     </SelectItem>
                   ))}
                 </SelectContent>

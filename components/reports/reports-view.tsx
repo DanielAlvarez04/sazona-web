@@ -310,7 +310,7 @@ export function ReportsView({
                               {row.name}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatQuantity(row.quantity)} {row.baseUnit}
+                              {formatQuantity(row.quantity)} {row.displayUnit}
                             </TableCell>
                           </TableRow>
                         ))
@@ -344,10 +344,10 @@ export function ReportsView({
                               {row.name}
                             </TableCell>
                             <TableCell className="text-right text-destructive tabular-nums">
-                              {formatQuantity(row.currentStock)} {row.baseUnit}
+                              {formatQuantity(row.currentStock)} {row.displayUnit}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatQuantity(row.minStock)} {row.baseUnit}
+                              {formatQuantity(row.minStock)} {row.displayUnit}
                             </TableCell>
                           </TableRow>
                         ))

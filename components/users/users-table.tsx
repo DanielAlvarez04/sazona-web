@@ -13,10 +13,13 @@ import type { RowSelectionState } from "@tanstack/react-table"
 
 import {
   AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
@@ -63,11 +66,14 @@ function userName(user: InternalUser) {
 export function UsersTable({
   users,
   branches,
+  activeBranch,
   currentUserId,
   organizationDomain,
 }: {
   users: InternalUser[]
   branches: Branch[]
+  /** Sucursal activa; `null` = vista consolidada de todas las sucursales. */
+  activeBranch: Branch | null
   currentUserId: string
   organizationDomain: string
 }) {
@@ -75,6 +81,7 @@ export function UsersTable({
   const [editing, setEditing] = React.useState<InternalUser | null>(null)
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [roleFilter, setRoleFilter] = React.useState<string>(DATA_TABLE_ALL)
+  const [branchFilter, setBranchFilter] = React.useState<string>(DATA_TABLE_ALL)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
 
   /** Usuarios a eliminar, pendientes de confirmación. */
@@ -139,17 +146,52 @@ export function UsersTable({
     ]
   )
 
-  /** Filtrado local: texto (nombre, usuario o correo) y rol. */
+  /**
+   * Usuarios visibles según la sucursal activa.
+   *
+   * En una sucursal concreta la API devuelve toda la organización, así que el
+   * recorte se hace aquí; en la vista consolidada se muestran todos. Quien no
+   * tiene sucursal asignada (`branchId === null`) opera en todas, por lo que es
+   * visible desde cualquier sucursal.
+   */
+  const scopedUsers = React.useMemo(
+    () =>
+      activeBranch
+        ? users.filter(
+            (user) =>
+              user.branchId === null || user.branchId === activeBranch.id
+          )
+        : users,
+    [users, activeBranch]
+  )
+
+  /**
+   * Filtro por sucursal efectivo.
+   *
+   * Solo aplica en la vista consolidada: al cambiar a una sucursal concreta se
+   * ignora cualquier valor previo, aunque el estado del componente se conserve.
+   */
+  const effectiveBranchFilter = activeBranch ? DATA_TABLE_ALL : branchFilter
+
+  /** Filtrado local: texto (nombre, usuario o correo), sucursal y rol. */
   const filteredUsers = React.useMemo(() => {
     const term = globalFilter.trim().toLowerCase()
 
-    return users.filter((user) => {
+    return scopedUsers.filter((user) => {
       if (term) {
         const haystack = [user.name, user.username, user.email]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
         if (!haystack.includes(term)) return false
+      }
+      // Los usuarios sin sucursal (acceso a todas) aparecen en cualquier filtro.
+      if (
+        effectiveBranchFilter !== DATA_TABLE_ALL &&
+        user.branchId !== effectiveBranchFilter &&
+        user.branchId !== null
+      ) {
+        return false
       }
       if (
         roleFilter !== DATA_TABLE_ALL &&
@@ -159,28 +201,53 @@ export function UsersTable({
       }
       return true
     })
-  }, [users, globalFilter, roleFilter])
+  }, [scopedUsers, globalFilter, effectiveBranchFilter, roleFilter])
 
-  const filters = React.useMemo<DataTableFilter[]>(
-    () => [
-      {
-        id: "role",
-        ariaLabel: "Filtrar por rol",
-        placeholder: "Todos los roles",
-        allLabel: "Todos los roles",
-        value: roleFilter,
-        onValueChange: setRoleFilter,
+  const filters = React.useMemo<DataTableFilter[]>(() => {
+    const list: DataTableFilter[] = []
+
+    // El filtro por sucursal solo tiene sentido en la vista consolidada.
+    if (!activeBranch) {
+      const branchOptions = branches
+        .filter(
+          (branch) =>
+            branch.isActive ||
+            users.some((user) => user.branchId === branch.id)
+        )
+        .map((branch) => ({ value: branch.id, label: branch.name }))
+
+      list.push({
+        id: "branch",
+        ariaLabel: "Filtrar por sucursal",
+        placeholder: "Todas las sucursales",
+        allLabel: "Todas las sucursales",
+        value: branchFilter,
+        onValueChange: setBranchFilter,
         options: [
-          { value: DATA_TABLE_ALL, label: "Todos los roles" },
-          ...ROLE_OPTIONS.map((role) => ({
-            value: role.value,
-            label: role.label,
-          })),
+          { value: DATA_TABLE_ALL, label: "Todas las sucursales" },
+          ...branchOptions,
         ],
-      },
-    ],
-    [roleFilter]
-  )
+      })
+    }
+
+    list.push({
+      id: "role",
+      ariaLabel: "Filtrar por rol",
+      placeholder: "Todos los roles",
+      allLabel: "Todos los roles",
+      value: roleFilter,
+      onValueChange: setRoleFilter,
+      options: [
+        { value: DATA_TABLE_ALL, label: "Todos los roles" },
+        ...ROLE_OPTIONS.map((role) => ({
+          value: role.value,
+          label: role.label,
+        })),
+      ],
+    })
+
+    return list
+  }, [activeBranch, branchFilter, branches, users, roleFilter])
 
   const selectedUsers = React.useMemo(
     () => filteredUsers.filter((user) => rowSelection[user.id]),
@@ -190,10 +257,12 @@ export function UsersTable({
   const inactiveCount = users.filter((user) => !user.isActive).length
   const activeFilterCount =
     (globalFilter.trim().length > 0 ? 1 : 0) +
+    (effectiveBranchFilter !== DATA_TABLE_ALL ? 1 : 0) +
     (roleFilter !== DATA_TABLE_ALL ? 1 : 0)
 
   const clearFilters = React.useCallback(() => {
     setGlobalFilter("")
+    setBranchFilter(DATA_TABLE_ALL)
     setRoleFilter(DATA_TABLE_ALL)
   }, [])
 
@@ -263,9 +332,9 @@ export function UsersTable({
       {editing ? (
         <EditUserDialog
           user={editing}
-          isSelf={editing.id === currentUserId}
           onClose={() => setEditing(null)}
           branches={branches}
+          organizationDomain={organizationDomain}
         />
       ) : null}
 
@@ -275,8 +344,11 @@ export function UsersTable({
           if (!open) setDeleteTargets(null)
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent size="sm">
           <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
             <AlertDialogTitle>
               {deleteTargets && deleteTargets.length > 1
                 ? `¿Eliminar ${deleteTargets.length} usuarios?`
@@ -289,27 +361,24 @@ export function UsersTable({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteTargets(null)}
-              disabled={busy}
-            >
-              Cancelar
-            </Button>
-            <Button
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
               variant="destructive"
               onClick={handleDeleteConfirm}
               disabled={busy}
             >
-              {busy ? "Eliminando…" : "Eliminar"}
-            </Button>
+              Eliminar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={confirmingPurge} onOpenChange={setConfirmingPurge}>
-        <AlertDialogContent>
+        <AlertDialogContent size="sm">
           <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
             <AlertDialogTitle>
               ¿Eliminar los {inactiveCount} usuarios inactivos?
             </AlertDialogTitle>
@@ -320,16 +389,14 @@ export function UsersTable({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmingPurge(false)}
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handlePurge}
               disabled={busy}
             >
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handlePurge} disabled={busy}>
-              {busy ? "Eliminando…" : "Eliminar inactivos"}
-            </Button>
+              Eliminar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -339,7 +406,8 @@ export function UsersTable({
         data={filteredUsers}
         columns={columns}
         getRowId={(user) => user.id}
-        pageResetKey={`${globalFilter}|${roleFilter}`}
+        pageResetKey={`${globalFilter}|${effectiveBranchFilter}|${roleFilter}`}
+        tableClassName="[&_td]:py-1.5"
         search={{
           label: "Buscar usuario",
           placeholder: "Buscar por nombre, usuario o correo...",
@@ -434,8 +502,9 @@ export function UsersTable({
         }}
         emptyState={
           <p className="text-muted-foreground">
-            Todavía no hay usuarios. Crea el primero para que tu equipo pueda
-            entrar.
+            {activeBranch
+              ? `Todavía no hay usuarios en ${activeBranch.name}.`
+              : "Todavía no hay usuarios. Crea el primero para que tu equipo pueda entrar."}
           </p>
         }
         filteredEmptyState={
@@ -446,6 +515,9 @@ export function UsersTable({
         summary={
           <>
             {selectedCount} de {filteredUsers.length} fila(s) seleccionada(s).
+            {activeBranch ? (
+              <span className="ml-1">Sucursal: {activeBranch.name}.</span>
+            ) : null}
           </>
         }
         pageSizeOptions={PAGE_SIZES}

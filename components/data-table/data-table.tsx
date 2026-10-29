@@ -13,6 +13,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import { Columns3Icon, SearchIcon, XIcon } from "lucide-react"
+import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -120,6 +121,8 @@ export interface DataTableProps<TData extends RowData> {
   enableRowSelection?: boolean | ((row: TData) => boolean)
 
   // Estados vacíos y pie
+  /** Clases extra para el `<table>` (por ejemplo, densidad de celdas). */
+  tableClassName?: string
   emptyState?: React.ReactNode
   filteredEmptyState?: React.ReactNode
   /** Fuerza el estado "sin resultados por filtros"; por defecto usa `activeFilterCount`. */
@@ -157,6 +160,7 @@ export function DataTable<TData extends RowData>({
   rowSelection,
   onRowSelectionChange,
   enableRowSelection,
+  tableClassName,
   emptyState,
   filteredEmptyState,
   isFiltered,
@@ -220,7 +224,7 @@ export function DataTable<TData extends RowData>({
     typeof rowClassName === "function" ? rowClassName(row) : rowClassName
 
   return (
-    <>
+    <div className="flex min-w-0 flex-col gap-4">
       <div className="flex min-w-0 flex-col gap-3">
         {/* Barra de herramientas: una sola fila con dos grupos. */}
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -344,7 +348,7 @@ export function DataTable<TData extends RowData>({
       </div>
 
       <div className="overflow-hidden rounded-lg border">
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -364,7 +368,7 @@ export function DataTable<TData extends RowData>({
                 const tableRow = (
                   <TableRow
                     data-state={row.getIsSelected() ? "selected" : undefined}
-                    className={resolveRowClassName(row.original)}
+                    className={cn("h-max", resolveRowClassName(row.original))}
                     onClick={
                       onRowClick
                         ? () => onRowClick(row.original)
@@ -475,6 +479,6 @@ export function DataTable<TData extends RowData>({
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

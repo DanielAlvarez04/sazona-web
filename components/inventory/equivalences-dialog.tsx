@@ -35,6 +35,7 @@ import {
   type Ingredient,
   type UnitCode,
 } from "@/lib/catalog"
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts"
 
 export function EquivalencesDialog({
   open,
@@ -51,8 +52,24 @@ export function EquivalencesDialog({
 }) {
   const [items, setItems] = useState<Equivalence[]>(initialItems)
   const [refreshError, setRefreshError] = useState<string | null>(null)
-  const [fromUnit, setFromUnit] = useState<UnitCode>("ML")
-  const [toUnit, setToUnit] = useState<UnitCode>(ingredient.baseUnit)
+
+  // Borrador de "Nueva equivalencia": si el diálogo se cierra por accidente,
+  // al reabrirlo se recupera lo que se estaba escribiendo.
+  const draftKey = `equivalence:${ingredient.id}`
+  const [draft] = useState(() =>
+    readDraft<{
+      fromUnit: UnitCode
+      toUnit: UnitCode
+      factor: string
+      note: string
+    }>(draftKey)
+  )
+  const [fromUnit, setFromUnit] = useState<UnitCode>(draft?.fromUnit ?? "ML")
+  const [toUnit, setToUnit] = useState<UnitCode>(
+    draft?.toUnit ?? ingredient.displayUnit
+  )
+  const [factor, setFactor] = useState(draft?.factor ?? "")
+  const [note, setNote] = useState(draft?.note ?? "")
 
   async function refresh() {
     const result = await getEquivalences(ingredient.id)
@@ -70,8 +87,14 @@ export function EquivalencesDialog({
   const addForm = useActionForm(() => void refresh())
   const removeForm = useActionForm(() => void refresh())
 
+  function handleOpenChange(next: boolean) {
+    if (!next) writeDraft(draftKey, { fromUnit, toUnit, factor, note })
+
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Equivalencias de {ingredient.name}</DialogTitle>
@@ -143,25 +166,23 @@ export function EquivalencesDialog({
               className="flex flex-col gap-3 rounded-md border border-dashed p-3"
               onSubmit={(event) => {
                 event.preventDefault()
-                const form = event.currentTarget
-                const formData = new FormData(form)
-                const factor = Number(
-                  String(formData.get("factor") ?? "").replace(",", ".")
-                )
-                const note = String(formData.get("note") ?? "").trim()
+                const quantity = Number(factor.replace(",", "."))
+                const trimmedNote = note.trim()
 
                 addForm.run(async () => {
                   const result = await createEquivalence(ingredient.id, {
                     fromUnit,
                     toUnit,
-                    factor,
-                    ...(note ? { note } : {}),
+                    factor: quantity,
+                    ...(trimmedNote ? { note: trimmedNote } : {}),
                   })
 
                   if (result.ok) {
-                    form.reset()
+                    setFactor("")
+                    setNote("")
                     setFromUnit("ML")
-                    setToUnit(ingredient.baseUnit)
+                    setToUnit(ingredient.displayUnit)
+                    clearDraft(draftKey)
                   }
                   return result
                 })
@@ -197,7 +218,7 @@ export function EquivalencesDialog({
                   <Select
                     value={toUnit}
                     onValueChange={(value) =>
-                      setToUnit((value ?? ingredient.baseUnit) as UnitCode)
+                      setToUnit((value ?? ingredient.displayUnit) as UnitCode)
                     }
                     items={UNIT_SELECT_ITEMS}
                   >
@@ -221,9 +242,10 @@ export function EquivalencesDialog({
                     name="factor"
                     type="number"
                     min="0.0001"
-                   
                     required
                     placeholder="1.2"
+                    value={factor}
+                    onChange={(event) => setFactor(event.target.value)}
                   />
                 </Field>
               </div>
@@ -237,6 +259,8 @@ export function EquivalencesDialog({
                   name="note"
                   maxLength={200}
                   placeholder="1 ml de harina = 1.2 g"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
                 />
               </Field>
 

@@ -13,10 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 export function SettingsTabs({
   account,
   business,
+  inventory,
   personalization,
 }: {
   account: ReactNode
   business: ReactNode
+  inventory: ReactNode
   personalization: ReactNode
 }) {
   return (
@@ -31,6 +33,7 @@ export function SettingsTabs({
       >
         <TabsTrigger value="account">Cuenta</TabsTrigger>
         <TabsTrigger value="business">Negocio</TabsTrigger>
+        <TabsTrigger value="inventory">Inventario</TabsTrigger>
         <TabsTrigger value="personalization">Personalización</TabsTrigger>
       </TabsList>
 
@@ -39,6 +42,14 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent value="business" className="flex min-w-0 flex-col gap-6">
         {business}
+      </TabsContent>
+      <TabsContent
+        value="inventory"
+        // Mantiene la selección de productos al cambiar de pestaña.
+        keepMounted
+        className="flex min-w-0 flex-col gap-6"
+      >
+        {inventory}
       </TabsContent>
       <TabsContent
         value="personalization"

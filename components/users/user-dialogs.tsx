@@ -10,6 +10,7 @@ import {
   updateInternalUser,
 } from "@/app/(app)/users/actions"
 import { Button } from "@/components/ui/button"
+import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/select"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts"
 import {
   ROLE_OPTIONS,
   type InternalUser,
@@ -40,6 +42,16 @@ import {
   useUsernameStatus,
   generateUsernameCandidates,
 } from "./username-field"
+
+/** Borrador de un formulario de usuario (se recupera si se cierra por error). */
+interface UserDraft {
+  name: string
+  surname: string
+  password: string
+  username: string
+  branchId: string
+  roles: RoleCode[]
+}
 
 
 function RolePicker({
@@ -108,15 +120,15 @@ function UsernameWithDomainInput({
   placeholder,
   onChange,
   required,
-  readOnly,
+  disabled,
 }: {
   id: string
   domain: string
   displayValue: string
   placeholder: string
-  onChange: (localPart: string) => void
+  onChange?: (localPart: string) => void
   required?: boolean
-  readOnly?: boolean
+  disabled?: boolean
 }) {
   return (
     <div className="relative flex items-center w-full">
@@ -128,19 +140,21 @@ function UsernameWithDomainInput({
         maxLength={120}
         placeholder={placeholder}
         value={displayValue}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange?.(event.target.value)}
         required={required}
-        readOnly={readOnly}
+        disabled={disabled}
         className="pr-12"
       />
-      <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground">
+      <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground group-data-[disabled=true]/field:opacity-50">
         @{domain}
       </span>
-      <input
-        type="hidden"
-        name="username"
-        value={displayValue ? `${displayValue}@${domain}` : ""}
-      />
+      {disabled ? null : (
+        <input
+          type="hidden"
+          name="username"
+          value={displayValue ? `${displayValue}@${domain}` : ""}
+        />
+      )}
     </div>
   )
 }
@@ -195,17 +209,20 @@ function PasswordInput({
   )
 }
 
-/** Selector de sucursal principal. Vacío = acceso a todas. */
+/** Selector de sucursal. Vacío = acceso a todas (solo cuando no es obligatorio). */
 function BranchPicker({
   id,
   branches,
   value,
   onChange,
+  required = false,
 }: {
   id: string
   branches: Branch[]
   value: string
   onChange: (value: string) => void
+  /** Exige elegir una sucursal concreta (alta de usuarios). */
+  required?: boolean
 }) {
   const activeBranches = branches.filter((branch) => branch.isActive)
 
@@ -213,27 +230,39 @@ function BranchPicker({
     return null
   }
 
+  const branchItems = activeBranches.map((branch) => ({
+    label: branch.name,
+    value: branch.id,
+  }))
+
   return (
     <Field>
-      <FieldLabel htmlFor={id}>Sucursal</FieldLabel>
+      <FieldLabel htmlFor={id} required={required}>
+        Sucursal
+      </FieldLabel>
       <Select
-        value={value || "all"}
+        required={required}
+        value={required ? value || null : value || "all"}
         onValueChange={(next) =>
           onChange(!next || next === "all" ? "" : next)
         }
-        items={[
-          { label: "Todas las sucursales", value: "all" },
-          ...activeBranches.map((branch) => ({
-            label: branch.name,
-            value: branch.id,
-          })),
-        ]}
+        items={
+          required
+            ? branchItems
+            : [{ label: "Todas las sucursales", value: "all" }, ...branchItems]
+        }
       >
         <SelectTrigger id={id}>
-          <SelectValue placeholder="Todas las sucursales" />
+          <SelectValue
+            placeholder={
+              required ? "Selecciona una sucursal" : "Todas las sucursales"
+            }
+          />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todas las sucursales</SelectItem>
+          {required ? null : (
+            <SelectItem value="all">Todas las sucursales</SelectItem>
+          )}
           {activeBranches.map((branch) => (
             <SelectItem key={branch.id} value={branch.id}>
               {branch.name}
@@ -264,12 +293,18 @@ export function CreateUserDialog({
   branches: Branch[]
 }) {
   const router = useRouter()
-  const [roles, setRoles] = useState<RoleCode[]>(["WAITER"])
-  const [branchId, setBranchId] = useState("")
-  const [name, setName] = useState("")
-  const [surname, setSurname] = useState("")
-  const [manualUsernameLocalPart, setManualUsernameLocalPart] = useState("")
+  const draftKey = "user:new"
+  const [draft] = useState(() => readDraft<UserDraft>(draftKey))
+  const [roles, setRoles] = useState<RoleCode[]>(draft?.roles ?? ["WAITER"])
+  const [branchId, setBranchId] = useState(draft?.branchId ?? "")
+  const [name, setName] = useState(draft?.name ?? "")
+  const [surname, setSurname] = useState(draft?.surname ?? "")
+  const [manualUsernameLocalPart, setManualUsernameLocalPart] = useState(
+    draft?.username ?? ""
+  )
+  const [password, setPassword] = useState(draft?.password ?? "")
   const domain = organizationDomain
+  const hasBranches = branches.some((branch) => branch.isActive)
   const manualUsername = manualUsernameLocalPart
     ? `${manualUsernameLocalPart}@${domain}`
     : null
@@ -309,14 +344,37 @@ export function CreateUserDialog({
     setCandidate({ name: fullName, index: candidateIndex + 1 })
   }
   const { pending, error, run } = useActionForm(() => {
+    clearDraft(draftKey)
     onClose()
     router.refresh()
   })
 
-  const [password, setPassword] = useState("")
+  /** Guarda el borrador antes de cerrar, para recuperarlo al reabrir. */
+  function handleClose() {
+    writeDraft<UserDraft>(draftKey, {
+      name,
+      surname,
+      password,
+      username: manualUsernameLocalPart,
+      branchId,
+      roles,
+    })
+    onClose()
+  }
+
+  /** Devuelve el formulario a su estado inicial y descarta el borrador. */
+  function handleClear() {
+    clearDraft(draftKey)
+    setName("")
+    setSurname("")
+    setPassword("")
+    setManualUsernameLocalPart("")
+    setBranchId("")
+    setRoles(["WAITER"])
+  }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Nuevo usuario del equipo</DialogTitle>
@@ -343,7 +401,9 @@ export function CreateUserDialog({
             {/* Fila 1: Nombre, Apellido e ID de usuario. */}
             <div className="grid gap-3 sm:grid-cols-[2fr_2fr_3fr]">
               <Field>
-                <FieldLabel htmlFor="new-name">Nombre</FieldLabel>
+                <FieldLabel htmlFor="new-name" required>
+                  Nombre
+                </FieldLabel>
                 <Input
                   id="new-name"
                   name="name"
@@ -356,7 +416,9 @@ export function CreateUserDialog({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="new-surname">Apellido</FieldLabel>
+                <FieldLabel htmlFor="new-surname" required>
+                  Apellido
+                </FieldLabel>
                 <Input
                   id="new-surname"
                   name="surname"
@@ -365,6 +427,7 @@ export function CreateUserDialog({
                   placeholder="Ramírez"
                   value={surname}
                   onChange={(event) => setSurname(event.target.value)}
+                  required
                 />
               </Field>
               <Field>
@@ -372,6 +435,7 @@ export function CreateUserDialog({
                   htmlFor="new-username"
                   label="ID de usuario"
                   status={usernameStatus}
+                  required
                 />
                 <UsernameWithDomainInput
                   id="new-username"
@@ -387,7 +451,9 @@ export function CreateUserDialog({
             {/* Fila 2: Contraseña y Sucursal. */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="new-password">Contraseña inicial</FieldLabel>
+                <FieldLabel htmlFor="new-password" required>
+                  Contraseña inicial
+                </FieldLabel>
                 <PasswordInput
                   id="new-password"
                   name="password"
@@ -403,11 +469,17 @@ export function CreateUserDialog({
                 branches={branches}
                 value={branchId}
                 onChange={setBranchId}
+                required
               />
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">Roles</span>
+              <span className="text-sm font-medium">
+                Roles
+                <span aria-hidden="true" className="ml-0.5 text-destructive">
+                  *
+                </span>
+              </span>
               <RolePicker value={roles} onChange={setRoles} columns={3} />
               {roles.length === 0 ? (
                 <p className="text-sm text-destructive">
@@ -419,13 +491,21 @@ export function CreateUserDialog({
             {error ? <FieldError>{error}</FieldError> : null}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+              <ClearFieldsButton
+                onClick={handleClear}
+                disabled={pending}
+                className="sm:mr-auto"
+              />
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 disabled={
-                  pending || roles.length === 0 || usernameStatus.state !== "ok"
+                  pending ||
+                  roles.length === 0 ||
+                  usernameStatus.state !== "ok" ||
+                  (hasBranches && !branchId)
                 }
               >
                 {pending ? (
@@ -445,33 +525,65 @@ export function CreateUserDialog({
 
 export function EditUserDialog({
   user,
-  isSelf,
   onClose,
   branches,
+  organizationDomain,
 }: {
   user: InternalUser
-  isSelf: boolean
   onClose: () => void
   branches: Branch[]
+  organizationDomain: string
 }) {
   const router = useRouter()
   const initialName = splitDisplayName(user.name ?? "")
-  const [name, setName] = useState(initialName.first)
-  const [surname, setSurname] = useState(initialName.surname)
-  const [roles, setRoles] = useState<RoleCode[]>(user.roles)
-  const [branchId, setBranchId] = useState(user.branchId ?? "")
-  const [active, setActive] = useState(user.isActive)
-  const [password, setPassword] = useState("")
+
+  // Borrador: lo editado se guarda al cerrar y se recupera al reabrir. Se
+  // descarta solo cuando el formulario se guarda con éxito.
+  const draftKey = `user:${user.id}`
+  const [draft] = useState(() => readDraft<UserDraft>(draftKey))
+  const [name, setName] = useState(draft?.name ?? initialName.first)
+  const [surname, setSurname] = useState(draft?.surname ?? initialName.surname)
+  const [roles, setRoles] = useState<RoleCode[]>(draft?.roles ?? user.roles)
+  const [branchId, setBranchId] = useState(
+    draft?.branchId ?? user.branchId ?? ""
+  )
+  const [password, setPassword] = useState(draft?.password ?? "")
+
+  // El ID de usuario no se puede cambiar: se muestra tal cual está guardado.
+  const storedUsername = user.username ?? ""
+  const [usernameLocalPart, usernameDomain] = storedUsername.includes("@")
+    ? [
+        storedUsername.slice(0, storedUsername.lastIndexOf("@")),
+        storedUsername.slice(storedUsername.lastIndexOf("@") + 1),
+      ]
+    : [storedUsername, organizationDomain]
+
   const { pending, error, run } = useActionForm(() => {
+    clearDraft(draftKey)
     onClose()
     router.refresh()
   })
 
+  /** Guarda el borrador antes de cerrar, para recuperarlo al reabrir. */
+  function handleClose() {
+    writeDraft<UserDraft>(draftKey, {
+      name,
+      surname,
+      password,
+      username: "",
+      branchId,
+      roles,
+    })
+    onClose()
+  }
+
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Editar {user.name ?? user.username ?? "usuario"}</DialogTitle>
+          <DialogTitle>
+            Editar {user.name ?? user.username ?? "usuario"}
+          </DialogTitle>
           <DialogDescription>
             Cambia el nombre, los roles o la contraseña. Guardar una nueva
             contraseña cierra todas sus sesiones activas.
@@ -493,7 +605,8 @@ export function EditUserDialog({
           }}
         >
           <div className="flex flex-col gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* Fila 1: Nombre, Apellido e ID de usuario (solo lectura). */}
+            <div className="grid gap-3 sm:grid-cols-[2fr_2fr_3fr]">
               <Field>
                 <FieldLabel htmlFor="edit-name">Nombre</FieldLabel>
                 <Input
@@ -518,24 +631,49 @@ export function EditUserDialog({
                   onChange={(event) => setSurname(event.target.value)}
                 />
               </Field>
+              <Field data-disabled>
+                <FieldLabel htmlFor="edit-username">ID de usuario</FieldLabel>
+                <UsernameWithDomainInput
+                  id="edit-username"
+                  domain={usernameDomain}
+                  displayValue={usernameLocalPart}
+                  placeholder="Sin usuario"
+                  disabled
+                />
+              </Field>
             </div>
 
-            <Field>
-              <FieldLabel htmlFor="edit-password">
-                Nueva contraseña (opcional)
-              </FieldLabel>
-              <PasswordInput
-                id="edit-password"
-                name="password"
-                placeholder="Déjalo vacío para conservarla"
-                value={password}
-                onChange={setPassword}
+            {/* Fila 2: Nueva contraseña y Sucursal. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="edit-password">
+                  Nueva contraseña
+                </FieldLabel>
+                <PasswordInput
+                  id="edit-password"
+                  name="password"
+                  placeholder="Déjalo vacío para conservarla"
+                  value={password}
+                  onChange={setPassword}
+                />
+              </Field>
+
+              <BranchPicker
+                id="edit-branch"
+                branches={branches}
+                value={branchId}
+                onChange={setBranchId}
               />
-            </Field>
+            </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">Roles</span>
-              <RolePicker value={roles} onChange={setRoles} />
+              <span className="text-sm font-medium">
+                Roles
+                <span aria-hidden="true" className="ml-0.5 text-destructive">
+                  *
+                </span>
+              </span>
+              <RolePicker value={roles} onChange={setRoles} columns={3} />
               {roles.length === 0 ? (
                 <p className="text-sm text-destructive">
                   Elige al menos un rol.
@@ -543,42 +681,13 @@ export function EditUserDialog({
               ) : null}
             </div>
 
-            <BranchPicker
-              id="edit-branch"
-              branches={branches}
-              value={branchId}
-              onChange={setBranchId}
-            />
-
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox
-                checked={active}
-                onCheckedChange={(next) => setActive(Boolean(next))}
-                disabled={isSelf}
-              />
-              Cuenta activa
-              {isSelf ? (
-                <span className="text-xs text-muted-foreground">
-                  (no puedes desactivar tu propia cuenta)
-                </span>
-              ) : null}
-            </label>
-            <input
-              type="hidden"
-              name="isActive"
-              value={active ? "on" : "off"}
-            />
-
             {error ? <FieldError>{error}</FieldError> : null}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={pending || roles.length === 0}
-              >
+              <Button type="submit" disabled={pending || roles.length === 0}>
                 {pending ? (
                   <Loader2Icon className="animate-spin" />
                 ) : (

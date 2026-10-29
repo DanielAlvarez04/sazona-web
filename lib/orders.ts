@@ -85,7 +85,12 @@ export interface OrderItemExtra {
 export interface OrderItemExclusion {
   id: string
   ingredientId: string
-  ingredient: { id: string; name: string; baseUnit: string }
+  ingredient: {
+    id: string
+    name: string
+    baseUnit: string
+    displayUnit: string
+  }
 }
 
 export interface OrderItem {

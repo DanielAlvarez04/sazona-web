@@ -1,5 +1,8 @@
 export type UnitDimension = "MASS" | "VOLUME" | "COUNT"
 
+/** Estrategia para resolver insumos repetidos al importar un CSV. */
+export type ImportIngredientsMode = "exclude" | "duplicate" | "overwrite"
+
 export type UnitCode =
   | "MG"
   | "G"
@@ -59,6 +62,34 @@ export const UNIT_DEFINITIONS: UnitDefinition[] = [
   { code: "HALF_DOZEN", symbol: "½ docena", name: "media docena", dimension: "COUNT", factor: 6 },
   { code: "DOZEN", symbol: "docena", name: "docena", dimension: "COUNT", factor: 12 },
 ]
+
+/** Unidades de la misma dimensión que `unit`. */
+export function unitsOfDimension(unit: UnitCode): UnitDefinition[] {
+  const dimension = UNIT_DEFINITIONS.find((item) => item.code === unit)?.dimension
+  return UNIT_DEFINITIONS.filter((item) => item.dimension === dimension)
+}
+
+/**
+ * Convierte una cantidad entre unidades de la misma dimensión.
+ * Devuelve `null` si alguna unidad no existe o la dimensión no coincide.
+ */
+export function convertUnitValue(
+  value: number,
+  from: UnitCode,
+  to: UnitCode
+): number | null {
+  const source = UNIT_DEFINITIONS.find((item) => item.code === from)
+  const target = UNIT_DEFINITIONS.find((item) => item.code === to)
+
+  if (!source || !target || source.dimension !== target.dimension) return null
+
+  return roundQuantity((value * source.factor) / target.factor)
+}
+
+/** Redondea a la escala de la base de datos (4 decimales). */
+export function roundQuantity(value: number): number {
+  return Math.round((value + Number.EPSILON) * 10000) / 10000
+}
 
 export const UNIT_LABELS: Record<UnitCode, string> = Object.fromEntries(
   UNIT_DEFINITIONS.map((unit) => [unit.code, unit.symbol])
@@ -131,6 +162,7 @@ export interface ExtraIngredient {
     id: string
     name: string
     baseUnit: UnitCode
+    displayUnit: UnitCode
     currentStock?: string
   }
 }
@@ -163,7 +195,7 @@ export interface ProductListItem {
 export interface Exclusion {
   id: string
   label: string | null
-  ingredient: { id: string; name: string; baseUnit: UnitCode }
+  ingredient: { id: string; name: string; baseUnit: UnitCode; displayUnit: UnitCode }
 }
 
 export interface ComboComponent {
@@ -180,6 +212,7 @@ export interface RecipeIngredient {
     id: string
     name: string
     baseUnit: UnitCode
+    displayUnit: UnitCode
     currentStock?: string
   }
 }
@@ -205,13 +238,25 @@ export interface Ingredient {
   id: string
   name: string
   sku: string | null
+  /** Unidad canónica de almacenamiento (G, ML o UNIT). */
   baseUnit: UnitCode
+  /** Unidad con la que se muestran y capturan las cantidades. */
+  displayUnit: UnitCode
   /** Existencia en la sucursal activa (o el total si no hay sucursal). */
   currentStock: string
   /** Existencia total de la organización (sólo con sucursal activa). */
   organizationStock?: string
-  /** Sucursal de la vista actual; `null` = consolidado. */
+  /** Sucursal de la vista actual; `null` = Modo Global (todas las sucursales). */
   branchId?: string | null
+  /**
+   * Stock por sucursal en la unidad visible. Solo llega con
+   * `includeBranchStocks`; lo usa el resumen en Modo Global.
+   */
+  branchStocks?: Array<{
+    branchId: string
+    branch?: { id: string; name: string }
+    quantity: string
+  }>
   minStock: string
   maxStock: string | null
   unitCost: string | null
@@ -220,7 +265,9 @@ export interface Ingredient {
   deficit: string
   category: { id: string; name: string; isCore: boolean } | null
   location: { id: string; name: string; isCore: boolean } | null
-  _count?: { recipeIngredients: number }
+  /** `inventoryMovements` cuenta solo los movimientos que bloquean el cambio
+   *  de unidad base (excluye el alta con stock inicial). */
+  _count?: { recipeIngredients: number; inventoryMovements?: number }
 }
 
 export interface IngredientVariant {
@@ -256,6 +303,7 @@ export interface StockAlert {
   id: string
   name: string
   baseUnit: UnitCode
+  displayUnit: UnitCode
   currentStock: string
   minStock: string
   deficit: string
@@ -279,7 +327,17 @@ export interface InventoryMovement {
   reason: string | null
   referenceType: string | null
   createdAt: string
-  ingredient: { id: string; name: string; baseUnit: UnitCode }
+  /** Nombre del producto en el momento del movimiento (snapshot). */
+  ingredientName: string
+  /** Unidad visible del producto en ese momento. */
+  displayUnit: UnitCode
+  /** `null` si el producto se eliminó; el kardex se conserva. */
+  ingredient: {
+    id: string
+    name: string
+    baseUnit: UnitCode
+    displayUnit: UnitCode
+  } | null
   /** Sucursal afectada; `null` = movimiento consolidado de la organización. */
   branch?: { id: string; name: string } | null
   /** `null` cuando la cuenta que registró el movimiento ya no existe. */

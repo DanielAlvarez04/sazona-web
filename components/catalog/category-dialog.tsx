@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Loader2Icon, Trash2Icon } from "lucide-react"
 
 import {
@@ -20,6 +21,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Category } from "@/lib/catalog"
+import { clearDraft, readDraft, writeDraft } from "@/lib/drafts"
 
 export function CategoryDialog({
   open,
@@ -34,8 +36,18 @@ export function CategoryDialog({
   const createForm = useActionForm(() => router.refresh())
   const rowForm = useActionForm(() => router.refresh())
 
+  // Borrador del nombre: si se cierra el diálogo por accidente, se recupera.
+  const draftKey = "category:new"
+  const [name, setName] = useState(() => readDraft<string>(draftKey) ?? "")
+
+  function handleOpenChange(next: boolean) {
+    if (!next) writeDraft(draftKey, name)
+
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Categorías</DialogTitle>
@@ -48,11 +60,13 @@ export function CategoryDialog({
           className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault()
-            const form = event.currentTarget
-            const formData = new FormData(form)
+            const formData = new FormData(event.currentTarget)
             createForm.run(async () => {
               const result = await createCategory(formData)
-              if (result.ok) form.reset()
+              if (result.ok) {
+                setName("")
+                clearDraft(draftKey)
+              }
               return result
             })
           }}
@@ -67,6 +81,8 @@ export function CategoryDialog({
                 minLength={2}
                 maxLength={80}
                 placeholder="Postres"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
               />
               <Button type="submit" disabled={createForm.pending}>
                 {createForm.pending ? (

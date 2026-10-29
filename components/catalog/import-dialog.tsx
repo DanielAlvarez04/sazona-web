@@ -7,6 +7,7 @@ import { Loader2Icon, UploadIcon } from "lucide-react"
 import { importProducts } from "@/app/(app)/catalog/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,13 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
+  /** Devuelve el formulario a su estado inicial (CSV vacío y sin resultados). */
+  function handleClear() {
+    setCsv("")
+    setResult(null)
+    setError(null)
+  }
+
   function submit(dryRun: boolean) {
     setError(null)
     startTransition(async () => {
@@ -57,6 +65,8 @@ export function ImportDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next)
+        // El CSV se conserva al cerrar (por si fue un cierre accidental);
+        // los resultados de la última validación no.
         if (!next) {
           setResult(null)
           setError(null)
@@ -134,6 +144,11 @@ export function ImportDialog({
         ) : null}
 
         <DialogFooter>
+          <ClearFieldsButton
+            onClick={handleClear}
+            disabled={pending || csv.length === 0}
+            className="sm:mr-auto"
+          />
           <Button
             type="button"
             variant="outline"

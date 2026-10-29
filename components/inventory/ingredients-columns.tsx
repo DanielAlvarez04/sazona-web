@@ -10,18 +10,21 @@ import {
   MinusIcon,
   PlusIcon,
   PencilIcon,
+  Trash2Icon,
   TrendingDownIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -90,19 +93,23 @@ function IngredientColumnHeader({
 
 export interface IngredientRowActions {
   onEdit: (ingredient: Ingredient) => void
-  onToggleActive: (ingredient: Ingredient) => void
   onAddStock: (ingredient: Ingredient) => void
   onSubtractStock: (ingredient: Ingredient) => void
-  /** Hay una mutación en curso para ese insumo (desactiva el menú). */
+  /** Pide confirmación para eliminar definitivamente. */
+  onRequestDelete: (ingredient: Ingredient) => void
+  /** Muestra la acción destructiva de eliminar. */
+  canManage: boolean
+  /** Hay una mutación en curso para ese producto (desactiva el menú). */
   isPending: (ingredient: Ingredient) => boolean
 }
 
 function IngredientRowActionsMenu({
   ingredient,
   onEdit,
-  onToggleActive,
   onAddStock,
   onSubtractStock,
+  onRequestDelete,
+  canManage,
   isPending,
 }: IngredientRowActions & { ingredient: Ingredient }) {
   const pending = isPending(ingredient)
@@ -113,7 +120,7 @@ function IngredientRowActionsMenu({
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             className="text-muted-foreground aria-expanded:bg-muted"
             disabled={pending}
             aria-label={`Acciones de ${ingredient.name}`}
@@ -123,7 +130,7 @@ function IngredientRowActionsMenu({
         <EllipsisVerticalIcon />
         <span className="sr-only">Abrir menú</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="min-w-40">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onAddStock(ingredient)}>
@@ -139,6 +146,21 @@ function IngredientRowActionsMenu({
             Editar
           </DropdownMenuItem>
         </DropdownMenuGroup>
+        {canManage ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => onRequestDelete(ingredient)}
+                disabled={pending}
+              >
+                <Trash2Icon />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -146,10 +168,12 @@ function IngredientRowActionsMenu({
 
 /** Etiquetas legibles para el selector de columnas. */
 export const INGREDIENT_COLUMN_LABELS: Record<string, string> = {
+  select: "Selección",
   sku: "SKU",
-  name: "Insumo",
+  name: "Producto",
   stock: "Stock / mínimo",
   unitCost: "Costo unitario",
+  totalCost: "Costo total",
   maxStock: "Stock máximo",
   category: "Categoría",
   location: "Ubicación",
@@ -157,15 +181,73 @@ export const INGREDIENT_COLUMN_LABELS: Record<string, string> = {
 }
 
 /**
- * Definición de columnas de la tabla de insumos.
+ * Prioridad de reposición: stock actual / stock mínimo.
  *
- * Orden: SKU · Insumo · Stock/mínimo · Costo · Máximo · Clasificación · Acciones
- *
- * Categoría, ubicación y número de recetas comparten una sola columna con un
- * `BadgeGroup` para que la tabla sea más angosta.
+ * Ordenar de menor a mayor deja arriba lo más urgente, sin importar que cada
+ * producto use una unidad distinta. Sin mínimo definido, lo que tiene stock
+ * queda al final.
  */
-export function createIngredientColumns(actions: IngredientRowActions) {
+function stockPriority(ingredient: Ingredient): number {
+  const current = Number(ingredient.currentStock)
+  const min = Number(ingredient.minStock)
+
+  if (min <= 0) {
+    return current > 0 ? Number.MAX_SAFE_INTEGER : 1
+  }
+
+  return current / min
+}
+
+/**
+ * Definición de columnas de la tabla de productos.
+ *
+ * Modo sucursal: Selección · SKU · Producto · Stock/mínimo · Costo · Máximo ·
+ * Clasificación · Acciones.
+ *
+ * Modo Global (todas las sucursales): Selección · SKU · Producto · Stock total ·
+ * Costo unitario · Costo total · Clasificación · Acciones. Sin máximo ni
+ * stock/mínimo por sucursal.
+ */
+export function createIngredientColumns(
+  actions: IngredientRowActions,
+  options: { selectable?: boolean; global?: boolean } = {}
+) {
   return columnHelper.columns([
+    ...(options.selectable
+      ? [
+          columnHelper.display({
+            id: "select",
+            header: ({ table }) => (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected()}
+                  indeterminate={
+                    table.getIsSomePageRowsSelected() &&
+                    !table.getIsAllPageRowsSelected()
+                  }
+                  onCheckedChange={(value) =>
+                    table.toggleAllPageRowsSelected(!!value)
+                  }
+                  aria-label="Seleccionar todas las filas de la página"
+                />
+              </div>
+            ),
+            cell: ({ row }) => (
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  disabled={!row.getCanSelect()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label={`Seleccionar ${row.original.name}`}
+                />
+              </div>
+            ),
+            enableSorting: false,
+            enableHiding: false,
+            enableGlobalFilter: false,
+          }),
+        ]
+      : []),
     columnHelper.accessor((row) => row.sku ?? "", {
       id: "sku",
       header: ({ column }) => (
@@ -180,7 +262,7 @@ export function createIngredientColumns(actions: IngredientRowActions) {
     }),
     columnHelper.accessor("name", {
       header: ({ column }) => (
-        <IngredientColumnHeader title="Insumo" column={column} />
+        <IngredientColumnHeader title="Producto" column={column} />
       ),
       cell: ({ row }) => {
         const outOfStock = Number(row.original.currentStock) === 0
@@ -206,34 +288,49 @@ export function createIngredientColumns(actions: IngredientRowActions) {
       },
       sortFn: "text",
     }),
-    columnHelper.accessor((row) => Number(row.currentStock), {
-      id: "stock",
-      header: ({ column }) => (
-        <IngredientColumnHeader title="Stock / mínimo" column={column} align="right" />
-      ),
-      cell: ({ row }) => {
-        const unit = unitLabel(row.original.baseUnit)
+    columnHelper.accessor(
+      (row) => (options.global ? Number(row.currentStock) : stockPriority(row)),
+      {
+        id: "stock",
+        header: ({ column }) => (
+          <IngredientColumnHeader
+            title={options.global ? "Stock total" : "Stock / mínimo"}
+            column={column}
+            align="right"
+          />
+        ),
+        cell: ({ row }) => {
+          const unit = unitLabel(row.original.displayUnit)
 
-        return (
-          <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
-            <span
-              className={
-                row.original.isLowStock
-                  ? "font-medium text-destructive"
-                  : "font-medium"
-              }
-            >
-              {formatQuantity(row.original.currentStock)} {unit}
-            </span>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">
-              {formatQuantity(row.original.minStock)} {unit}
-            </span>
-          </div>
-        )
-      },
-      enableSorting: false,
-    }),
+          if (options.global) {
+            return (
+              <div className="text-right whitespace-nowrap font-medium tabular-nums">
+                {formatQuantity(row.original.currentStock)} {unit}
+              </div>
+            )
+          }
+
+          return (
+            <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
+              <span
+                className={
+                  row.original.isLowStock
+                    ? "font-medium text-destructive"
+                    : "font-medium"
+                }
+              >
+                {formatQuantity(row.original.currentStock)} {unit}
+              </span>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-muted-foreground">
+                {formatQuantity(row.original.minStock)} {unit}
+              </span>
+            </div>
+          )
+        },
+        sortFn: "basic",
+      }
+    ),
     columnHelper.accessor(
       (row) => (row.unitCost === null ? null : Number(row.unitCost)),
       {
@@ -248,34 +345,75 @@ export function createIngredientColumns(actions: IngredientRowActions) {
             <div className="text-right whitespace-nowrap tabular-nums">
               {formatMoney(row.original.unitCost)}{" "}
               <span className="text-muted-foreground">
-                / {unitLabel(row.original.baseUnit)}
+                / {unitLabel(row.original.displayUnit)}
               </span>
             </div>
           ),
         enableSorting: false,
       }
     ),
-    columnHelper.accessor(
-      (row) => (row.maxStock === null ? null : Number(row.maxStock)),
-      {
-        id: "maxStock",
-        header: ({ column }) => (
-          <IngredientColumnHeader title="Stock máximo" column={column} align="right" />
-        ),
-        cell: ({ row }) =>
-          row.original.maxStock === null ? (
-            <div className="text-right text-muted-foreground">—</div>
-          ) : (
-            <div className="text-right whitespace-nowrap tabular-nums">
-              {formatQuantity(row.original.maxStock)}{" "}
-              <span className="text-muted-foreground">
-                {unitLabel(row.original.baseUnit)}
-              </span>
-            </div>
+    ...(options.global
+      ? [
+          // Modo Global: valor del stock total (stock × costo unitario).
+          columnHelper.accessor(
+            (row) =>
+              row.unitCost === null
+                ? null
+                : Number(row.currentStock) * Number(row.unitCost),
+            {
+              id: "totalCost",
+              header: ({ column }) => (
+                <IngredientColumnHeader
+                  title="Costo total"
+                  column={column}
+                  align="right"
+                />
+              ),
+              cell: ({ row }) =>
+                row.original.unitCost === null ? (
+                  <div className="text-right text-muted-foreground">—</div>
+                ) : (
+                  <div className="text-right whitespace-nowrap font-medium tabular-nums">
+                    {formatMoney(
+                      Number(row.original.currentStock) *
+                        Number(row.original.unitCost)
+                    )}
+                  </div>
+                ),
+              sortFn: "basic",
+            }
           ),
-        enableSorting: false,
-      }
-    ),
+        ]
+      : []),
+    ...(options.global
+      ? []
+      : [
+          columnHelper.accessor(
+            (row) => (row.maxStock === null ? null : Number(row.maxStock)),
+            {
+              id: "maxStock",
+              header: ({ column }) => (
+                <IngredientColumnHeader
+                  title="Stock máximo"
+                  column={column}
+                  align="right"
+                />
+              ),
+              cell: ({ row }) =>
+                row.original.maxStock === null ? (
+                  <div className="text-right text-muted-foreground">—</div>
+                ) : (
+                  <div className="text-right whitespace-nowrap tabular-nums">
+                    {formatQuantity(row.original.maxStock)}{" "}
+                    <span className="text-muted-foreground">
+                      {unitLabel(row.original.displayUnit)}
+                    </span>
+                  </div>
+                ),
+              enableSorting: false,
+            }
+          ),
+        ]),
     columnHelper.accessor((row) => row.category?.name ?? "", {
       id: "category",
       header: ({ column }) => (

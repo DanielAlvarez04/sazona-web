@@ -151,7 +151,11 @@ export async function updateInternalUser(
     payload.branchId = text(formData, "branchId") ?? ""
   }
 
-  payload.isActive = formData.get("isActive") === "on"
+  // El estado de la cuenta no se edita desde el diálogo: se activa o desactiva
+  // desde las acciones de la fila. Solo se envía si el formulario lo incluye.
+  if (formData.has("isActive")) {
+    payload.isActive = formData.get("isActive") === "on"
+  }
 
   return mutateApi(`/users/${userId}`, "PATCH", payload, USER_PATHS)
 }

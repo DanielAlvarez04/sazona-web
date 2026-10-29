@@ -3,6 +3,8 @@
 import { cookies } from "next/headers"
 
 import { BRANCH_COOKIE } from "@/lib/api"
+import type { UnitCode } from "@/lib/catalog"
+import { CORE_PRODUCT_GROUPS } from "@/lib/core-products"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 
 function text(formData: FormData, key: string): string | undefined {
@@ -61,6 +63,60 @@ export async function updateOrganizationTaxRate(
 }
 
 const BRANCH_PATHS = ["/settings", "/users"]
+
+export interface CoreInventorySyncResult {
+  created: string[]
+  removed: string[]
+  skipped: Array<{ name: string; reason: string }>
+}
+
+/**
+ * Guarda en el inventario los productos core seleccionados.
+ *
+ * El catálogo vive en el web; aquí se envía a la API qué productos deben
+ * existir y qué nombres del catálogo quedaron desmarcados. La API crea los
+ * que faltan y retira los desmarcados solo si no están en recetas ni pedidos.
+ */
+export async function saveCoreInventory(
+  selectedNames: string[],
+  createMissing = true
+): Promise<ActionResult<CoreInventorySyncResult>> {
+  const selected = new Set(selectedNames)
+  const catalog = new Map<
+    string,
+    { name: string; displayUnit: UnitCode; category: string; location: string }
+  >()
+
+  // Un mismo nombre puede aparecer en dos categorías del catálogo; se manda
+  // una sola vez para respetar la unicidad del insumo.
+  for (const group of CORE_PRODUCT_GROUPS) {
+    for (const product of group.products) {
+      if (catalog.has(product.name)) continue
+
+      catalog.set(product.name, {
+        name: product.name,
+        displayUnit: product.unit,
+        category: group.category,
+        location: product.location,
+      })
+    }
+  }
+
+  const products = createMissing
+    ? [...selected]
+        .filter((name) => catalog.has(name))
+        .map((name) => catalog.get(name)!)
+    : []
+
+  const removeNames = [...catalog.keys()].filter((name) => !selected.has(name))
+
+  return mutateApi<CoreInventorySyncResult>(
+    "/inventory/ingredients/sync-core",
+    "POST",
+    { products, removeNames },
+    ["/settings", "/inventory"]
+  )
+}
 
 /** Crea una sucursal. El límite de uso justo se valida también en la API. */
 export async function createBranch(

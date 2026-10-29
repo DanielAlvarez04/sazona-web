@@ -1,12 +1,13 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 
 import { createProduct, saveRecipe } from "@/app/(app)/catalog/actions"
 import { Button } from "@/components/ui/button"
+import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -36,6 +37,7 @@ import {
   type Ingredient,
   type UnitCode,
 } from "@/lib/catalog"
+import { formValues } from "@/lib/drafts"
 
 interface RecipeRow {
   key: string
@@ -66,15 +68,41 @@ export function ProductCreateDialog({
   const [tab, setTab] = useState("data")
   const [withRecipe, setWithRecipe] = useState(false)
   const [rows, setRows] = useState<RecipeRow[]>([])
-  const { pending, error, run, setError } = useActionForm(() => {
-    onOpenChange(false)
-    router.refresh()
-  })
+  const formRef = useRef<HTMLFormElement>(null)
+
+  // Los campos de "Datos" no son controlados y el formulario se desmonta al
+  // cerrar: guardamos sus valores para usarlos como `defaultValue` al reabrir.
+  const [draft, setDraft] = useState<Record<string, string> | null>(null)
+  // Cambiar la clave remonta el formulario: así los campos no controlados
+  // vuelven a su `defaultValue` cuando se limpian.
+  const [formKey, setFormKey] = useState(0)
 
   function reset() {
     setTab("data")
     setWithRecipe(false)
     setRows([])
+    setDraft(null)
+  }
+
+  /** Devuelve los campos a su valor inicial y descarta el borrador. */
+  function handleClear() {
+    reset()
+    setFormKey((key) => key + 1)
+  }
+
+  const { pending, error, run, setError } = useActionForm(() => {
+    reset()
+    onOpenChange(false)
+    router.refresh()
+  })
+
+  /** Guarda lo escrito antes de cerrar para poder recuperarlo al reabrir. */
+  function handleOpenChange(next: boolean) {
+    if (!next && formRef.current) {
+      setDraft(formValues(formRef.current))
+    }
+
+    onOpenChange(next)
   }
 
   function updateRow(key: string, changes: Partial<RecipeRow>) {
@@ -183,13 +211,7 @@ export function ProductCreateDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        onOpenChange(next)
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Nuevo producto</DialogTitle>
@@ -200,6 +222,8 @@ export function ProductCreateDialog({
         </DialogHeader>
 
         <form
+          key={formKey}
+          ref={formRef}
           noValidate
           onSubmit={(event) => {
             event.preventDefault()
@@ -229,6 +253,7 @@ export function ProductCreateDialog({
                     required
                     maxLength={120}
                     placeholder="Latte"
+                    defaultValue={draft?.name ?? ""}
                   />
                 </Field>
 
@@ -240,13 +265,14 @@ export function ProductCreateDialog({
                       name="sku"
                       maxLength={60}
                       placeholder="CAF-LAT"
+                      defaultValue={draft?.sku ?? ""}
                     />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="product-category">Categoría</FieldLabel>
                     <Select
                       name="categoryId"
-                      defaultValue="none"
+                      defaultValue={draft?.categoryId ?? "none"}
                       items={[
                         { value: "none", label: "Sin categoría" },
                         ...categories
@@ -287,9 +313,9 @@ export function ProductCreateDialog({
                     name="price"
                     type="number"
                     min="0"
-                   
                     required
                     placeholder="55.00"
+                    defaultValue={draft?.price ?? ""}
                   />
                 </Field>
 
@@ -303,6 +329,7 @@ export function ProductCreateDialog({
                     rows={3}
                     maxLength={500}
                     placeholder="Espresso con leche vaporizada"
+                    defaultValue={draft?.description ?? ""}
                   />
                 </Field>
               </FieldGroup>
@@ -352,14 +379,14 @@ export function ProductCreateDialog({
                             )
                             updateRow(row.key, {
                               ingredientId: nextId,
-                              unit: ingredient?.baseUnit ?? "",
+                              unit: ingredient?.displayUnit ?? "",
                             })
                           }}
                           items={[
                             { value: "none", label: "Elige un ingrediente" },
                             ...ingredients.map((ingredient) => ({
                               value: ingredient.id,
-                              label: `${ingredient.name} (${unitLabel(ingredient.baseUnit)})`,
+                              label: `${ingredient.name} (${unitLabel(ingredient.displayUnit)})`,
                             })),
                           ]}
                         >
@@ -379,7 +406,7 @@ export function ProductCreateDialog({
                                 value={ingredient.id}
                               >
                                 {ingredient.name} (
-                                {unitLabel(ingredient.baseUnit)})
+                                {unitLabel(ingredient.displayUnit)})
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -469,7 +496,12 @@ export function ProductCreateDialog({
 
           {error ? <FieldError>{error}</FieldError> : null}
 
-          <DialogFooter className="mt-4">
+          <DialogFooter>
+            <ClearFieldsButton
+              onClick={handleClear}
+              disabled={pending}
+              className="sm:mr-auto"
+            />
             <Button
               type="button"
               variant="outline"

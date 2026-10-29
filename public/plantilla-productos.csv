@@ -1,0 +1,6 @@
+﻿nombre,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
+Tomate,KG,Frutas y verduras,Refrigerador,25,50,10,2
+Cebolla,KG,Frutas y verduras,Almacén seco,15,30,5,1
+Leche entera,L,Lácteos y refrigerados,Refrigerador,22,24,12,6
+"Aceite de oliva",ML,"Aceites, salsas y condimentos",Almacén seco,45,2000,1000,200
+Vaso 12 oz,UNIT,Desechables y empaques,Almacén de desechables,1.2,500,200,100

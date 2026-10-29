@@ -2,10 +2,33 @@ import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "cn"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+/**
+ * Input de texto/número.
+ *
+ * Los `type="number"` aceptan hasta 4 decimales (`step` 0.0001) y no cambian de
+ * valor con las flechas ↑/↓ del teclado: el número solo se modifica al
+ * escribirlo.
+ */
+function Input({
+  className,
+  type,
+  step,
+  onKeyDown,
+  ...props
+}: React.ComponentProps<"input">) {
+  const isNumber = type === "number"
+
   return (
     <InputPrimitive
       type={type}
+      step={isNumber ? (step ?? "0.0001") : step}
+      onKeyDown={(event) => {
+        if (isNumber && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+          event.preventDefault()
+        }
+
+        onKeyDown?.(event)
+      }}
       data-slot="input"
       className={cn(
         "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",

@@ -90,6 +90,12 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Pie del diálogo: barra con fondo propio que contiene los botones.
+ *
+ * Los márgenes negativos lo pegan a los bordes del `DialogContent` (que usa
+ * `p-6`), igual que en `AlertDialogFooter`.
+ */
 function DialogFooter({
   className,
   showCloseButton = false,
@@ -102,7 +108,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "-mx-6 -mb-6 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted px-6 py-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}

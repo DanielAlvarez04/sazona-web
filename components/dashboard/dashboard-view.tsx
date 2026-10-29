@@ -313,7 +313,7 @@ export function DashboardView({
                     <span className="truncate">{alert.name}</span>
                     <span className="shrink-0 text-xs text-destructive tabular-nums">
                       {formatQuantity(alert.currentStock)} /{" "}
-                      {formatQuantity(alert.minStock)} {alert.baseUnit}
+                      {formatQuantity(alert.minStock)} {alert.displayUnit}
                     </span>
                   </li>
                 ))}

@@ -1,27 +1,39 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { BoxesIcon, HistoryIcon } from "lucide-react"
 
-import { BulkIngredientsSheet } from "@/components/inventory/bulk-ingredients-sheet"
-import { ImportCsvSheet } from "@/components/inventory/import-csv-sheet"
+import { BulkIngredientsDialog } from "@/components/inventory/bulk-ingredients-dialog"
+import { ImportIngredientsDialog } from "@/components/inventory/import-ingredients-dialog"
 import { IngredientDialog } from "@/components/inventory/ingredient-dialog"
 import { IngredientsTable } from "@/components/inventory/ingredients-table"
+import { InventorySummary } from "@/components/inventory/inventory-summary"
+import { KardexTable } from "@/components/inventory/kardex-table"
 import { listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   type IngredientCategory,
   type IngredientLocation,
   type Ingredient,
+  type InventoryMovement,
 } from "@/lib/catalog"
+import type { InventoryReport } from "@/lib/dashboard"
 import { type Branch } from "@/lib/branches"
 
 interface InventoryClientProps {
   initialIngredients: Ingredient[]
+  initialMovements: InventoryMovement[]
+  inventoryReport: InventoryReport | null
+  branches: Branch[]
   canManage: boolean
   initialBranch: Branch | null
 }
 
 export function InventoryClient({
   initialIngredients,
+  initialMovements,
+  inventoryReport,
+  branches,
   canManage,
   initialBranch,
 }: InventoryClientProps) {
@@ -56,18 +68,46 @@ export function InventoryClient({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <IngredientsTable
-        idPrefix="ingredients"
-        ingredients={initialIngredients}
-        branch={branch}
-        canManage={canManage}
-        onCreate={() => setCreating(true)}
-        onBulkCreate={() => setBulkCreating(true)}
-        onImportCsv={() => setImportingCsv(true)}
-        onEdit={(ingredient) => setEditing(ingredient)}
-        categories={categories}
-        locations={locations}
-      />
+      <Tabs defaultValue="inventario" className="gap-4">
+        <TabsList>
+          <TabsTrigger type="button" value="inventario">
+            <BoxesIcon className="size-4" />
+            Inventario
+          </TabsTrigger>
+          <TabsTrigger type="button" value="kardex">
+            <HistoryIcon className="size-4" />
+            Kardex
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="inventario" keepMounted>
+          <div className="flex flex-col gap-4">
+            <InventorySummary
+              ingredients={initialIngredients}
+              report={inventoryReport}
+              branch={branch}
+              branches={branches}
+            />
+            <IngredientsTable
+              idPrefix="ingredients"
+              ingredients={initialIngredients}
+              branch={branch}
+              global={branch === null}
+              canManage={canManage}
+              onCreate={() => setCreating(true)}
+              onBulkCreate={() => setBulkCreating(true)}
+              onImportCsv={() => setImportingCsv(true)}
+              onEdit={(ingredient) => setEditing(ingredient)}
+              categories={categories}
+              locations={locations}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="kardex" keepMounted>
+          <KardexTable movements={initialMovements} branch={branch} />
+        </TabsContent>
+      </Tabs>
 
       {canManage && creating ? (
         <IngredientDialog
@@ -96,7 +136,7 @@ export function InventoryClient({
       ) : null}
 
       {canManage && bulkCreating ? (
-        <BulkIngredientsSheet
+        <BulkIngredientsDialog
           open
           onOpenChange={(open) => {
             if (!open) setBulkCreating(false)
@@ -108,12 +148,13 @@ export function InventoryClient({
       ) : null}
 
       {canManage && importingCsv ? (
-        <ImportCsvSheet
+        <ImportIngredientsDialog
           open
           onOpenChange={(open) => {
             if (!open) setImportingCsv(false)
           }}
           branchName={branch?.name ?? null}
+          existingNames={initialIngredients.map((ingredient) => ingredient.name)}
         />
       ) : null}
     </div>
