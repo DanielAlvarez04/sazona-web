@@ -151,17 +151,36 @@ export function CatalogClient({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <Tabs defaultValue="recetas" className="gap-4">
+      <Tabs defaultValue="articulos" className="gap-4">
         <TabsList>
-          <TabsTrigger type="button" value="recetas">
-            <FlaskConicalIcon className="size-4" />
-            Recetas
-          </TabsTrigger>
           <TabsTrigger type="button" value="articulos">
             <BoxesIcon className="size-4" />
             Artículos
           </TabsTrigger>
+          <TabsTrigger type="button" value="recetas">
+            <FlaskConicalIcon className="size-4" />
+            Recetas
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="articulos" keepMounted>
+          <div className="flex flex-col gap-4">
+            <CatalogSummary mode="articles" recipes={recipes} articles={articles} />
+            {rowForm.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {rowForm.error}
+              </p>
+            ) : null}
+            <ArticlesTable
+              articles={articles}
+              categories={categories}
+              canManage={canManage}
+              onCreate={openNewArticle}
+              onEdit={openArticle}
+              onDeactivate={handleDeactivateArticle}
+            />
+          </div>
+        </TabsContent>
 
         <TabsContent value="recetas" keepMounted>
           <div className="flex flex-col gap-4">
@@ -182,25 +201,6 @@ export function CatalogClient({
               onProduce={(recipe) => setProducing(recipe)}
               onToggleActive={toggleRecipeActive}
               onDelete={handleDeleteRecipe}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="articulos" keepMounted>
-          <div className="flex flex-col gap-4">
-            <CatalogSummary mode="articles" recipes={recipes} articles={articles} />
-            {rowForm.error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {rowForm.error}
-              </p>
-            ) : null}
-            <ArticlesTable
-              articles={articles}
-              categories={categories}
-              canManage={canManage}
-              onCreate={openNewArticle}
-              onEdit={openArticle}
-              onDeactivate={handleDeactivateArticle}
             />
           </div>
         </TabsContent>
