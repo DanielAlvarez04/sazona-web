@@ -16,15 +16,12 @@ function ContextMenuTrigger({
   asChild?: boolean
   children?: React.ReactNode
 }) {
-  if (asChild) {
+  // `asChild` clona el hijo con las props del trigger en lugar de envolverlo en
+  // un `div`. Un `div` dentro de `<tbody>` es HTML inválido (provoca errores de
+  // hidratación); así la fila de la tabla ES el trigger.
+  if (asChild && React.isValidElement(children)) {
     return (
-      <ContextMenuPrimitive.Trigger
-        data-slot="context-menu-trigger"
-        {...props}
-        style={{ display: "contents" }}
-      >
-        {children}
-      </ContextMenuPrimitive.Trigger>
+      <ContextMenuPrimitive.Trigger {...props} render={children} />
     )
   }
 

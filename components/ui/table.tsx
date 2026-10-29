@@ -35,8 +35,8 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
       className={cn(
         // El separador se pinta en las celdas (no en el `tr`) para que se vea
         // en cualquier modelo de tablas. La última fila no lleva borde inferior.
-        // El segundo selector cubre las tablas cuyas filas van envueltas (p.
-        // ej. por un `ContextMenuTrigger` con `display: contents`).
+        // El segundo selector cubre las tablas cuyas filas van envueltas en
+        // otro elemento (p. ej. un trigger de menú contextual).
         "[&>tr:last-child>td]:border-b-0 [&>*:last-child>tr:last-child>td]:border-b-0",
         className
       )}
