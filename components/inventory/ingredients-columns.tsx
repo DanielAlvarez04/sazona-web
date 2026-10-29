@@ -99,7 +99,7 @@ export interface IngredientRowActions {
   onRequestDelete: (ingredient: Ingredient) => void
   /** Muestra la acción destructiva de eliminar. */
   canManage: boolean
-  /** Hay una mutación en curso para ese producto (desactiva el menú). */
+  /** Hay una mutación en curso para ese insumo (desactiva el menú). */
   isPending: (ingredient: Ingredient) => boolean
 }
 
@@ -170,7 +170,7 @@ function IngredientRowActionsMenu({
 export const INGREDIENT_COLUMN_LABELS: Record<string, string> = {
   select: "Selección",
   sku: "SKU",
-  name: "Producto",
+  name: "Insumo",
   stock: "Stock / mínimo",
   unitCost: "Costo unitario",
   totalCost: "Costo total",
@@ -184,7 +184,7 @@ export const INGREDIENT_COLUMN_LABELS: Record<string, string> = {
  * Prioridad de reposición: stock actual / stock mínimo.
  *
  * Ordenar de menor a mayor deja arriba lo más urgente, sin importar que cada
- * producto use una unidad distinta. Sin mínimo definido, lo que tiene stock
+ * insumo use una unidad distinta. Sin mínimo definido, lo que tiene stock
  * queda al final.
  */
 function stockPriority(ingredient: Ingredient): number {
@@ -199,12 +199,12 @@ function stockPriority(ingredient: Ingredient): number {
 }
 
 /**
- * Definición de columnas de la tabla de productos.
+ * Definición de columnas de la tabla de insumos.
  *
- * Modo sucursal: Selección · SKU · Producto · Stock/mínimo · Costo · Máximo ·
+ * Modo sucursal: Selección · SKU · Insumo · Stock/mínimo · Costo · Máximo ·
  * Clasificación · Acciones.
  *
- * Modo Global (todas las sucursales): Selección · SKU · Producto · Stock total ·
+ * Modo Global (todas las sucursales): Selección · SKU · Insumo · Stock total ·
  * Costo unitario · Costo total · Clasificación · Acciones. Sin máximo ni
  * stock/mínimo por sucursal.
  */
@@ -262,7 +262,7 @@ export function createIngredientColumns(
     }),
     columnHelper.accessor("name", {
       header: ({ column }) => (
-        <IngredientColumnHeader title="Producto" column={column} />
+        <IngredientColumnHeader title="Insumo" column={column} />
       ),
       cell: ({ row }) => {
         const outOfStock = Number(row.original.currentStock) === 0

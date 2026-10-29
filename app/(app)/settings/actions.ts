@@ -71,9 +71,9 @@ export interface CoreInventorySyncResult {
 }
 
 /**
- * Guarda en el inventario los productos core seleccionados.
+ * Guarda en el inventario los insumos core seleccionados.
  *
- * El catálogo vive en el web; aquí se envía a la API qué productos deben
+ * El catálogo vive en el web; aquí se envía a la API qué insumos deben
  * existir y qué nombres del catálogo quedaron desmarcados. La API crea los
  * que faltan y retira los desmarcados solo si no están en recetas ni pedidos.
  */

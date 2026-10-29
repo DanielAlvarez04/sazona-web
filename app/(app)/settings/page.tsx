@@ -76,7 +76,7 @@ export default async function SettingsPage({
     ? ((await branchesResponse.json()) as Branch[])
     : []
 
-  // Inventario actual: sirve para marcar los productos core que ya existen y
+  // Inventario actual: sirve para marcar los insumos core que ya existen y
   // bloquear los que están en recetas.
   const [
     ingredientsResponse,

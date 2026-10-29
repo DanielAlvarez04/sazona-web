@@ -32,7 +32,7 @@ function toPercent(taxRate: string): string {
 /**
  * IVA del negocio.
  *
- * Es la tasa que se aplica a los productos que no tienen una propia y la que
+ * Es la tasa que se aplica a los artículos que no tienen una propia y la que
  * usan los pedidos nuevos para separar el impuesto del precio final.
  */
 export function TaxSettingsCard({
@@ -54,7 +54,7 @@ export function TaxSettingsCard({
       <CardHeader>
         <CardTitle>IVA</CardTitle>
         <CardDescription>
-          Se aplica a los productos que no tengan una tasa propia y a los
+          Se aplica a los artículos que no tengan una tasa propia y a los
           pedidos nuevos. Los pedidos ya registrados conservan su IVA.
         </CardDescription>
       </CardHeader>

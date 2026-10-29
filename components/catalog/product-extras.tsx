@@ -56,7 +56,7 @@ export function ProductExtras({
       <CardContent className="flex flex-col gap-3">
         {product.extras.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Este producto no tiene extras.
+            Este artículo no tiene extras.
           </p>
         ) : (
           product.extras.map((extra) => (

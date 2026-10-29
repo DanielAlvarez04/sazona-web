@@ -190,21 +190,21 @@ export function ReportsView({
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Productos más vendidos</CardTitle>
+                  <CardTitle>Artículos más vendidos</CardTitle>
                   <CardDescription>Por unidades.</CardDescription>
                 </CardHeader>
                 <CardContent className="px-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Producto</TableHead>
+                        <TableHead>Artículo</TableHead>
                         <TableHead className="text-right">Unidades</TableHead>
                         <TableHead className="text-right">Importe</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sales.topProducts.length === 0 ? (
-                        <EmptyRow colSpan={3} text="Sin productos vendidos." />
+                        <EmptyRow colSpan={3} text="Sin artículos vendidos." />
                       ) : (
                         sales.topProducts.map((row) => (
                           <TableRow key={row.name}>

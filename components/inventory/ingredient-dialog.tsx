@@ -171,11 +171,11 @@ export function IngredientDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? `Editar ${ingredient?.name}` : "Nuevo producto"}
+            {isEdit ? `Editar ${ingredient?.name}` : "Nuevo insumo"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "El stock solo cambia con ajustes auditables, no editando el producto."
+              ? "El stock solo cambia con ajustes auditables, no editando el insumo."
               : branchName
                 ? `El stock inicial se registra en ${branchName} como un movimiento de ajuste.`
                 : "En la vista de organización no se puede definir stock inicial. Use una sucursal para dar de alta stock."}
@@ -191,7 +191,7 @@ export function IngredientDialog({
 
             const name = String(formData.get("name") ?? "").trim()
             if (!name) {
-              setFormError("Escribe el nombre del producto.")
+              setFormError("Escribe el nombre del insumo.")
               return
             }
 
@@ -474,7 +474,7 @@ export function IngredientDialog({
                 ) : (
                   <SaveIcon />
                 )}
-                {isEdit ? "Guardar cambios" : "Crear producto"}
+                {isEdit ? "Guardar cambios" : "Crear insumo"}
               </Button>
             </DialogFooter>
           </div>

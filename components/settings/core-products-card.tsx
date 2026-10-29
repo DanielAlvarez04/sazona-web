@@ -44,10 +44,10 @@ function normalize(value: string): string {
 }
 
 /**
- * Catálogo de productos core.
+ * Catálogo de insumos core.
  *
  * Los checkboxes marcan lo que debe existir en el inventario. Al guardar, los
- * productos nuevos se precargan en el diálogo de alta masiva para editar
+ * insumos nuevos se precargan en el diálogo de alta masiva para editar
  * precios y stock; los desmarcados se retiran si no están en recetas.
  */
 export function CoreProductsCard({
@@ -58,7 +58,7 @@ export function CoreProductsCard({
   storageKey,
   canManage,
 }: {
-  /** Nombres de los productos que ya están en el inventario. */
+  /** Nombres de los insumos que ya están en el inventario. */
   existingNames: string[]
   categories: IngredientCategory[]
   locations: IngredientLocation[]
@@ -83,8 +83,8 @@ export function CoreProductsCard({
 
     return initial
   })
-  // Giros aplicados. Se llevan aparte de los productos porque los paquetes se
-  // solapan: un producto seleccionado no debe marcar otros giros.
+  // Giros aplicados. Se llevan aparte de los insumos porque los paquetes se
+  // solapan: un insumo seleccionado no debe marcar otros giros.
   const [activePresets, setActivePresets] = React.useState<Set<string>>(
     new Set()
   )
@@ -170,7 +170,7 @@ export function CoreProductsCard({
     return map
   }, [])
 
-  // Productos marcados que aún no están en el inventario: se precargan en el
+  // Insumos marcados que aún no están en el inventario: se precargan en el
   // alta masiva para editar precios y stock antes de crearlos.
   const newRows = React.useMemo<BulkIngredientInitialRow[]>(() => {
     const rows: BulkIngredientInitialRow[] = []
@@ -218,7 +218,7 @@ export function CoreProductsCard({
           return next
         }
 
-        // Al quitar un giro se conservan los productos que también pertenecen
+        // Al quitar un giro se conservan los insumos que también pertenecen
         // a otro giro activo o que están bloqueados por recetas.
         const keep = new Set(
           CORE_PRODUCT_PRESETS.filter(
@@ -282,7 +282,7 @@ export function CoreProductsCard({
   }
 
   function handleSave() {
-    // Si hay productos nuevos, se editan en el alta masiva antes de crearlos.
+    // Si hay insumos nuevos, se editan en el alta masiva antes de crearlos.
     if (newRows.length > 0) {
       setBulkOpen(true)
       return
@@ -291,7 +291,7 @@ export function CoreProductsCard({
     void persistSelection([...selected], true)
   }
 
-  /** Limpia productos y giros seleccionados. */
+  /** Limpia insumos y giros seleccionados. */
   function handleClearSelection() {
     setSelected(new Set())
     setActivePresets(new Set())
@@ -308,7 +308,7 @@ export function CoreProductsCard({
     }
 
     setSelected(kept)
-    // Los productos nuevos ya los creó el alta masiva; aquí solo se retiran
+    // Los insumos nuevos ya los creó el alta masiva; aquí solo se retiran
     // los desmarcados.
     void persistSelection([...kept], false)
   }
@@ -317,9 +317,9 @@ export function CoreProductsCard({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Productos sugeridos</CardTitle>
+          <CardTitle>Insumos sugeridos</CardTitle>
           <CardDescription>
-            Marca los productos que quieras tener en el inventario. Al guardar,
+            Marca los insumos que quieras tener en el inventario. Al guardar,
             los nuevos se abren en el alta masiva para ajustar precios y stock;
             los desmarcados se retiran y, si estaban en recetas, esas recetas
             quedan inactivas.
@@ -356,7 +356,7 @@ export function CoreProductsCard({
                 <span className="text-sm font-medium">Selección por giro</span>
                 <span className="text-xs text-muted-foreground">
                   Marca un giro para seleccionar automáticamente un paquete de
-                  productos base.
+                  insumos base.
                 </span>
               </div>
 
@@ -425,7 +425,7 @@ export function CoreProductsCard({
                   {group.category}
                 </h3>
                 <span className="text-xs text-muted-foreground">
-                  {group.products.length} producto
+                  {group.products.length} insumo
                   {group.products.length === 1 ? "" : "s"}
                 </span>
               </div>

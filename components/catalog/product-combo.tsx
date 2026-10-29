@@ -60,7 +60,7 @@ export function ProductCombo({
     }))
   )
 
-  // Un combo no puede contener otro combo ni productos desactivados.
+  // Un combo no puede contener otro combo ni artículos desactivados.
   const options = products.filter(
     (candidate) =>
       candidate.id !== product.id &&
@@ -109,7 +109,7 @@ export function ProductCombo({
 
     if (unique.size !== components.length) {
       // Duplicados: el formulario local lo señala sin llamar a la API.
-      window.alert("Cada producto/variante solo puede aparecer una vez.")
+      window.alert("Cada artículo/variante solo puede aparecer una vez.")
       return
     }
 
@@ -132,8 +132,8 @@ export function ProductCombo({
       <CardHeader>
         <CardTitle>Componentes del combo</CardTitle>
         <CardDescription>
-          Productos que incluye el combo. Los combos no pueden contener otros
-          combos y el descuento del combo se define en el precio del producto.
+          Artículos que incluye el combo. Los combos no pueden contener otros
+          combos y el descuento del combo se define en el precio del artículo.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -166,7 +166,7 @@ export function ProductCombo({
                       })
                     }
                     items={[
-                      { value: "none", label: "Elige un producto" },
+                      { value: "none", label: "Elige un artículo" },
                       ...options.map((candidate) => ({
                         value: candidate.id,
                         label: `${candidate.name}${candidate.isActive ? "" : " (inactivo)"}`,
@@ -175,12 +175,12 @@ export function ProductCombo({
                   >
                     <SelectTrigger
                       className="w-full"
-                      aria-label="Producto del combo"
+                      aria-label="Artículo del combo"
                     >
-                      <SelectValue placeholder="Elige un producto" />
+                      <SelectValue placeholder="Elige un artículo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Elige un producto</SelectItem>
+                      <SelectItem value="none">Elige un artículo</SelectItem>
                       {options.map((candidate) => (
                         <SelectItem key={candidate.id} value={candidate.id}>
                           {candidate.name}

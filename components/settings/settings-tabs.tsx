@@ -45,7 +45,7 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent
         value="inventory"
-        // Mantiene la selección de productos al cambiar de pestaña.
+        // Mantiene la selección de insumos al cambiar de pestaña.
         keepMounted
         className="flex min-w-0 flex-col gap-6"
       >

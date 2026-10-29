@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import type { ImportResult, UnitCode } from "@/lib/catalog"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
@@ -52,7 +52,7 @@ export async function deactivateCategory(id: string): Promise<ActionResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Productos
+// Artículos
 // ---------------------------------------------------------------------------
 
 export async function createProduct(
@@ -110,6 +110,7 @@ export async function createVariant(
     {
       name: text(formData, "name"),
       priceAdjust: numeric(formData, "priceAdjust") ?? 0,
+      recipeFactor: numeric(formData, "recipeFactor") ?? 1,
     },
     productPaths(productId)
   )
@@ -126,6 +127,7 @@ export async function updateVariant(
     {
       name: text(formData, "name"),
       priceAdjust: numeric(formData, "priceAdjust"),
+      recipeFactor: numeric(formData, "recipeFactor"),
       isActive: checkbox(formData, "isActive"),
     },
     productPaths(productId)
@@ -189,7 +191,156 @@ export async function deactivateExtra(
 }
 
 // ---------------------------------------------------------------------------
-// Exclusiones, combos y recetas
+// Recetas
+// ---------------------------------------------------------------------------
+
+export interface RecipeIngredientInput {
+  ingredientId: string
+  quantity: number
+  unit?: UnitCode
+  label?: string
+  isOptional?: boolean
+  alternatives?: Array<{
+    ingredientId: string
+    quantity: number
+    unit?: UnitCode
+  }>
+}
+
+export interface RecipePublishInput {
+  price: number
+  sku?: string
+  categoryId?: string
+  taxRate?: number | null
+  variants?: Array<{
+    name: string
+    priceAdjust?: number
+    recipeFactor?: number
+    sortOrder?: number
+    isActive?: boolean
+  }>
+}
+
+export interface RecipeInput {
+  name: string
+  description?: string
+  categoryId?: string | null
+  isActive?: boolean
+  ingredients?: RecipeIngredientInput[]
+  publish?: RecipePublishInput
+  produce?: { displayUnit: UnitCode; yieldQuantity: number }
+}
+
+export async function createRecipe(
+  input: RecipeInput
+): Promise<ActionResult<{ id: string }>> {
+  return mutateApi<{ id: string }>("/catalog/recipes", "POST", input, [
+    "/catalog",
+  ])
+}
+
+export async function updateRecipe(
+  recipeId: string,
+  input: Partial<RecipeInput>
+): Promise<ActionResult> {
+  return mutateApi(`/catalog/recipes/${recipeId}`, "PATCH", input, [
+    "/catalog",
+  ])
+}
+
+export async function updateRecipeIngredients(
+  recipeId: string,
+  ingredients: RecipeIngredientInput[]
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/recipes/${recipeId}/ingredients`,
+    "PUT",
+    { ingredients },
+    ["/catalog"]
+  )
+}
+
+export async function deleteRecipe(recipeId: string): Promise<ActionResult> {
+  return mutateApi(`/catalog/recipes/${recipeId}`, "DELETE", undefined, [
+    "/catalog",
+  ])
+}
+
+export async function publishRecipe(
+  recipeId: string,
+  input: RecipePublishInput
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/recipes/${recipeId}/publish`,
+    "POST",
+    input,
+    ["/catalog"]
+  )
+}
+
+export async function unpublishRecipe(
+  recipeId: string
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/recipes/${recipeId}/publish`,
+    "DELETE",
+    undefined,
+    ["/catalog"]
+  )
+}
+
+export async function produceRecipe(
+  recipeId: string,
+  input: { quantity?: number; unit?: UnitCode; reason?: string }
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/recipes/${recipeId}/produce`,
+    "POST",
+    input,
+    ["/catalog", "/inventory"]
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Artículos
+// ---------------------------------------------------------------------------
+
+export interface ArticleInput {
+  name: string
+  description?: string | null
+  sku?: string | null
+  categoryId?: string | null
+  price: number
+  taxRate?: number | null
+  isActive?: boolean
+  variants?: Array<{
+    name: string
+    priceAdjust?: number
+    recipeFactor?: number
+    sortOrder?: number
+    isActive?: boolean
+  }>
+}
+
+export async function createArticle(
+  input: ArticleInput
+): Promise<ActionResult<{ id: string }>> {
+  return mutateApi<{ id: string }>("/catalog/products", "POST", input, [
+    "/catalog",
+  ])
+}
+
+export async function updateArticle(
+  articleId: string,
+  input: ArticleInput
+): Promise<ActionResult> {
+  return mutateApi(`/catalog/products/${articleId}`, "PATCH", input, [
+    "/catalog",
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// Exclusiones y combos
 // ---------------------------------------------------------------------------
 
 export async function replaceExclusions(
@@ -222,40 +373,6 @@ export async function replaceComboComponents(
   )
 }
 
-export interface RecipeInput {
-  variantId: string | null
-  name?: string
-  ingredients: Array<{ ingredientId: string; quantity: number; unit?: UnitCode }>
-}
-
-export async function saveRecipe(
-  productId: string,
-  input: RecipeInput
-): Promise<ActionResult> {
-  return mutateApi(
-    `/catalog/products/${productId}/recipes`,
-    "PUT",
-    {
-      variantId: input.variantId,
-      name: input.name,
-      ingredients: input.ingredients,
-    },
-    productPaths(productId)
-  )
-}
-
-export async function deleteRecipe(
-  productId: string,
-  recipeId: string
-): Promise<ActionResult> {
-  return mutateApi(
-    `/catalog/products/${productId}/recipes/${recipeId}`,
-    "DELETE",
-    undefined,
-    productPaths(productId)
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Importación CSV
 // ---------------------------------------------------------------------------
@@ -271,3 +388,4 @@ export async function importProducts(
     dryRun ? [] : CATALOG_PATHS
   )
 }
+

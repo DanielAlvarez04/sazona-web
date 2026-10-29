@@ -100,7 +100,7 @@ export function IngredientsTable({
     React.useState<string>(DATA_TABLE_ALL)
   const [pendingIds, setPendingIds] = React.useState<string[]>([])
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
-  /** Productos a eliminar, pendientes de confirmación. */
+  /** Insumos a eliminar, pendientes de confirmación. */
   const [deleteTargets, setDeleteTargets] = React.useState<
     Ingredient[] | null
   >(null)
@@ -135,18 +135,18 @@ export function IngredientsTable({
       if (result?.ok) {
         const count = result.data?.deletedCount ?? deleteTargets.length
         toast.success(
-          count === 1 ? "Producto eliminado" : `${count} productos eliminados`
+          count === 1 ? "Insumo eliminado" : `${count} insumos eliminados`
         )
         setRowSelection({})
         setDeleteTargets(null)
         router.refresh()
       } else {
         toast.error(
-          result?.message ?? "No se pudieron eliminar los productos"
+          result?.message ?? "No se pudieron eliminar los insumos"
         )
       }
     } catch {
-      toast.error("No se pudieron eliminar los productos")
+      toast.error("No se pudieron eliminar los insumos")
     } finally {
       setDeleting(false)
     }
@@ -317,7 +317,7 @@ export function IngredientsTable({
         // Lo más urgente (stock/mínimo más bajo) primero.
         initialSorting={[{ id: "stock", desc: false }]}
         search={{
-          label: "Buscar producto",
+          label: "Buscar insumo",
           placeholder: "Buscar por nombre o SKU...",
           value: globalFilter,
           onValueChange: setGlobalFilter,
@@ -345,7 +345,7 @@ export function IngredientsTable({
 
               <Button onClick={onCreate}>
                 <PlusIcon className="size-4" />
-                Nuevo producto
+                Nuevo insumo
               </Button>
 
               <DropdownMenu>
@@ -425,13 +425,13 @@ export function IngredientsTable({
         emptyState={
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <PackageOpenIcon className="size-6" />
-            <p>Todavía no hay productos. Crea el primero para empezar.</p>
+            <p>Todavía no hay insumos. Crea el primero para empezar.</p>
           </div>
         }
         filteredEmptyState={
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <PackageOpenIcon className="size-6" />
-            <p>No hay productos que coincidan con los filtros.</p>
+            <p>No hay insumos que coincidan con los filtros.</p>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               <XIcon className="size-4" />
               Limpiar filtros
@@ -440,7 +440,7 @@ export function IngredientsTable({
         }
         summary={
           <>
-            {filteredIngredients.length} producto
+            {filteredIngredients.length} insumo
             {filteredIngredients.length === 1 ? "" : "s"}
             {selectedCount > 0 ? ` · ${selectedCount} seleccionado(s)` : ""}
             {branch
@@ -477,15 +477,15 @@ export function IngredientsTable({
             </AlertDialogMedia>
             <AlertDialogTitle>
               {deleteTargets && deleteTargets.length > 1
-                ? `¿Eliminar ${deleteTargets.length} productos?`
-                : "¿Eliminar este producto?"}
+                ? `¿Eliminar ${deleteTargets.length} insumos?`
+                : "¿Eliminar este insumo?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTargets && deleteTargets.length === 1
                 ? `«${deleteTargets[0].name}» se eliminará definitivamente, junto con su historial de movimientos (kardex). También se quitará de recetas y extras que lo usen.`
                 : "Se eliminarán definitivamente junto con su historial de movimientos (kardex). También se quitarán de recetas y extras que los usen."}{" "}
-              Los productos del catálogo core que estén en recetas harán que
-              esas recetas queden inactivas. Los productos que aparecen en
+              Los insumos del catálogo core que estén en recetas harán que
+              esas recetas queden inactivas. Los insumos que aparecen en
               pedidos no se pueden eliminar.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -71,7 +71,7 @@ export function AdjustStockDialog({
       <DialogContent className="sm:max-w-md">
         {ingredient ? (
           <AdjustStockForm
-            // Remontar el formulario al abrir (o al cambiar de producto/tipo)
+            // Remontar el formulario al abrir (o al cambiar de insumo/tipo)
             // deja el diálogo siempre limpio, sin arrastrar valores previos.
             key={`${ingredient.id}-${type}-${open ? "open" : "closed"}`}
             ingredient={ingredient}

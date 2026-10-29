@@ -1,4 +1,4 @@
-export type UnitDimension = "MASS" | "VOLUME" | "COUNT"
+﻿export type UnitDimension = "MASS" | "VOLUME" | "COUNT"
 
 /** Estrategia para resolver insumos repetidos al importar un CSV. */
 export type ImportIngredientsMode = "exclude" | "duplicate" | "overwrite"
@@ -143,9 +143,21 @@ export interface Variant {
   id: string
   name: string
   priceAdjust: string
+  /** Multiplicador del consumo de la receta base. Regular = 1. */
+  recipeFactor: string
   isActive: boolean
   sortOrder: number
 }
+
+/** Presentaciones base sugeridas al publicar una receta como artículo. */
+export const PRESENTATION_PRESETS: Array<{
+  name: string
+  recipeFactor: string
+}> = [
+  { name: "Chico", recipeFactor: "0.8" },
+  { name: "Regular", recipeFactor: "1" },
+  { name: "Grande", recipeFactor: "1.3" },
+]
 
 export interface Unit {
   code: UnitCode
@@ -189,6 +201,12 @@ export interface ProductListItem {
   variants: Variant[]
   extras: Extra[]
   ingredientExclusions: Exclusion[]
+  recipes?: Array<{
+    id: string
+    name: string
+    variantId: string | null
+    isActive: boolean
+  }>
   _count: { recipes: number }
 }
 
@@ -205,25 +223,58 @@ export interface ComboComponent {
   variant: { id: string; name: string } | null
 }
 
+export interface RecipeIngredientRef {
+  id: string
+  name: string
+  baseUnit: UnitCode
+  displayUnit: UnitCode
+  currentStock?: string
+  unitCost?: string | null
+  isActive?: boolean
+}
+
 export interface RecipeIngredient {
   id: string
   quantity: string
-  ingredient: {
-    id: string
-    name: string
-    baseUnit: UnitCode
-    displayUnit: UnitCode
-    currentStock?: string
-  }
+  label: string | null
+  isOptional: boolean
+  sortOrder: number
+  ingredient: RecipeIngredientRef
+  options: RecipeIngredientOption[]
+}
+
+export interface RecipeIngredientOption {
+  id: string
+  quantity: string
+  sortOrder: number
+  ingredient: RecipeIngredientRef
 }
 
 export interface Recipe {
   id: string
   name: string
+  description: string | null
   isActive: boolean
+  productId: string | null
   variantId: string | null
-  variant: { id: string; name: string } | null
+  variant?: { id: string; name: string } | null
+  categoryId: string | null
+  category: { id: string; name: string } | null
+  product: {
+    id: string
+    name: string
+    sku: string | null
+    price: string
+    isActive: boolean
+  } | null
+  producesIngredientId: string | null
+  producesIngredient: RecipeIngredientRef | null
+  yieldQuantity: string | null
+  yieldUnit: UnitCode | null
   ingredients: RecipeIngredient[]
+  /** Costo estimado del lote con los insumos default (en MXN). */
+  estimatedCost: string | null
+  hasCompleteCost: boolean
   canComputeConsumption?: boolean
 }
 
@@ -233,6 +284,10 @@ export interface ProductDetail extends ProductListItem {
   comboComponents: ComboComponent[]
   recipes: Recipe[]
 }
+
+/** Alias semántico: en la UI un `Product` del catálogo es un artículo. */
+export type ArticleListItem = ProductListItem
+export type ArticleDetail = ProductDetail
 
 export interface Ingredient {
   id: string
@@ -317,7 +372,7 @@ export interface Equivalence {
   note: string | null
 }
 
-export type MovementType = "ADJUSTMENT" | "CONSUMPTION" | "RETURN"
+export type MovementType = "ADJUSTMENT" | "CONSUMPTION" | "RETURN" | "PRODUCTION"
 
 export interface InventoryMovement {
   id: string
@@ -327,9 +382,9 @@ export interface InventoryMovement {
   reason: string | null
   referenceType: string | null
   createdAt: string
-  /** Nombre del producto en el momento del movimiento (snapshot). */
+  /** Nombre del insumo en el momento del movimiento (snapshot). */
   ingredientName: string
-  /** Unidad visible del producto en ese momento. */
+  /** Unidad visible del insumo en ese momento. */
   displayUnit: UnitCode
   /** `null` si el producto se eliminó; el kardex se conserva. */
   ingredient: {
@@ -348,6 +403,7 @@ export const MOVEMENT_LABELS: Record<MovementType, string> = {
   ADJUSTMENT: "Ajuste",
   CONSUMPTION: "Consumo",
   RETURN: "Devolución",
+  PRODUCTION: "Producción",
 }
 
 export interface ImportRowError {
@@ -417,3 +473,6 @@ export function formatPercent(value: string | null): string {
 export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value))
 }
+
+
+

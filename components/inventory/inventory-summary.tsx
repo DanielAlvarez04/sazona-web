@@ -39,7 +39,7 @@ interface ConsumptionRow {
 /**
  * Tarjetas de resumen de la tab Inventario.
  *
- * Todo se calcula con los productos ya cargados; el reporte de inventario solo
+ * Todo se calcula con los insumos ya cargados; el reporte de inventario solo
  * se usa para el consumo del periodo (y para estimar la cobertura).
  */
 export function InventorySummary({
@@ -146,7 +146,7 @@ export function InventorySummary({
             Estado del inventario
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">
-            {metrics.active} producto{metrics.active === 1 ? "" : "s"}
+            {metrics.active} insumo{metrics.active === 1 ? "" : "s"}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
@@ -178,8 +178,8 @@ export function InventorySummary({
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
           {metrics.withoutCost > 0
-            ? `${metrics.withoutCost} producto(s) sin costo registrado.`
-            : "Todos los productos tienen costo registrado."}{" "}
+            ? `${metrics.withoutCost} insumo(s) sin costo registrado.`
+            : "Todos los insumos tienen costo registrado."}{" "}
           {branch ? branch.name : "Toda la organización"}.
         </CardContent>
       </Card>
@@ -193,7 +193,7 @@ export function InventorySummary({
           <CardTitle className="text-2xl tabular-nums">
             {report === null ? "—" : metrics.consumedCount}
             <span className="ml-1 text-xs font-normal text-muted-foreground">
-              producto(s)
+              insumo(s)
             </span>
           </CardTitle>
         </CardHeader>
@@ -233,7 +233,7 @@ export function InventorySummary({
         <CardContent className="flex flex-col gap-1 text-xs">
           {metrics.critical.length === 0 ? (
             <span className="text-muted-foreground">
-              Ningún producto de alto consumo se agota en menos de{" "}
+              Ningún insumo de alto consumo se agota en menos de{" "}
               {CRITICAL_DAYS} días.
             </span>
           ) : (

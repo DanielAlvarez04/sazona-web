@@ -4,7 +4,7 @@ import type { QueuedRound } from "./types"
  * Persistencia local de la cola de sincronización.
  *
  * IndexedDB no guarda cookies, tokens ni credenciales: cada operación solo
- * contiene identificadores de producto, cantidades, notas y claves de
+ * contiene identificadores de artículo, cantidades, notas y claves de
  * idempotencia. Las operaciones se etiquetan con el `userId` que las creó para
  * que otra cuenta en el mismo dispositivo no las vea ni las envíe.
  */

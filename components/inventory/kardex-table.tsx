@@ -28,7 +28,7 @@ const DEFAULT_PAGE_SIZE = 15
 
 const COLUMN_LABELS: Record<string, string> = {
   createdAt: "Fecha",
-  product: "Producto",
+  product: "Insumo",
   branch: "Sucursal",
   type: "Tipo",
   quantity: "Cantidad",
@@ -71,7 +71,7 @@ function MovementColumnHeader({
 /**
  * Kardex de movimientos de inventario.
  *
- * Muestra la cantidad y el saldo en la unidad visible del producto (la API ya
+ * Muestra la cantidad y el saldo en la unidad visible del insumo (la API ya
  * los devuelve convertidos desde la unidad canónica).
  */
 export function KardexTable({
@@ -148,7 +148,7 @@ export function KardexTable({
         columnHelper.accessor((row) => row.ingredientName, {
           id: "product",
           header: ({ column }) => (
-            <MovementColumnHeader title="Producto" column={column} />
+            <MovementColumnHeader title="Insumo" column={column} />
           ),
           cell: ({ row }) => (
             <span className="flex items-center gap-1.5 font-medium">
@@ -272,7 +272,7 @@ export function KardexTable({
       initialSorting={[{ id: "createdAt", desc: true }]}
       search={{
         label: "Buscar movimiento",
-        placeholder: "Buscar por producto, motivo o usuario...",
+        placeholder: "Buscar por insumo, motivo o usuario...",
         value: globalFilter,
         onValueChange: setGlobalFilter,
       }}

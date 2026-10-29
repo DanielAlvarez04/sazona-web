@@ -1,9 +1,9 @@
 import type { UnitCode } from "./catalog"
 
 /**
- * Catálogo de productos core sugeridos para el inventario.
+ * Catálogo de insumos core sugeridos para el inventario.
  *
- * `unit` es solo una sugerencia de visualización: no crea productos ni cambia
+ * `unit` es solo una sugerencia de visualización: no crea insumos ni cambia
  * la unidad canónica con la que se almacena el stock.
  */
 export interface CoreProductSuggestion {
@@ -17,7 +17,7 @@ export interface CoreProductGroup {
   products: CoreProductSuggestion[]
 }
 
-/** Paquete de productos sugeridos según el giro del negocio. */
+/** Paquete de insumos sugeridos según el giro del negocio. */
 export interface CoreProductPreset {
   id: string
   label: string
@@ -28,7 +28,7 @@ export interface CoreProductPreset {
 export const CORE_PRODUCT_PRESETS: CoreProductPreset[] = [
   {
     id: "global",
-    label: "Productos globales",
+    label: "Insumos globales",
     productNames: [
       "Jitomate",
       "Cebolla blanca",

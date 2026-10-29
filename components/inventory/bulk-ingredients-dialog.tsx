@@ -131,7 +131,7 @@ export function BulkIngredientsDialog({
   branchName?: string | null
   /** Filas precargadas (se usan en lugar del borrador). */
   initialRows?: BulkIngredientInitialRow[]
-  /** Se invoca tras crear los productos correctamente, con sus nombres. */
+  /** Se invoca tras crear los insumos correctamente, con sus nombres. */
   onSaved?: (createdNames: string[]) => void
 }) {
   const router = useRouter()
@@ -188,7 +188,7 @@ export function BulkIngredientsDialog({
       .map((l) => ({ value: l.id, label: l.name })),
   ]
 
-  // Una sola fila por producto: la rejilla es la misma en la cabecera y en los
+  // Una sola fila por insumo: la rejilla es la misma en la cabecera y en los
   // datos para que todo quede alineado y sin saltos de línea.
   const rowGrid = cn(
     "grid items-center gap-2",
@@ -248,14 +248,14 @@ export function BulkIngredientsDialog({
     setError(null)
 
     if (named.length === 0) {
-      setError("Escribe al menos un producto.")
+      setError("Escribe al menos un insumo.")
       return
     }
 
     const missingName = rows.find((row) => hasData(row) && !row.name.trim())
     if (missingName) {
       setError(
-        `Escribe el nombre del producto en la fila ${rows.indexOf(missingName) + 1}.`
+        `Escribe el nombre del insumo en la fila ${rows.indexOf(missingName) + 1}.`
       )
       return
     }
@@ -298,14 +298,14 @@ export function BulkIngredientsDialog({
       )
 
       if (!result.ok) {
-        setError(result.message ?? "No se pudieron crear los productos")
+        setError(result.message ?? "No se pudieron crear los insumos")
         return
       }
 
       toast.success(
         named.length === 1
-          ? "Producto creado"
-          : `${named.length} productos creados`
+          ? "Insumo creado"
+          : `${named.length} insumos creados`
       )
       if (draftKey) clearDraft(draftKey)
       const createdNames = named.map((row) => row.name.trim())
@@ -327,10 +327,10 @@ export function BulkIngredientsDialog({
         <DialogHeader>
           <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex flex-col gap-1">
-              <DialogTitle>Añadir varios productos</DialogTitle>
+              <DialogTitle>Añadir varios insumos</DialogTitle>
               <DialogDescription>
                 {branchName
-                  ? `Cada producto se guarda con su stock inicial como movimiento de ajuste en ${branchName}. El nombre, la unidad y la categoría son obligatorios; el SKU se genera automáticamente.`
+                  ? `Cada insumo se guarda con su stock inicial como movimiento de ajuste en ${branchName}. El nombre, la unidad y la categoría son obligatorios; el SKU se genera automáticamente.`
                   : "El nombre, la unidad y la categoría son obligatorios; el SKU se genera automáticamente. En la vista de organización no se puede definir stock inicial."}
               </DialogDescription>
             </div>
@@ -396,7 +396,7 @@ export function BulkIngredientsDialog({
                   }
                   placeholder="Leche entera"
                   maxLength={120}
-                  aria-label={`Nombre del producto ${index + 1}`}
+                  aria-label={`Nombre del insumo ${index + 1}`}
                   className="h-8 text-sm"
                   disabled={pending}
                 />
@@ -412,7 +412,7 @@ export function BulkIngredientsDialog({
                   <SelectTrigger
                     size="sm"
                     className="w-full"
-                    aria-label={`Unidad del producto ${index + 1}`}
+                    aria-label={`Unidad del insumo ${index + 1}`}
                   >
                     <SelectValue />
                   </SelectTrigger>
@@ -432,7 +432,7 @@ export function BulkIngredientsDialog({
                   <SelectTrigger
                     size="sm"
                     className="w-full"
-                    aria-label={`Categoría del producto ${index + 1}`}
+                    aria-label={`Categoría del insumo ${index + 1}`}
                   >
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
@@ -456,7 +456,7 @@ export function BulkIngredientsDialog({
                   <SelectTrigger
                     size="sm"
                     className="w-full"
-                    aria-label={`Ubicación del producto ${index + 1}`}
+                    aria-label={`Ubicación del insumo ${index + 1}`}
                   >
                     <SelectValue placeholder="Sin ubicación" />
                   </SelectTrigger>
@@ -481,7 +481,7 @@ export function BulkIngredientsDialog({
                     onChange={(event) =>
                       updateRow(row.key, { unitCost: event.target.value })
                     }
-                    aria-label={`Costo unitario del producto ${index + 1}`}
+                    aria-label={`Costo unitario del insumo ${index + 1}`}
                     className="h-full text-sm"
                     disabled={pending}
                   />
@@ -503,7 +503,7 @@ export function BulkIngredientsDialog({
                             currentStock: event.target.value,
                           })
                         }
-                        aria-label={`Stock inicial del producto ${index + 1}`}
+                        aria-label={`Stock inicial del insumo ${index + 1}`}
                         className="h-full text-sm"
                         disabled={pending}
                       />
@@ -523,7 +523,7 @@ export function BulkIngredientsDialog({
                         onChange={(event) =>
                           updateRow(row.key, { minStock: event.target.value })
                         }
-                        aria-label={`Stock mínimo del producto ${index + 1}`}
+                        aria-label={`Stock mínimo del insumo ${index + 1}`}
                         className="h-full text-sm"
                         disabled={pending}
                       />
@@ -543,7 +543,7 @@ export function BulkIngredientsDialog({
                         onChange={(event) =>
                           updateRow(row.key, { maxStock: event.target.value })
                         }
-                        aria-label={`Stock máximo del producto ${index + 1}`}
+                        aria-label={`Stock máximo del insumo ${index + 1}`}
                         className="h-full text-sm"
                         disabled={pending}
                       />
@@ -561,7 +561,7 @@ export function BulkIngredientsDialog({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Duplicar producto ${index + 1}`}
+                    aria-label={`Duplicar insumo ${index + 1}`}
                     title="Duplicar fila"
                     disabled={pending}
                     onClick={() => duplicateRow(row.key)}
@@ -573,7 +573,7 @@ export function BulkIngredientsDialog({
                     variant="ghost"
                     size="icon-sm"
                     className="text-destructive hover:bg-destructive/10"
-                    aria-label={`Eliminar producto ${index + 1}`}
+                    aria-label={`Eliminar insumo ${index + 1}`}
                     title="Eliminar fila"
                     disabled={pending || rows.length === 1}
                     onClick={() => removeRow(row.key)}
@@ -597,7 +597,7 @@ export function BulkIngredientsDialog({
             onClick={addRow}
           >
             <PlusIcon />
-            Añadir producto
+            Añadir insumo
           </Button>
           <ClearFieldsButton
             onClick={handleClear}
@@ -622,7 +622,7 @@ export function BulkIngredientsDialog({
             ) : (
               <SaveIcon />
             )}
-            Crear {validRows.length > 0 ? `${validRows.length} ` : ""}producto
+            Crear {validRows.length > 0 ? `${validRows.length} ` : ""}insumo
             {validRows.length !== 1 ? "s" : ""}
           </Button>
         </DialogFooter>

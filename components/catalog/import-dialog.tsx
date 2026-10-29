@@ -75,7 +75,7 @@ export function ImportDialog({
     >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar productos desde CSV</DialogTitle>
+          <DialogTitle>Importar artículos desde CSV</DialogTitle>
           <DialogDescription>
             Columnas admitidas: <code>sku, name, category, description, price,
             taxRate, isActive</code>. Se actualiza por SKU (o por nombre si no

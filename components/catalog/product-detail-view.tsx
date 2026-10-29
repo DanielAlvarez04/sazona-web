@@ -5,7 +5,6 @@ import { ProductCombo } from "@/components/catalog/product-combo"
 import { ProductExclusions } from "@/components/catalog/product-exclusions"
 import { ProductExtras } from "@/components/catalog/product-extras"
 import { ProductGeneralForm } from "@/components/catalog/product-general-form"
-import { ProductRecipes } from "@/components/catalog/product-recipes"
 import { ProductVariants } from "@/components/catalog/product-variants"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -95,14 +94,6 @@ export function ProductDetailView({
             canManage={canManage}
           />
         ) : null}
-
-        <div className="xl:col-span-2">
-          <ProductRecipes
-            product={product}
-            ingredients={ingredients}
-            canManage={canManage}
-          />
-        </div>
       </div>
     </div>
   )

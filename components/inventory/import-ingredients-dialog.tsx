@@ -68,12 +68,12 @@ const DUPLICATE_OPTIONS: Array<{
   {
     value: "overwrite",
     label: "Sobreescribir",
-    description: "Se reemplazan los datos de los productos existentes.",
+    description: "Se reemplazan los datos de los insumos existentes.",
   },
 ]
 
 /**
- * Diálogo para importar productos desde CSV.
+ * Diálogo para importar insumos desde CSV.
  *
  * Formato esperado:
  * nombre,unidad,categoria,ubicacion,costoUnitario,stockMaximo,stockInicial,stockMinimo
@@ -99,7 +99,7 @@ export function ImportIngredientsDialog({
   onOpenChange: (open: boolean) => void
   /** Sucursal donde se registra el stock inicial; `null` = organización. */
   branchName?: string | null
-  /** Nombres de los productos que ya existen (para detectar duplicados). */
+  /** Nombres de los insumos que ya existen (para detectar duplicados). */
   existingNames?: string[]
 }) {
   const router = useRouter()
@@ -178,7 +178,7 @@ export function ImportIngredientsDialog({
     importIngredientsFromCsv(csv, mode)
       .then((result) => {
         if (!result.ok) {
-          setError(result.message ?? "No se pudieron importar los productos")
+          setError(result.message ?? "No se pudieron importar los insumos")
           return
         }
 
@@ -189,10 +189,10 @@ export function ImportIngredientsDialog({
 
         toast.success(
           count === null
-            ? "Productos procesados"
+            ? "Insumos procesados"
             : mode === "overwrite"
-              ? `${count} productos actualizados`
-              : `${count} productos importados`
+              ? `${count} insumos actualizados`
+              : `${count} insumos importados`
         )
         clearDraft(DRAFT_KEY)
         onOpenChange(false)
@@ -225,10 +225,10 @@ export function ImportIngredientsDialog({
           onDrop={handleDrop}
         >
           <DialogHeader>
-            <DialogTitle>Importar productos</DialogTitle>
+            <DialogTitle>Importar insumos</DialogTitle>
             <DialogDescription>
               Sube un archivo CSV. ¿No tienes uno?{" "}
-              <a href="/plantilla-productos.csv" download>
+              <a href="/plantilla-insumos.csv" download>
                 Descarga la plantilla
               </a>
               .
@@ -282,8 +282,8 @@ export function ImportIngredientsDialog({
                 <div className="flex flex-col gap-0.5">
                   <p className="text-sm font-medium">
                     {duplicates.length === 1
-                      ? "1 producto duplicado"
-                      : `${duplicates.length} productos duplicados`}
+                      ? "1 insumo duplicado"
+                      : `${duplicates.length} insumos duplicados`}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Elige qué hacer con ellos antes de importar.
@@ -292,7 +292,7 @@ export function ImportIngredientsDialog({
 
                 <div
                   role="radiogroup"
-                  aria-label="Acción para los productos duplicados"
+                  aria-label="Acción para los insumos duplicados"
                   className="flex flex-col gap-1.5"
                 >
                   {DUPLICATE_OPTIONS.map((option) => (
@@ -398,13 +398,13 @@ export function ImportIngredientsDialog({
             </AlertDialogMedia>
             <AlertDialogTitle>
               {confirmMode === "overwrite"
-                ? "¿Sobreescribir los productos existentes?"
-                : "¿Duplicar los productos repetidos?"}
+                ? "¿Sobreescribir los insumos existentes?"
+                : "¿Duplicar los insumos repetidos?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmMode === "overwrite"
                 ? `Se reemplazarán los datos de los ${duplicates.length} registros duplicados con los del archivo: unidad, categoría, ubicación, costo y stocks mínimo/máximo. El stock actual no cambia y esta acción no se puede deshacer.`
-                : `Se crearán ${duplicates.length} productos nuevos con " [ DUPLICADO]" añadido al nombre. Los productos originales no cambian.`}
+                : `Se crearán ${duplicates.length} insumos nuevos con " [ DUPLICADO]" añadido al nombre. Los insumos originales no cambian.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

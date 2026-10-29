@@ -109,7 +109,7 @@ export function CategoryDialog({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{category.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {category._count.products} producto(s)
+                    {category._count.products} artículo(s)
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

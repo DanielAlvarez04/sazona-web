@@ -169,7 +169,7 @@ export function PosView({
 
   const handleSend = async () => {
     if (cart.length === 0) {
-      toast.error("Añade al menos un producto")
+      toast.error("Añade al menos un artículo")
       return
     }
 
@@ -349,9 +349,9 @@ export function PosView({
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar producto"
+                placeholder="Buscar artículo"
                 className="pl-8"
-                aria-label="Buscar productos"
+                aria-label="Buscar artículos"
               />
             </div>
             <Select
@@ -387,7 +387,7 @@ export function PosView({
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
               <UtensilsIcon className="size-8" />
-              No hay productos que coincidan con el filtro.
+              No hay artículos que coincidan con el filtro.
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
@@ -456,7 +456,7 @@ export function PosView({
 
           {cart.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Elige productos del catálogo para armar la ronda.
+              Elige artículos del catálogo para armar la ronda.
             </p>
           ) : (
             <ul className="flex flex-col gap-3">

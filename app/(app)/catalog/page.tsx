@@ -1,6 +1,6 @@
-import { TriangleAlertIcon } from "lucide-react"
+﻿import { TriangleAlertIcon } from "lucide-react"
 
-import { CatalogView } from "@/components/catalog/catalog-view"
+import { CatalogClient } from "@/components/catalog/catalog-client"
 import {
   Card,
   CardDescription,
@@ -11,24 +11,32 @@ import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
 import {
   canManageCatalog,
+  type ArticleListItem,
   type Category,
   type Ingredient,
-  type ProductListItem,
+  type Recipe,
 } from "@/lib/catalog"
 import { requireUser } from "@/lib/session"
 
 export default async function CatalogPage() {
   const user = await requireUser()
 
-  const [productsResponse, categoriesResponse, ingredientsResponse, branch] =
-    await Promise.all([
-      apiFetch("/catalog/products?includeInactive=true"),
-      apiFetch("/catalog/categories?includeInactive=true"),
-      apiFetch("/inventory/ingredients"),
-      getActiveBranch(),
-    ])
+  const [
+    recipesResponse,
+    productsResponse,
+    categoriesResponse,
+    ingredientsResponse,
+    branch,
+  ] = await Promise.all([
+    apiFetch("/catalog/recipes?includeInactive=true"),
+    apiFetch("/catalog/products?includeInactive=true"),
+    apiFetch("/catalog/categories?includeInactive=true"),
+    apiFetch("/inventory/ingredients?includeInactive=true"),
+    getActiveBranch(),
+  ])
 
   if (
+    !recipesResponse.ok ||
     !productsResponse.ok ||
     !categoriesResponse.ok ||
     !ingredientsResponse.ok
@@ -49,20 +57,23 @@ export default async function CatalogPage() {
     )
   }
 
-  const [products, categories, ingredients] = await Promise.all([
-    productsResponse.json() as Promise<ProductListItem[]>,
+  const [recipes, articles, categories, ingredients] = await Promise.all([
+    recipesResponse.json() as Promise<Recipe[]>,
+    productsResponse.json() as Promise<ArticleListItem[]>,
     categoriesResponse.json() as Promise<Category[]>,
     ingredientsResponse.json() as Promise<Ingredient[]>,
   ])
 
   return (
-    <CatalogView
-      products={products}
+    <CatalogClient
+      recipes={recipes}
+      articles={articles}
       categories={categories}
       ingredients={ingredients}
-      organizationTaxRate={user.organizationTaxRate}
       canManage={canManageCatalog(user.roles)}
       branch={branch}
     />
   )
 }
+
+

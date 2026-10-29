@@ -32,16 +32,16 @@ export function ProductVariants({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Variantes</CardTitle>
+        <CardTitle>Presentaciones</CardTitle>
         <CardDescription>
-          Tamaños o versiones con un ajuste de precio. Puedes definir una receta
-          propia para cada variante.
+          Tamaños o versiones con un ajuste de precio. El factor escala el
+          consumo de la receta: Regular es la medida base (1).
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {product.variants.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Este producto no tiene variantes.
+            Este artículo no tiene presentaciones.
           </p>
         ) : (
           product.variants.map((variant) => (
@@ -106,6 +106,20 @@ function VariantRow({
             disabled={!canManage}
           />
         </Field>
+        <Field className="w-28">
+          <FieldLabel htmlFor={`variant-factor-${variant.id}`}>
+            Factor
+          </FieldLabel>
+          <Input
+            id={`variant-factor-${variant.id}`}
+            name="recipeFactor"
+            type="number"
+            min="0.001"
+            step="0.1"
+            defaultValue={variant.recipeFactor}
+            disabled={!canManage}
+          />
+        </Field>
         <label className="flex items-center gap-2 pb-2 text-sm">
           <input
             type="checkbox"
@@ -130,7 +144,7 @@ function VariantRow({
 
       <div className="flex items-center gap-2">
         <Badge variant="outline">
-          +{formatMoney(variant.priceAdjust)}
+          +{formatMoney(variant.priceAdjust)} · x{variant.recipeFactor}
         </Badge>
         {canManage && variant.isActive ? (
           <Button
@@ -192,6 +206,17 @@ function VariantCreateForm({ productId }: { productId: string }) {
           type="number"
          
           defaultValue={0}
+        />
+      </Field>
+      <Field className="w-28">
+        <FieldLabel htmlFor="new-variant-factor">Factor</FieldLabel>
+        <Input
+          id="new-variant-factor"
+          name="recipeFactor"
+          type="number"
+          min="0.001"
+          step="0.1"
+          defaultValue={1}
         />
       </Field>
       <Button type="submit" disabled={pending}>

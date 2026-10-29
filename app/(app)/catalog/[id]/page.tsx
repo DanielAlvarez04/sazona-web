@@ -49,7 +49,7 @@ export default async function ProductDetailPage({
         <Card className="max-w-md text-center">
           <CardHeader className="items-center">
             <TriangleAlertIcon className="size-6 text-destructive" />
-            <CardTitle>No se pudo cargar el producto</CardTitle>
+            <CardTitle>No se pudo cargar el artículo</CardTitle>
             <CardDescription>
               La API no respondió correctamente. Comprueba que está en marcha e
               inténtalo de nuevo.
