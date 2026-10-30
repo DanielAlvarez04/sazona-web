@@ -122,7 +122,7 @@ function RecipeActionsMenu({
               Producir lote
             </DropdownMenuItem>
           ) : null}
-          {recipe.productId ? (
+          {recipe.itemId ? (
             <DropdownMenuItem onClick={() => actions.onUnpublish(recipe)}>
               <Undo2Icon />
               Quitar artículo
@@ -202,7 +202,7 @@ export function createRecipeColumns(
             {row.original.name}
           </button>
           <div className="flex flex-wrap gap-1">
-            {row.original.productId ? (
+            {row.original.itemId ? (
               <Badge variant="secondary">Artículo</Badge>
             ) : (
               <Badge variant="outline">Solo receta</Badge>
@@ -264,7 +264,7 @@ export function createRecipeColumns(
     ),
 
     columnHelper.accessor(
-      (recipe) => (recipe.product ? Number(recipe.product.price) : null),
+      (recipe) => (recipe.item ? Number(recipe.item.price) : null),
       {
         id: "price",
         header: ({ column }) => (

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 
 import { OfflineStatus } from "@/components/offline/offline-status"
+import { ModeToggle } from "@/components/mode-toggle"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -41,6 +42,7 @@ export function SiteHeader({ branchName }: { branchName?: string | null }) {
         />
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">
+          <ModeToggle />
           <OfflineStatus />
         </div>
       </div>

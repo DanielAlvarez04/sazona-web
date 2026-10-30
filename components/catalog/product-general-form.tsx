@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { Loader2Icon, SaveIcon } from "lucide-react"
 
-import { updateProduct } from "@/app/(app)/catalog/actions"
+import { updateItem } from "@/app/(app)/catalog/actions"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -23,14 +23,14 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
-import type { Category, ProductDetail } from "@/lib/catalog"
+import type { Category, ItemDetail } from "@/lib/catalog"
 
 export function ProductGeneralForm({
   product,
   categories,
   canManage,
 }: {
-  product: ProductDetail
+  product: ItemDetail
   categories: Category[]
   canManage: boolean
 }) {
@@ -59,7 +59,7 @@ export function ProductGeneralForm({
               formData.set("categoryId", "")
             }
 
-            run(() => updateProduct(product.id, formData))
+            run(() => updateItem(product.id, formData))
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2">

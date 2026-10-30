@@ -272,7 +272,7 @@ export function KitchenView({
                               <span className="font-medium tabular-nums">
                                 {item.quantity}×
                               </span>{" "}
-                              {item.productName}
+                              {item.itemName}
                               {item.variantName ? (
                                 <span className="text-muted-foreground">
                                   {" "}

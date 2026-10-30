@@ -23,9 +23,6 @@ import {
 
 const columnHelper = createColumnHelper<DataTableFeatures, InventoryMovement>()
 
-const PAGE_SIZES = [15, 30, 50, 100]
-const DEFAULT_PAGE_SIZE = 15
-
 const COLUMN_LABELS: Record<string, string> = {
   createdAt: "Fecha",
   product: "Insumo",
@@ -301,8 +298,6 @@ export function KardexTable({
           {branch ? ` · ${branch.name}` : " · Toda la organización"}.
         </>
       }
-      pageSizeOptions={PAGE_SIZES}
-      defaultPageSize={DEFAULT_PAGE_SIZE}
     />
   )
 }

@@ -23,11 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useActionForm } from "@/hooks/use-action-form"
-import { formatMoney, type ProductDetail, type ProductListItem } from "@/lib/catalog"
+import { formatMoney, type ItemDetail, type ItemListItem } from "@/lib/catalog"
 
 interface ComboRow {
   key: string
-  productId: string
+  itemId: string
   variantId: string
   quantity: string
 }
@@ -44,8 +44,8 @@ export function ProductCombo({
   products,
   canManage,
 }: {
-  product: ProductDetail
-  products: ProductListItem[]
+  product: ItemDetail
+  products: ItemListItem[]
   canManage: boolean
 }) {
   const router = useRouter()
@@ -54,7 +54,7 @@ export function ProductCombo({
   const [rows, setRows] = useState<ComboRow[]>(() =>
     product.comboComponents.map((component) => ({
       key: nextKey(),
-      productId: component.component.id,
+      itemId: component.componentItem.id,
       variantId: component.variant?.id ?? "",
       quantity: String(component.quantity),
     }))
@@ -66,7 +66,7 @@ export function ProductCombo({
       candidate.id !== product.id &&
       !candidate.isCombo &&
       (candidate.isActive ||
-        rows.some((row) => row.productId === candidate.id))
+        rows.some((row) => row.itemId === candidate.id))
   )
 
   function updateRow(key: string, changes: Partial<ComboRow>) {
@@ -78,7 +78,7 @@ export function ProductCombo({
   function addRow() {
     setRows((current) => [
       ...current,
-      { key: nextKey(), productId: "", variantId: "", quantity: "1" },
+      { key: nextKey(), itemId: "", variantId: "", quantity: "1" },
     ])
   }
 
@@ -88,16 +88,16 @@ export function ProductCombo({
 
   function save() {
     const components = rows
-      .filter((row) => row.productId)
+      .filter((row) => row.itemId)
       .map((row) => ({
-        productId: row.productId,
+        itemId: row.itemId,
         ...(row.variantId ? { variantId: row.variantId } : {}),
         quantity: Math.max(1, Math.trunc(Number(row.quantity) || 1)),
       }))
 
     const unique = new Set(
       components.map(
-        (component) => `${component.productId}:${component.variantId ?? ""}`
+        (component) => `${component.itemId}:${component.variantId ?? ""}`
       )
     )
 
@@ -117,7 +117,7 @@ export function ProductCombo({
   }
 
   const total = rows.reduce((sum, row) => {
-    const component = products.find((candidate) => candidate.id === row.productId)
+    const component = products.find((candidate) => candidate.id === row.itemId)
     if (!component) return sum
 
     const variant = component.variants.find(
@@ -145,7 +145,7 @@ export function ProductCombo({
           <div className="flex flex-col gap-2">
             {rows.map((row) => {
               const component = products.find(
-                (candidate) => candidate.id === row.productId
+                (candidate) => candidate.id === row.itemId
               )
               const variants = (component?.variants ?? []).filter(
                 (variant) => variant.isActive || variant.id === row.variantId
@@ -157,11 +157,11 @@ export function ProductCombo({
                   className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_5rem_auto]"
                 >
                   <Select
-                    value={row.productId || "none"}
+                    value={row.itemId || "none"}
                     disabled={!canManage}
                     onValueChange={(value) =>
                       updateRow(row.key, {
-                        productId: value === "none" ? "" : (value ?? ""),
+                        itemId: value === "none" ? "" : (value ?? ""),
                         variantId: "",
                       })
                     }

@@ -20,13 +20,13 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
-import { formatMoney, type ProductDetail, type Variant } from "@/lib/catalog"
+import { formatMoney, type ItemDetail, type Variant } from "@/lib/catalog"
 
 export function ProductVariants({
   product,
   canManage,
 }: {
-  product: ProductDetail
+  product: ItemDetail
   canManage: boolean
 }) {
   return (
@@ -47,25 +47,25 @@ export function ProductVariants({
           product.variants.map((variant) => (
             <VariantRow
               key={variant.id}
-              productId={product.id}
+              itemId={product.id}
               variant={variant}
               canManage={canManage}
             />
           ))
         )}
 
-        {canManage ? <VariantCreateForm productId={product.id} /> : null}
+        {canManage ? <VariantCreateForm itemId={product.id} /> : null}
       </CardContent>
     </Card>
   )
 }
 
 function VariantRow({
-  productId,
+  itemId,
   variant,
   canManage,
 }: {
-  productId: string
+  itemId: string
   variant: Variant
   canManage: boolean
 }) {
@@ -80,7 +80,7 @@ function VariantRow({
         onSubmit={(event) => {
           event.preventDefault()
           const formData = new FormData(event.currentTarget)
-          saveForm.run(() => updateVariant(productId, variant.id, formData))
+          saveForm.run(() => updateVariant(itemId, variant.id, formData))
         }}
       >
         <Field className="min-w-32 flex-1">
@@ -156,7 +156,7 @@ function VariantRow({
               if (!window.confirm(`¿Desactivar la variante "${variant.name}"?`)) {
                 return
               }
-              deleteForm.run(() => deactivateVariant(productId, variant.id))
+              deleteForm.run(() => deactivateVariant(itemId, variant.id))
             }}
           >
             <Trash2Icon />
@@ -170,7 +170,7 @@ function VariantRow({
   )
 }
 
-function VariantCreateForm({ productId }: { productId: string }) {
+function VariantCreateForm({ itemId }: { itemId: string }) {
   const router = useRouter()
   const { pending, error, run } = useActionForm(() => router.refresh())
 
@@ -182,7 +182,7 @@ function VariantCreateForm({ productId }: { productId: string }) {
         const form = event.currentTarget
         const formData = new FormData(form)
         run(async () => {
-          const result = await createVariant(productId, formData)
+          const result = await createVariant(itemId, formData)
           if (result.ok) form.reset()
           return result
         })

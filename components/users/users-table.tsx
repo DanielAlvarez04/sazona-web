@@ -47,9 +47,6 @@ import {
   purgeDeletedUsers,
 } from "@/app/(app)/users/actions"
 
-const PAGE_SIZES = [10, 20, 30, 40, 50]
-const DEFAULT_PAGE_SIZE = 10
-
 /** Etiquetas legibles para el selector de columnas. */
 const COLUMN_LABELS: Record<string, string> = {
   name: "Nombre",
@@ -520,8 +517,6 @@ export function UsersTable({
             ) : null}
           </>
         }
-        pageSizeOptions={PAGE_SIZES}
-        defaultPageSize={DEFAULT_PAGE_SIZE}
       />
     </div>
   )

@@ -110,8 +110,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // CSS compilado e iconos de la app.
-  if (url.pathname === "/tailwind.css" || url.pathname.startsWith("/icons/")) {
+  // Iconos de la app.
+  if (url.pathname.startsWith("/icons/")) {
     event.respondWith(staleWhileRevalidate(request));
     return;
   }

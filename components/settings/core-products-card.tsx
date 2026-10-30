@@ -28,6 +28,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   unitLabel,
+  type Ingredient,
   type IngredientCategory,
   type IngredientLocation,
   type UnitCode,
@@ -51,15 +52,15 @@ function normalize(value: string): string {
  * precios y stock; los desmarcados se retiran si no están en recetas.
  */
 export function CoreProductsCard({
-  existingNames,
+  ingredients,
   categories,
   locations,
   branchName,
   storageKey,
   canManage,
 }: {
-  /** Nombres de los insumos que ya están en el inventario. */
-  existingNames: string[]
+  /** Insumos que ya están en el inventario (activos o inactivos). */
+  ingredients: Ingredient[]
   categories: IngredientCategory[]
   locations: IngredientLocation[]
   /** Sucursal activa para el stock inicial del alta masiva. */
@@ -72,12 +73,15 @@ export function CoreProductsCard({
   const router = useRouter()
 
   const [selected, setSelected] = React.useState<Set<string>>(() => {
-    const existing = new Set(existingNames.map(normalize))
+    const existing = new Map(
+      ingredients.map((ingredient) => [normalize(ingredient.name), ingredient])
+    )
     const initial = new Set<string>()
 
     for (const group of CORE_PRODUCT_GROUPS) {
       for (const product of group.products) {
-        if (existing.has(normalize(product.name))) initial.add(product.name)
+        const ingredient = existing.get(normalize(product.name))
+        if (ingredient?.isActive) initial.add(product.name)
       }
     }
 
@@ -91,54 +95,17 @@ export function CoreProductsCard({
   const [bulkOpen, setBulkOpen] = React.useState(false)
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  const presetsHydrated = React.useRef(false)
-
-  // Recupera los giros marcados la última vez.
-  React.useEffect(() => {
-    presetsHydrated.current = false
-
-    try {
-      const raw = window.localStorage.getItem(storageKey)
-      if (!raw) return
-
-      const ids = JSON.parse(raw) as unknown
-      if (!Array.isArray(ids)) return
-
-      const restored = new Set(
-        ids.filter(
-          (id): id is string =>
-            typeof id === "string" &&
-            CORE_PRODUCT_PRESETS.some((preset) => preset.id === id)
-        )
-      )
-
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratar la preferencia guardada
-      setActivePresets(restored)
-    } catch {
-      // localStorage puede no estar disponible; se ignora.
-    }
-  }, [storageKey])
-
-  React.useEffect(() => {
-    // Evita sobrescribir lo guardado con el estado vacío del primer render.
-    if (!presetsHydrated.current) {
-      presetsHydrated.current = true
-      return
-    }
-
-    try {
-      window.localStorage.setItem(
-        storageKey,
-        JSON.stringify([...activePresets])
-      )
-    } catch {
-      // Sin persistencia: la selección sigue funcionando en memoria.
-    }
-  }, [activePresets, storageKey])
 
   const existing = React.useMemo(
-    () => new Set(existingNames.map(normalize)),
-    [existingNames]
+    () => new Set(ingredients.map((ingredient) => normalize(ingredient.name))),
+    [ingredients]
+  )
+  const ingredientByName = React.useMemo(
+    () =>
+      new Map(
+        ingredients.map((ingredient) => [normalize(ingredient.name), ingredient])
+      ),
+    [ingredients]
   )
   const categoryIds = React.useMemo(
     () => new Map(categories.map((category) => [normalize(category.name), category.id])),
@@ -170,6 +137,95 @@ export function CoreProductsCard({
     return map
   }, [])
 
+  // Insumos core que ya fueron modificados (unidad, categoría, ubicación,
+  // stock o costo): quedan bloqueados para no desactivarlos desde aquí.
+  const locked = React.useMemo(() => {
+    const result = new Set<string>()
+
+    for (const [name, preset] of catalog) {
+      const ingredient = ingredientByName.get(normalize(name))
+      if (!ingredient) continue
+
+      const modified =
+        ingredient.displayUnit !== preset.unit ||
+        (ingredient.category !== null &&
+          (ingredient.category?.name ?? "") !== preset.category) ||
+        (ingredient.location?.name ?? "") !== preset.location ||
+        (ingredient.unitCost !== null && Number(ingredient.unitCost) !== 0) ||
+        Number(ingredient.currentStock) !== 0 ||
+        Number(ingredient.minStock) !== 0 ||
+        (ingredient.maxStock !== null && Number(ingredient.maxStock) !== 0)
+
+      if (modified) result.add(name)
+    }
+
+    return result
+  }, [catalog, ingredientByName])
+
+  /** Guarda los giros marcados para recordarlos en la próxima visita. */
+  const persistPresets = React.useCallback(
+    (presets: Set<string>) => {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify([...presets]))
+      } catch {
+        // Sin persistencia: la selección sigue funcionando en memoria.
+      }
+    },
+    [storageKey]
+  )
+
+  // Recupera los giros guardados y vuelve a marcar sus insumos. El checkbox
+  // del giro y sus insumos deben contar la misma historia al recargar; si solo
+  // se restaurara el giro, quedaría marcado sin sus insumos.
+  const restoredFor = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    if (restoredFor.current === storageKey) return
+    restoredFor.current = storageKey
+
+    try {
+      const raw = window.localStorage.getItem(storageKey)
+      if (!raw) return
+
+      const ids = JSON.parse(raw) as unknown
+      if (!Array.isArray(ids)) return
+
+      const restored = new Set(
+        ids.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            CORE_PRODUCT_PRESETS.some((preset) => preset.id === id)
+        )
+      )
+
+      if (restored.size === 0) return
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratar la preferencia guardada
+      setActivePresets(restored)
+
+      setSelected((current) => {
+        const next = new Set(current)
+
+        for (const preset of CORE_PRODUCT_PRESETS) {
+          if (!restored.has(preset.id)) continue
+
+          for (const name of preset.productNames) {
+            // Solo se vuelven a marcar los que todavía no existen. Los que ya
+            // están en el inventario muestran su estado real (activo/inactivo)
+            // para no reactivar algo que el usuario quitó a propósito.
+            if (existing.has(normalize(name))) continue
+
+            next.add(name)
+          }
+        }
+
+        return next
+      })
+    } catch {
+      // localStorage puede no estar disponible; se ignora.
+    }
+  }, [storageKey, existing])
+
   // Insumos marcados que aún no están en el inventario: se precargan en el
   // alta masiva para editar precios y stock antes de crearlos.
   const newRows = React.useMemo<BulkIngredientInitialRow[]>(() => {
@@ -192,34 +248,44 @@ export function CoreProductsCard({
     return rows
   }, [selected, existing, catalog, categoryIds, locationIds])
 
-  const toggle = React.useCallback((name: string, checked: boolean) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (checked) next.add(name)
-      else next.delete(name)
-      return next
-    })
-  }, [])
+  const toggle = React.useCallback(
+    (name: string, checked: boolean) => {
+      if (!checked && locked.has(name)) return
+
+      setSelected((current) => {
+        const next = new Set(current)
+        if (checked) next.add(name)
+        else next.delete(name)
+        return next
+      })
+    },
+    [locked]
+  )
 
   const applyPreset = React.useCallback(
     (preset: CoreProductPreset, checked: boolean) => {
-      setActivePresets((current) => {
-        const next = new Set(current)
-        if (checked) next.add(preset.id)
-        else next.delete(preset.id)
-        return next
-      })
+      const nextPresets = new Set(activePresets)
+
+      if (checked) nextPresets.add(preset.id)
+      else nextPresets.delete(preset.id)
+
+      setActivePresets(nextPresets)
+      // Se guarda al instante: los insumos del giro se restauran con él.
+      persistPresets(nextPresets)
 
       setSelected((current) => {
         const next = new Set(current)
 
         if (checked) {
-          for (const name of preset.productNames) next.add(name)
+          for (const name of preset.productNames) {
+            if (!locked.has(name) || next.has(name)) next.add(name)
+          }
           return next
         }
 
         // Al quitar un giro se conservan los insumos que también pertenecen
-        // a otro giro activo o que están bloqueados por recetas.
+        // a otro giro activo, los bloqueados por cambios o los que están en
+        // recetas.
         const keep = new Set(
           CORE_PRODUCT_PRESETS.filter(
             (other) => other.id !== preset.id && activePresets.has(other.id)
@@ -227,13 +293,13 @@ export function CoreProductsCard({
         )
 
         for (const name of preset.productNames) {
-          if (!keep.has(name)) next.delete(name)
+          if (!keep.has(name) && !locked.has(name)) next.delete(name)
         }
 
         return next
       })
     },
-    [activePresets]
+    [activePresets, locked, persistPresets]
   )
 
   /** Aplica los retiros y sincroniza lo seleccionado con el inventario. */
@@ -267,7 +333,7 @@ export function CoreProductsCard({
         const extra = skipped.length > 3 ? ` y ${skipped.length - 3} más` : ""
 
         toast.warning(
-          `No se pudieron procesar ${names}${extra}. Revisa si aparecen en pedidos.`
+          `No se pudieron procesar ${names}${extra}. Revisa si tienen cambios o aparecen en pedidos.`
         )
       } else {
         toast.success("Inventario actualizado")
@@ -291,10 +357,17 @@ export function CoreProductsCard({
     void persistSelection([...selected], true)
   }
 
-  /** Limpia insumos y giros seleccionados. */
+  /** Limpia insumos y giros seleccionados (conserva los bloqueados activos). */
   function handleClearSelection() {
-    setSelected(new Set())
+    setSelected((current) => {
+      const next = new Set<string>()
+      for (const name of current) {
+        if (locked.has(name)) next.add(name)
+      }
+      return next
+    })
     setActivePresets(new Set())
+    persistPresets(new Set())
     setError(null)
   }
 
@@ -319,13 +392,16 @@ export function CoreProductsCard({
         <CardHeader>
           <CardTitle>Insumos sugeridos</CardTitle>
           <CardDescription>
-            Marca los insumos que quieras tener en el inventario. Al guardar,
-            los nuevos se abren en el alta masiva para ajustar precios y stock;
-            los desmarcados se retiran y, si estaban en recetas, esas recetas
-            quedan inactivas.
+            Marca los insumos que quieras tener en el inventario. Los nuevos se
+            abren en el alta masiva para ajustar precios y stock. Los que ya
+            tienen cambios de unidad, categoría, ubicación, stock o costo
+            quedan bloqueados; los demás se pueden desmarcar para desactivarlos.
           </CardDescription>
           <CardAction>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              {locked.size > 0 ? (
+                <Badge variant="outline">{locked.size} bloqueado(s)</Badge>
+              ) : null}
               <Badge variant="secondary">
                 <PackageIcon data-icon="inline-start" />
                 {selected.size} seleccionado{selected.size === 1 ? "" : "s"}
@@ -431,34 +507,49 @@ export function CoreProductsCard({
               </div>
 
               <div className="grid gap-1 sm:grid-cols-4">
-                {group.products.map((product) => (
-                  <label
-                    key={`${group.category}|${product.name}`}
-                    className={cn(
-                      "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-sm transition-colors",
-                      canManage
-                        ? "cursor-pointer hover:bg-muted/50"
-                        : "cursor-default"
-                    )}
-                  >
-                    <Checkbox
-                      checked={selected.has(product.name)}
-                      disabled={!canManage}
-                      onCheckedChange={(checked) =>
-                        toggle(product.name, checked === true)
+                {group.products.map((product) => {
+                  const isLocked = locked.has(product.name)
+
+                  return (
+                    <label
+                      key={`${group.category}|${product.name}`}
+                      className={cn(
+                        "flex items-start gap-2 rounded-md px-1.5 py-1.5 text-sm transition-colors",
+                        canManage && !isLocked
+                          ? "cursor-pointer hover:bg-muted/50"
+                          : "cursor-default",
+                        isLocked && "opacity-75"
+                      )}
+                      title={
+                        isLocked
+                          ? "Insumo con cambios: no se puede desactivar desde Configuración"
+                          : undefined
                       }
-                      aria-label={`Seleccionar ${product.name}`}
-                    />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate font-medium">
-                        {product.name}
+                    >
+                      <Checkbox
+                        checked={selected.has(product.name)}
+                        disabled={!canManage || isLocked}
+                        onCheckedChange={(checked) =>
+                          toggle(product.name, checked === true)
+                        }
+                        aria-label={`Seleccionar ${product.name}`}
+                      />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="flex items-center gap-1.5 truncate font-medium">
+                          {product.name}
+                          {isLocked ? (
+                            <Badge variant="outline" className="shrink-0">
+                              Modificado
+                            </Badge>
+                          ) : null}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {unitLabel(product.unit)} · {product.location}
+                        </span>
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {unitLabel(product.unit)} · {product.location}
-                      </span>
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  )
+                })}
               </div>
             </section>
           ))}

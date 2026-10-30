@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build:css": "npx @tailwindcss/cli -i ./app/globals.css -o ./public/tailwind.css --minify",
     "build": "next build",
     "start": "next start",
     "dev": "next dev -p 3000",

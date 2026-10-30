@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Loader2Icon, UploadIcon } from "lucide-react"
 
-import { importProducts } from "@/app/(app)/catalog/actions"
+import { importItems } from "@/app/(app)/catalog/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
@@ -47,7 +47,7 @@ export function ImportDialog({
   function submit(dryRun: boolean) {
     setError(null)
     startTransition(async () => {
-      const response = await importProducts(csv, dryRun)
+      const response = await importItems(csv, dryRun)
 
       if (!response.ok) {
         setResult(null)
@@ -117,7 +117,7 @@ export function ImportDialog({
             </div>
 
             {result.errors.length > 0 ? (
-              <div className="max-h-40 overflow-y-auto">
+              <div className="no-scrollbar max-h-40 overflow-y-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="text-muted-foreground">
                     <tr>

@@ -60,9 +60,6 @@ import {
   INGREDIENT_COLUMN_LABELS,
 } from "./ingredients-columns"
 
-const PAGE_SIZES = [15, 30, 50, 100]
-const DEFAULT_PAGE_SIZE = 15
-
 export function IngredientsTable({
   ingredients,
   branch,
@@ -449,8 +446,6 @@ export function IngredientsTable({
             {hasFilters ? " (filtrados)" : ""}.
           </>
         }
-        pageSizeOptions={PAGE_SIZES}
-        defaultPageSize={DEFAULT_PAGE_SIZE}
       />
 
       <AdjustStockDialog

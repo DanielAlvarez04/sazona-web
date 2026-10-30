@@ -20,6 +20,8 @@ export interface SessionUser {
   organizationDomain: string | null
   /** IVA por defecto del negocio como fracción (`0.16` = 16 %). */
   organizationTaxRate: string
+  /** La organización usa la sección de insumos core sugeridos. */
+  organizationUseCoreSuggestions: boolean
 }
 
 interface MeResponse {
@@ -39,6 +41,7 @@ interface MeResponse {
     name: string
     domain?: string | null
     taxRate?: string | null
+    useCoreSuggestions?: boolean | null
   } | null
 }
 
@@ -73,6 +76,8 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       organizationName: data.organization?.name ?? null,
       organizationDomain: data.organization?.domain ?? null,
       organizationTaxRate: data.organization?.taxRate ?? "0.16",
+      organizationUseCoreSuggestions:
+        data.organization?.useCoreSuggestions ?? true,
     }
   } catch {
     return null

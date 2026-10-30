@@ -6,6 +6,7 @@ import {
   PencilIcon,
   PlayIcon,
   PlusIcon,
+  TagsIcon,
   Trash2Icon,
   Undo2Icon,
   UploadIcon,
@@ -33,9 +34,6 @@ import {
   createRecipeColumns,
 } from "./recipes-columns"
 
-const PAGE_SIZES = [15, 30, 50, 100]
-const DEFAULT_PAGE_SIZE = 15
-
 export function RecipesTable({
   recipes,
   categories,
@@ -47,6 +45,7 @@ export function RecipesTable({
   onProduce,
   onToggleActive,
   onDelete,
+  onManageCategories,
 }: {
   recipes: Recipe[]
   categories: Category[]
@@ -58,6 +57,7 @@ export function RecipesTable({
   onProduce: (recipe: Recipe) => void
   onToggleActive: (recipe: Recipe) => void
   onDelete: (recipe: Recipe) => void
+  onManageCategories: () => void
 }) {
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] =
@@ -77,8 +77,8 @@ export function RecipesTable({
       ) {
         return false
       }
-      if (publication === "published" && !recipe.productId) return false
-      if (publication === "standalone" && recipe.productId) return false
+      if (publication === "published" && !recipe.itemId) return false
+      if (publication === "standalone" && recipe.itemId) return false
       if (produces === "yes" && !recipe.producesIngredient) return false
       if (produces === "no" && recipe.producesIngredient) return false
       return true
@@ -195,10 +195,16 @@ export function RecipesTable({
       columnLabels={RECIPE_COLUMN_LABELS}
       actions={
         canManage ? (
-          <Button onClick={onCreate}>
-            <PlusIcon className="size-4" />
-            Nueva receta
-          </Button>
+          <>
+            <Button variant="outline" onClick={onManageCategories}>
+              <TagsIcon className="size-4" />
+              Categorías
+            </Button>
+            <Button onClick={onCreate}>
+              <PlusIcon className="size-4" />
+              Nueva receta
+            </Button>
+          </>
         ) : null
       }
       rowContextMenu={(recipe) => (
@@ -215,7 +221,7 @@ export function RecipesTable({
                 Producir lote
               </ContextMenuItem>
             ) : null}
-            {recipe.productId ? (
+            {recipe.itemId ? (
               <ContextMenuItem onClick={() => onUnpublish(recipe)}>
                 <Undo2Icon />
                 Quitar artículo
@@ -264,8 +270,6 @@ export function RecipesTable({
           {activeFilterCount > 0 ? " (filtradas)" : ""}.
         </>
       }
-      pageSizeOptions={PAGE_SIZES}
-      defaultPageSize={DEFAULT_PAGE_SIZE}
     />
   )
 }

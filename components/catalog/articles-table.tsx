@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { PackageOpenIcon, PlusIcon, XIcon } from "lucide-react"
+import { PackageOpenIcon, PlusIcon, TagsIcon, UploadIcon, XIcon } from "lucide-react"
 import type { RowSelectionState } from "@tanstack/react-table"
 
 import {
@@ -17,9 +17,6 @@ import {
   createArticleColumns,
 } from "./articles-columns"
 
-const PAGE_SIZES = [15, 30, 50, 100]
-const DEFAULT_PAGE_SIZE = 15
-
 export function ArticlesTable({
   articles,
   categories,
@@ -27,6 +24,8 @@ export function ArticlesTable({
   onCreate,
   onEdit,
   onDeactivate,
+  onManageCategories,
+  onImportCsv,
 }: {
   articles: ArticleListItem[]
   categories: Category[]
@@ -34,6 +33,8 @@ export function ArticlesTable({
   onCreate: () => void
   onEdit: (article: ArticleListItem) => void
   onDeactivate: (article: ArticleListItem) => void
+  onManageCategories: () => void
+  onImportCsv: () => void
 }) {
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] =
@@ -143,10 +144,20 @@ export function ArticlesTable({
       columnLabels={ARTICLE_COLUMN_LABELS}
       actions={
         canManage ? (
-          <Button onClick={onCreate}>
-            <PlusIcon className="size-4" />
-            Nuevo artículo
-          </Button>
+          <>
+            <Button variant="outline" onClick={onManageCategories}>
+              <TagsIcon className="size-4" />
+              Categorías
+            </Button>
+            <Button variant="outline" onClick={onImportCsv}>
+              <UploadIcon className="size-4" />
+              Importar CSV
+            </Button>
+            <Button onClick={onCreate}>
+              <PlusIcon className="size-4" />
+              Nuevo artículo
+            </Button>
+          </>
         ) : null
       }
       emptyState={
@@ -174,8 +185,6 @@ export function ArticlesTable({
           {activeFilterCount > 0 ? " (filtrados)" : ""}.
         </>
       }
-      pageSizeOptions={PAGE_SIZES}
-      defaultPageSize={DEFAULT_PAGE_SIZE}
     />
   )
 }

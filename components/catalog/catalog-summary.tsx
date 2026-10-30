@@ -34,7 +34,7 @@ export function CatalogSummary({
 }) {
   const metrics = React.useMemo(() => {
     const activeRecipes = recipes.filter((recipe) => recipe.isActive)
-    const published = recipes.filter((recipe) => recipe.productId)
+    const published = recipes.filter((recipe) => recipe.itemId)
     const produces = recipes.filter((recipe) => recipe.producesIngredient)
     const withCost = recipes.filter(
       (recipe) => recipe.estimatedCost !== null && recipe.estimatedCost !== undefined
@@ -57,11 +57,11 @@ export function CatalogSummary({
       recipes
         .filter(
           (recipe) =>
-            recipe.productId &&
+            recipe.itemId &&
             recipe.variantId === null &&
             recipe.estimatedCost !== null
         )
-        .map((recipe) => [recipe.productId as string, Number(recipe.estimatedCost)])
+        .map((recipe) => [recipe.itemId as string, Number(recipe.estimatedCost)])
     )
 
     const margins = articles

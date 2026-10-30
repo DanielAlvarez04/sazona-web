@@ -4,7 +4,7 @@ import type { ImportResult, UnitCode } from "@/lib/catalog"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 
 const CATALOG_PATHS = ["/catalog"]
-const productPaths = (productId: string) => ["/catalog", `/catalog/${productId}`]
+const productPaths = (itemId: string) => ["/catalog", `/catalog/${itemId}`]
 
 function text(formData: FormData, key: string): string | undefined {
   const value = formData.get(key)
@@ -37,6 +37,7 @@ export async function createCategory(
     {
       name: text(formData, "name"),
       description: text(formData, "description"),
+      kind: text(formData, "kind") ?? "ARTICLE",
     },
     CATALOG_PATHS
   )
@@ -55,11 +56,11 @@ export async function deactivateCategory(id: string): Promise<ActionResult> {
 // Artículos
 // ---------------------------------------------------------------------------
 
-export async function createProduct(
+export async function createItem(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return mutateApi<{ id: string }>(
-    "/catalog/products",
+    "/catalog/items",
     "POST",
     {
       name: text(formData, "name"),
@@ -72,12 +73,12 @@ export async function createProduct(
   )
 }
 
-export async function updateProduct(
-  productId: string,
+export async function updateItem(
+  itemId: string,
   formData: FormData
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}`,
+    `/catalog/items/${itemId}`,
     "PATCH",
     {
       name: text(formData, "name"),
@@ -88,12 +89,12 @@ export async function updateProduct(
       isCombo: checkbox(formData, "isCombo"),
       isActive: checkbox(formData, "isActive"),
     },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
-export async function deactivateProduct(id: string): Promise<ActionResult> {
-  return mutateApi(`/catalog/products/${id}`, "DELETE", undefined, CATALOG_PATHS)
+export async function deactivateItem(id: string): Promise<ActionResult> {
+  return mutateApi(`/catalog/items/${id}`, "DELETE", undefined, CATALOG_PATHS)
 }
 
 // ---------------------------------------------------------------------------
@@ -101,28 +102,28 @@ export async function deactivateProduct(id: string): Promise<ActionResult> {
 // ---------------------------------------------------------------------------
 
 export async function createVariant(
-  productId: string,
+  itemId: string,
   formData: FormData
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/variants`,
+    `/catalog/items/${itemId}/variants`,
     "POST",
     {
       name: text(formData, "name"),
       priceAdjust: numeric(formData, "priceAdjust") ?? 0,
       recipeFactor: numeric(formData, "recipeFactor") ?? 1,
     },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
 export async function updateVariant(
-  productId: string,
+  itemId: string,
   variantId: string,
   formData: FormData
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/variants/${variantId}`,
+    `/catalog/items/${itemId}/variants/${variantId}`,
     "PATCH",
     {
       name: text(formData, "name"),
@@ -130,19 +131,19 @@ export async function updateVariant(
       recipeFactor: numeric(formData, "recipeFactor"),
       isActive: checkbox(formData, "isActive"),
     },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
 export async function deactivateVariant(
-  productId: string,
+  itemId: string,
   variantId: string
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/variants/${variantId}`,
+    `/catalog/items/${itemId}/variants/${variantId}`,
     "DELETE",
     undefined,
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
@@ -151,13 +152,13 @@ export async function deactivateVariant(
 // ---------------------------------------------------------------------------
 
 export async function createExtra(
-  productId: string,
+  itemId: string,
   formData: FormData
 ): Promise<ActionResult> {
   const ingredientId = text(formData, "ingredientId")
 
   return mutateApi(
-    `/catalog/products/${productId}/extras`,
+    `/catalog/items/${itemId}/extras`,
     "POST",
     {
       name: text(formData, "name"),
@@ -174,19 +175,19 @@ export async function createExtra(
           }
         : {}),
     },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
 export async function deactivateExtra(
-  productId: string,
+  itemId: string,
   extraId: string
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/extras/${extraId}`,
+    `/catalog/items/${itemId}/extras/${extraId}`,
     "DELETE",
     undefined,
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
@@ -308,24 +309,59 @@ export async function produceRecipe(
 export interface ArticleInput {
   name: string
   description?: string | null
-  sku?: string | null
   categoryId?: string | null
   price: number
-  taxRate?: number | null
-  isActive?: boolean
+  /** Clave del objeto en R2; `null` quita la imagen. */
+  imageKey?: string | null
   variants?: Array<{
     name: string
     priceAdjust?: number
     recipeFactor?: number
     sortOrder?: number
     isActive?: boolean
+    isPrimary?: boolean
   }>
+}
+
+export interface PresignImageInput {
+  contentType: string
+  size: number
+}
+
+export interface PresignedImage {
+  key: string
+  url: string
+  /** URL firmada a la que el navegador hace el PUT. */
+  uploadUrl: string
+  method: "PUT"
+  /** Cabeceras firmadas: hay que enviarlas tal cual. */
+  headers: Record<string, string>
+  expiresIn: number
+  maxBytes: number
+}
+
+/**
+ * Firma una subida directa del navegador a R2.
+ *
+ * La imagen va a la carpeta del artículo (`{org}/catalog/{itemId}/`), así que
+ * el artículo debe existir: el diálogo lo guarda primero y luego sube la
+ * imagen. No hay área temporal ni objetos huérfanos.
+ */
+export async function presignItemImage(
+  itemId: string,
+  input: PresignImageInput
+): Promise<ActionResult<PresignedImage>> {
+  return mutateApi<PresignedImage>(
+    `/uploads/catalog/items/${itemId}`,
+    "POST",
+    input
+  )
 }
 
 export async function createArticle(
   input: ArticleInput
 ): Promise<ActionResult<{ id: string }>> {
-  return mutateApi<{ id: string }>("/catalog/products", "POST", input, [
+  return mutateApi<{ id: string }>("/catalog/items", "POST", input, [
     "/catalog",
   ])
 }
@@ -334,7 +370,22 @@ export async function updateArticle(
   articleId: string,
   input: ArticleInput
 ): Promise<ActionResult> {
-  return mutateApi(`/catalog/products/${articleId}`, "PATCH", input, [
+  return mutateApi(`/catalog/items/${articleId}`, "PATCH", input, [
+    "/catalog",
+  ])
+}
+
+/**
+ * Guarda o quita la imagen de un artículo ya creado.
+ *
+ * La API valida que la clave esté en la carpeta del artículo, comprueba el
+ * tamaño real y borra la imagen anterior del bucket.
+ */
+export async function updateArticleImage(
+  articleId: string,
+  imageKey: string | null
+): Promise<ActionResult> {
+  return mutateApi(`/catalog/items/${articleId}`, "PATCH", { imageKey }, [
     "/catalog",
   ])
 }
@@ -344,32 +395,32 @@ export async function updateArticle(
 // ---------------------------------------------------------------------------
 
 export async function replaceExclusions(
-  productId: string,
+  itemId: string,
   ingredientIds: string[]
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/exclusions`,
+    `/catalog/items/${itemId}/exclusions`,
     "PUT",
     { exclusions: ingredientIds.map((ingredientId) => ({ ingredientId })) },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
 export interface ComboComponentInput {
-  productId: string
+  itemId: string
   variantId?: string
   quantity: number
 }
 
 export async function replaceComboComponents(
-  productId: string,
+  itemId: string,
   components: ComboComponentInput[]
 ): Promise<ActionResult> {
   return mutateApi(
-    `/catalog/products/${productId}/combo-components`,
+    `/catalog/items/${itemId}/combo-components`,
     "PUT",
     { components },
-    productPaths(productId)
+    productPaths(itemId)
   )
 }
 
@@ -377,12 +428,12 @@ export async function replaceComboComponents(
 // Importación CSV
 // ---------------------------------------------------------------------------
 
-export async function importProducts(
+export async function importItems(
   csv: string,
   dryRun: boolean
 ): Promise<ActionResult<ImportResult>> {
   return mutateApi<ImportResult>(
-    "/catalog/products/import",
+    "/catalog/items/import",
     "POST",
     { csv, dryRun },
     dryRun ? [] : CATALOG_PATHS

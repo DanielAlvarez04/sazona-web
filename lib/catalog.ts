@@ -130,18 +130,28 @@ export const UNIT_GROUPS: Array<{
   },
 ]
 
+export type CategoryKind = "ARTICLE" | "RECIPE"
+
 export interface Category {
   id: string
+  /** Identificador estable de las categorías core (breakfast, sauces…). */
+  code: string | null
   name: string
   description: string | null
+  isCore: boolean
+  kind: CategoryKind
   isActive: boolean
   sortOrder: number
-  _count: { products: number }
+  _count: { items?: number; recipes?: number }
 }
 
 export interface Variant {
   id: string
   name: string
+  /** SKU propio: el del artículo más el sufijo de la presentación (XVA101A). */
+  sku: string | null
+  /** Presentación que el menú muestra por defecto. */
+  isPrimary: boolean
   priceAdjust: string
   /** Multiplicador del consumo de la receta base. Regular = 1. */
   recipeFactor: string
@@ -187,11 +197,20 @@ export interface Extra {
   ingredients?: ExtraIngredient[]
 }
 
-export interface ProductListItem {
+export interface ItemListItem {
   id: string
   name: string
   description: string | null
   sku: string | null
+  /** Clave del objeto en R2; se usa para reemplazar o quitar la imagen. */
+  imageKey: string | null
+  /** URL pública de la imagen en R2. */
+  imageUrl: string | null
+  /**
+   * Nombre legible de la imagen (`snap` + nombre normalizado + fecha). En R2
+   * el objeto va hasheado; esto es solo referencia para la futura galería.
+   */
+  imageName: string | null
   price: string
   taxRate: string | null
   isActive: boolean
@@ -219,7 +238,7 @@ export interface Exclusion {
 export interface ComboComponent {
   id: string
   quantity: number
-  component: { id: string; name: string; price: string; isActive: boolean }
+  componentItem: { id: string; name: string; price: string; isActive: boolean }
   variant: { id: string; name: string } | null
 }
 
@@ -255,12 +274,12 @@ export interface Recipe {
   name: string
   description: string | null
   isActive: boolean
-  productId: string | null
+  itemId: string | null
   variantId: string | null
   variant?: { id: string; name: string } | null
   categoryId: string | null
   category: { id: string; name: string } | null
-  product: {
+  item: {
     id: string
     name: string
     sku: string | null
@@ -278,7 +297,7 @@ export interface Recipe {
   canComputeConsumption?: boolean
 }
 
-export interface ProductDetail extends ProductListItem {
+export interface ItemDetail extends ItemListItem {
   extras: Extra[]
   ingredientExclusions: Exclusion[]
   comboComponents: ComboComponent[]
@@ -286,8 +305,8 @@ export interface ProductDetail extends ProductListItem {
 }
 
 /** Alias semántico: en la UI un `Product` del catálogo es un artículo. */
-export type ArticleListItem = ProductListItem
-export type ArticleDetail = ProductDetail
+export type ArticleListItem = ItemListItem
+export type ArticleDetail = ItemDetail
 
 export interface Ingredient {
   id: string

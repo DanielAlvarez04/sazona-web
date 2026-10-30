@@ -13,11 +13,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 export function SettingsTabs({
   account,
   business,
+  catalog,
   inventory,
   personalization,
 }: {
   account: ReactNode
   business: ReactNode
+  catalog: ReactNode
   inventory: ReactNode
   personalization: ReactNode
 }) {
@@ -33,6 +35,7 @@ export function SettingsTabs({
       >
         <TabsTrigger value="account">Cuenta</TabsTrigger>
         <TabsTrigger value="business">Negocio</TabsTrigger>
+        <TabsTrigger value="catalog">Catálogo</TabsTrigger>
         <TabsTrigger value="inventory">Inventario</TabsTrigger>
         <TabsTrigger value="personalization">Personalización</TabsTrigger>
       </TabsList>
@@ -42,6 +45,13 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent value="business" className="flex min-w-0 flex-col gap-6">
         {business}
+      </TabsContent>
+      <TabsContent
+        value="catalog"
+        keepMounted
+        className="flex min-w-0 flex-col gap-6"
+      >
+        {catalog}
       </TabsContent>
       <TabsContent
         value="inventory"

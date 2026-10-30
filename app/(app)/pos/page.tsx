@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
-import type { Category, ProductListItem } from "@/lib/catalog"
+import type { Category, ItemListItem } from "@/lib/catalog"
 import {
   canConfirmPayments,
   canDraftOrders,
@@ -25,7 +25,7 @@ export default async function PointOfSalePage() {
 
   const [productsResponse, categoriesResponse, ordersResponse, branch] =
     await Promise.all([
-      apiFetch("/catalog/products"),
+      apiFetch("/catalog/items"),
       apiFetch("/catalog/categories"),
       apiFetch("/orders?status=OPEN"),
       getActiveBranch(),
@@ -53,7 +53,7 @@ export default async function PointOfSalePage() {
   }
 
   const [products, categories, orders] = await Promise.all([
-    productsResponse.json() as Promise<ProductListItem[]>,
+    productsResponse.json() as Promise<ItemListItem[]>,
     categoriesResponse.json() as Promise<Category[]>,
     ordersResponse.json() as Promise<Order[]>,
   ])

@@ -105,7 +105,7 @@ export function RecipeDialog({
 
   const [publish, setPublish] = useState(initialPublish)
   const [price, setPrice] = useState("")
-  const [sku, setSku] = useState(recipe?.product?.sku ?? "")
+  const [sku, setSku] = useState(recipe?.item?.sku ?? "")
   const [taxRate, setTaxRate] = useState("0.16")
   const [presentations, setPresentations] = useState<PresentationRow[]>(() =>
     defaultPresentationRows()
@@ -115,7 +115,7 @@ export function RecipeDialog({
   const [produceUnit, setProduceUnit] = useState<UnitCode>("KG")
   const [yieldQuantity, setYieldQuantity] = useState("")
 
-  const published = Boolean(recipe?.productId)
+  const published = Boolean(recipe?.itemId)
   const producesIngredient = Boolean(recipe?.producesIngredientId)
 
   function save() {
@@ -207,7 +207,7 @@ export function RecipeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {recipe ? "Editar receta" : "Nueva receta"}
@@ -309,7 +309,7 @@ export function RecipeDialog({
               </div>
               {published ? (
                 <Badge variant="secondary">
-                  Publicada · {recipe?.product?.name}
+                  Publicada · {recipe?.item?.name}
                 </Badge>
               ) : (
                 <label className="flex items-center gap-2 text-sm">

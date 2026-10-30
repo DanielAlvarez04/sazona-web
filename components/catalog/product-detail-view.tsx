@@ -12,8 +12,8 @@ import { formatMoney, formatPercent } from "@/lib/catalog"
 import type {
   Category,
   Ingredient,
-  ProductDetail,
-  ProductListItem,
+  ItemDetail,
+  ItemListItem,
 } from "@/lib/catalog"
 
 export function ProductDetailView({
@@ -24,10 +24,10 @@ export function ProductDetailView({
   organizationTaxRate,
   canManage,
 }: {
-  product: ProductDetail
+  product: ItemDetail
   categories: Category[]
   ingredients: Ingredient[]
-  products: ProductListItem[]
+  products: ItemListItem[]
   organizationTaxRate: string
   canManage: boolean
 }) {

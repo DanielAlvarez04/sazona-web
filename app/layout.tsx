@@ -4,6 +4,9 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { KeyboardShortcutsProvider } from "@/components/keyboard/keyboard-shortcuts-provider";
+import { ThemeShortcut } from "@/components/keyboard/theme-shortcut";
+import { ThemeProvider } from "@/components/theme-provider";
 
 import type { Metadata, Viewport } from "next";
 
@@ -38,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="es"
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -47,15 +51,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         inter.variable
       )}
     >
-      <head>
-        <link href="/tailwind.css" rel="stylesheet" />
-      </head>
-      <TooltipProvider>
-        <body className="min-h-full flex flex-col">
-          {children}
-          <Toaster position="bottom-right" />
-        </body>
-      </TooltipProvider>
+      <head />
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <KeyboardShortcutsProvider>
+            <ThemeShortcut />
+            <TooltipProvider>
+              {children}
+              <Toaster position="bottom-right" />
+            </TooltipProvider>
+          </KeyboardShortcutsProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

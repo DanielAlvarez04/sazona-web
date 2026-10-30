@@ -9,7 +9,7 @@ import {
 import { toast } from "sonner"
 
 import {
-  deactivateProduct,
+  deactivateItem,
   deleteRecipe,
   unpublishRecipe,
   updateRecipe,
@@ -22,7 +22,6 @@ import { ImportDialog } from "@/components/catalog/import-dialog"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipeDialog } from "@/components/catalog/recipe-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
-import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
@@ -36,14 +35,16 @@ import type {
 export function CatalogClient({
   recipes,
   articles,
-  categories,
+  articleCategories,
+  recipeCategories,
   ingredients,
   canManage,
   branch,
 }: {
   recipes: Recipe[]
   articles: ArticleListItem[]
-  categories: Category[]
+  articleCategories: Category[]
+  recipeCategories: Category[]
   ingredients: Ingredient[]
   canManage: boolean
   branch: Branch | null
@@ -117,7 +118,7 @@ export function CatalogClient({
   }
 
   function handleDeleteRecipe(recipe: Recipe) {
-    if (recipe.productId) {
+    if (recipe.itemId) {
       toast.error("Despublica la receta antes de eliminarla")
       return
     }
@@ -142,7 +143,7 @@ export function CatalogClient({
     }
 
     rowForm.run(() =>
-      deactivateProduct(article.id).then((result) => {
+      deactivateItem(article.id).then((result) => {
         if (result.ok) toast.success("Artículo desactivado")
         return result
       })
@@ -173,11 +174,13 @@ export function CatalogClient({
             ) : null}
             <ArticlesTable
               articles={articles}
-              categories={categories}
+              categories={articleCategories}
               canManage={canManage}
               onCreate={openNewArticle}
               onEdit={openArticle}
               onDeactivate={handleDeactivateArticle}
+              onManageCategories={() => setCategoriesOpen(true)}
+              onImportCsv={() => setImportOpen(true)}
             />
           </div>
         </TabsContent>
@@ -192,7 +195,7 @@ export function CatalogClient({
             ) : null}
             <RecipesTable
               recipes={recipes}
-              categories={categories}
+              categories={recipeCategories}
               canManage={canManage}
               onCreate={openNewRecipe}
               onEdit={(recipe) => openRecipe(recipe)}
@@ -201,6 +204,7 @@ export function CatalogClient({
               onProduce={(recipe) => setProducing(recipe)}
               onToggleActive={toggleRecipeActive}
               onDelete={handleDeleteRecipe}
+              onManageCategories={() => setCategoriesOpen(true)}
             />
           </div>
         </TabsContent>
@@ -216,7 +220,7 @@ export function CatalogClient({
             }
           }}
           recipe={editingRecipe}
-          categories={categories}
+          categories={recipeCategories}
           ingredients={ingredients}
           initialPublish={publishIntent}
         />
@@ -229,7 +233,7 @@ export function CatalogClient({
             if (!open) setArticleDialogOpen(false)
           }}
           article={editingArticle}
-          categories={categories}
+          categories={articleCategories}
         />
       ) : null}
 
@@ -249,7 +253,8 @@ export function CatalogClient({
           <CategoryDialog
             open={categoriesOpen}
             onOpenChange={setCategoriesOpen}
-            categories={categories}
+            articleCategories={articleCategories}
+            recipeCategories={recipeCategories}
           />
           <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
         </>

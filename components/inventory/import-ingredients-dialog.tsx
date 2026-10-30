@@ -238,7 +238,7 @@ export function ImportIngredientsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="no-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto">
             <button
               type="button"
               disabled={pending}

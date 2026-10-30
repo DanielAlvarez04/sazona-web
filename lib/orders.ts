@@ -77,7 +77,7 @@ export const ROUND_ACTIONS: Record<RoundStatus, RoundAction[]> = {
 
 export interface OrderItemExtra {
   id: string
-  productExtraId: string | null
+  itemExtraId: string | null
   extraName: string
   extraPrice: string
 }
@@ -95,11 +95,11 @@ export interface OrderItemExclusion {
 
 export interface OrderItem {
   id: string
-  productId: string
-  productVariantId: string | null
-  productName: string
+  itemId: string
+  itemVariantId: string | null
+  itemName: string
   variantName: string | null
-  productPrice: string
+  itemPrice: string
   taxRate: string | null
   taxAmount: string
   quantity: number

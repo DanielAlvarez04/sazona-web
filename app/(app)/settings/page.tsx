@@ -10,7 +10,9 @@ import {
 
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { BranchesCard } from "@/components/settings/branches-card"
+import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
+import { InventoryPreferencesCard } from "@/components/settings/inventory-preferences-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { TaxSettingsCard } from "@/components/settings/tax-settings-card"
 import { UnitsCard } from "@/components/settings/units-card"
@@ -31,7 +33,9 @@ import { googleLinkNotice } from "@/lib/auth-errors"
 import { getActiveBranch } from "@/lib/branch-server"
 import type { Branch } from "@/lib/branches"
 import {
+  canManageCatalog,
   canManageInventory,
+  type Category,
   type Ingredient,
   type IngredientCategory,
   type IngredientLocation,
@@ -83,11 +87,15 @@ export default async function SettingsPage({
     categoriesResponse,
     locationsResponse,
     activeBranch,
+    articleCategoriesResponse,
+    recipeCategoriesResponse,
   ] = await Promise.all([
     apiFetch("/inventory/ingredients?includeInactive=true"),
-    apiFetch("/inventory/ingredient-categories"),
+    apiFetch("/inventory/ingredient-categories?includeInactive=true"),
     apiFetch("/inventory/ingredient-locations"),
     getActiveBranch(),
+    apiFetch("/catalog/categories?includeInactive=true&kind=article"),
+    apiFetch("/catalog/categories?includeInactive=true&kind=recipe"),
   ])
   const ingredients: Ingredient[] = ingredientsResponse.ok
     ? ((await ingredientsResponse.json()) as Ingredient[])
@@ -98,10 +106,17 @@ export default async function SettingsPage({
   const locations: IngredientLocation[] = locationsResponse.ok
     ? ((await locationsResponse.json()) as IngredientLocation[])
     : []
+  const articleCategories: Category[] = articleCategoriesResponse.ok
+    ? ((await articleCategoriesResponse.json()) as Category[])
+    : []
+  const recipeCategories: Category[] = recipeCategoriesResponse.ok
+    ? ((await recipeCategoriesResponse.json()) as Category[])
+    : []
   const inventoryLoaded = ingredientsResponse.ok
   const catalogLoaded =
     inventoryLoaded && categoriesResponse.ok && locationsResponse.ok
-  const existingNames = ingredients.map((ingredient) => ingredient.name)
+  const catalogCategoriesLoaded =
+    articleCategoriesResponse.ok && recipeCategoriesResponse.ok
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-6 px-4 py-6 lg:px-6">
@@ -340,15 +355,35 @@ export default async function SettingsPage({
             <BranchesCard branches={branches} canManage={admin} />
           </>
         }
-        inventory={
-          <CoreProductsCard
-            existingNames={existingNames}
-            categories={categories}
-            locations={locations}
-            branchName={activeBranch?.name ?? null}
-            storageKey={`np-core-presets:${user.organizationId ?? "default"}`}
-            canManage={catalogLoaded && canManageInventory(user.roles)}
+        catalog={
+          <CatalogCategoriesCard
+            articleCategories={articleCategories}
+            recipeCategories={recipeCategories}
+            canManage={
+              catalogCategoriesLoaded && canManageCatalog(user.roles)
+            }
           />
+        }
+        inventory={
+          <>
+            <InventoryPreferencesCard
+              categories={categories}
+              useCoreSuggestions={user.organizationUseCoreSuggestions}
+              canManage={catalogLoaded && canManageInventory(user.roles)}
+              canManageSuggestions={admin}
+            />
+
+            {user.organizationUseCoreSuggestions ? (
+              <CoreProductsCard
+                ingredients={ingredients}
+                categories={categories.filter((category) => category.isActive)}
+                locations={locations}
+                branchName={activeBranch?.name ?? null}
+                storageKey={`np-core-presets:${user.organizationId ?? "default"}`}
+                canManage={catalogLoaded && canManageInventory(user.roles)}
+              />
+            ) : null}
+          </>
         }
         personalization={
           <>

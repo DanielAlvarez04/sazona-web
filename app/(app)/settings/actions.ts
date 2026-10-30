@@ -14,6 +14,43 @@ function text(formData: FormData, key: string): string | undefined {
   return trimmed === "" ? undefined : trimmed
 }
 
+/** Activa/desactiva todas las categorías core de inventario. */
+export async function setCoreIngredientCategoriesActive(
+  isActive: boolean
+): Promise<ActionResult> {
+  return mutateApi(
+    "/inventory/ingredient-categories/bulk/core-status",
+    "PATCH",
+    { isActive },
+    ["/settings", "/inventory"]
+  )
+}
+
+/** Activa/desactiva la sección de insumos core sugeridos. */
+export async function setUseCoreSuggestions(
+  enabled: boolean
+): Promise<ActionResult> {
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { useCoreSuggestions: enabled },
+    ["/settings", "/inventory"]
+  )
+}
+
+/** Activa/desactiva todas las categorías core de un tipo. */
+export async function setCoreCategoryGroupActive(
+  kind: "ARTICLE" | "RECIPE",
+  isActive: boolean
+): Promise<ActionResult> {
+  return mutateApi(
+    "/catalog/categories/bulk/core-status",
+    "PATCH",
+    { kind, isActive },
+    ["/settings", "/catalog"]
+  )
+}
+
 export async function renameOrganization(
   formData: FormData
 ): Promise<ActionResult> {
@@ -75,7 +112,7 @@ export interface CoreInventorySyncResult {
  *
  * El catálogo vive en el web; aquí se envía a la API qué insumos deben
  * existir y qué nombres del catálogo quedaron desmarcados. La API crea los
- * que faltan y retira los desmarcados solo si no están en recetas ni pedidos.
+ * que faltan y desactiva los desmarcados solo si no tienen cambios.
  */
 export async function saveCoreInventory(
   selectedNames: string[],
@@ -108,12 +145,14 @@ export async function saveCoreInventory(
         .map((name) => catalog.get(name)!)
     : []
 
-  const removeNames = [...catalog.keys()].filter((name) => !selected.has(name))
+  const removeProducts = [...catalog.values()].filter(
+    (product) => !selected.has(product.name)
+  )
 
   return mutateApi<CoreInventorySyncResult>(
     "/inventory/ingredients/sync-core",
     "POST",
-    { products, removeNames },
+    { products, removeNames: [], removeProducts },
     ["/settings", "/inventory"]
   )
 }

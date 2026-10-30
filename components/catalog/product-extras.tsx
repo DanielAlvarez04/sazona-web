@@ -32,7 +32,7 @@ import {
   unitLabel,
   type Extra,
   type Ingredient,
-  type ProductDetail,
+  type ItemDetail,
 } from "@/lib/catalog"
 
 export function ProductExtras({
@@ -40,7 +40,7 @@ export function ProductExtras({
   ingredients,
   canManage,
 }: {
-  product: ProductDetail
+  product: ItemDetail
   ingredients: Ingredient[]
   canManage: boolean
 }) {
@@ -62,7 +62,7 @@ export function ProductExtras({
           product.extras.map((extra) => (
             <ExtraRow
               key={extra.id}
-              productId={product.id}
+              itemId={product.id}
               extra={extra}
               canManage={canManage}
             />
@@ -70,7 +70,7 @@ export function ProductExtras({
         )}
 
         {canManage ? (
-          <ExtraCreateForm productId={product.id} ingredients={ingredients} />
+          <ExtraCreateForm itemId={product.id} ingredients={ingredients} />
         ) : null}
       </CardContent>
     </Card>
@@ -78,11 +78,11 @@ export function ProductExtras({
 }
 
 function ExtraRow({
-  productId,
+  itemId,
   extra,
   canManage,
 }: {
-  productId: string
+  itemId: string
   extra: Extra
   canManage: boolean
 }) {
@@ -120,7 +120,7 @@ function ExtraRow({
           disabled={pending}
           onClick={() => {
             if (!window.confirm(`¿Desactivar el extra "${extra.name}"?`)) return
-            run(() => deactivateExtra(productId, extra.id))
+            run(() => deactivateExtra(itemId, extra.id))
           }}
         >
           {pending ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
@@ -131,10 +131,10 @@ function ExtraRow({
 }
 
 function ExtraCreateForm({
-  productId,
+  itemId,
   ingredients,
 }: {
-  productId: string
+  itemId: string
   ingredients: Ingredient[]
 }) {
   const router = useRouter()
@@ -153,7 +153,7 @@ function ExtraCreateForm({
         formData.set("unit", unit === "base" ? "" : unit)
 
         run(async () => {
-          const result = await createExtra(productId, formData)
+          const result = await createExtra(itemId, formData)
 
           if (result.ok) {
             form.reset()

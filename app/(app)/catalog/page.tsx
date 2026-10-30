@@ -24,13 +24,15 @@ export default async function CatalogPage() {
   const [
     recipesResponse,
     productsResponse,
-    categoriesResponse,
+    articleCategoriesResponse,
+    recipeCategoriesResponse,
     ingredientsResponse,
     branch,
   ] = await Promise.all([
     apiFetch("/catalog/recipes?includeInactive=true"),
-    apiFetch("/catalog/products?includeInactive=true"),
-    apiFetch("/catalog/categories?includeInactive=true"),
+    apiFetch("/catalog/items?includeInactive=true"),
+    apiFetch("/catalog/categories?kind=article"),
+    apiFetch("/catalog/categories?kind=recipe"),
     apiFetch("/inventory/ingredients?includeInactive=true"),
     getActiveBranch(),
   ])
@@ -38,7 +40,8 @@ export default async function CatalogPage() {
   if (
     !recipesResponse.ok ||
     !productsResponse.ok ||
-    !categoriesResponse.ok ||
+    !articleCategoriesResponse.ok ||
+    !recipeCategoriesResponse.ok ||
     !ingredientsResponse.ok
   ) {
     return (
@@ -57,18 +60,21 @@ export default async function CatalogPage() {
     )
   }
 
-  const [recipes, articles, categories, ingredients] = await Promise.all([
-    recipesResponse.json() as Promise<Recipe[]>,
-    productsResponse.json() as Promise<ArticleListItem[]>,
-    categoriesResponse.json() as Promise<Category[]>,
-    ingredientsResponse.json() as Promise<Ingredient[]>,
-  ])
+  const [recipes, articles, articleCategories, recipeCategories, ingredients] =
+    await Promise.all([
+      recipesResponse.json() as Promise<Recipe[]>,
+      productsResponse.json() as Promise<ArticleListItem[]>,
+      articleCategoriesResponse.json() as Promise<Category[]>,
+      recipeCategoriesResponse.json() as Promise<Category[]>,
+      ingredientsResponse.json() as Promise<Ingredient[]>,
+    ])
 
   return (
     <CatalogClient
       recipes={recipes}
       articles={articles}
-      categories={categories}
+      articleCategories={articleCategories}
+      recipeCategories={recipeCategories}
       ingredients={ingredients}
       canManage={canManageCatalog(user.roles)}
       branch={branch}

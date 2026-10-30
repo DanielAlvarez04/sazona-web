@@ -53,8 +53,9 @@ import {
 /** Valor centinela para "sin filtro" en los `Select` de la barra de filtros. */
 export const DATA_TABLE_ALL = "__all__"
 
-const DEFAULT_PAGE_SIZES = [10, 20, 30, 50, 100]
-const DEFAULT_PAGE_SIZE = 10
+/** Todas las tablas comparten 12 filas por página salvo que se indique otra. */
+const DEFAULT_PAGE_SIZES = [12, 24, 48, 96]
+const DEFAULT_PAGE_SIZE = 12
 
 export interface DataTableFilterOption {
   value: string

@@ -9,7 +9,7 @@
 export type QueuedRoundStatus = "queued" | "syncing" | "error"
 
 export interface QueuedRoundItem {
-  productId: string
+  itemId: string
   variantId?: string
   quantity: number
   notes?: string

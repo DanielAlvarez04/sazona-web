@@ -11,7 +11,7 @@ import type {
 const ORDER_PATHS = ["/pos", "/kitchen"]
 
 export interface RoundItemInput {
-  productId: string
+  itemId: string
   variantId?: string
   quantity: number
   notes?: string

@@ -42,7 +42,7 @@ import { PendingOperations } from "@/components/offline/pending-operations"
 import {
   formatMoney,
   type Category,
-  type ProductListItem,
+  type ItemListItem,
 } from "@/lib/catalog"
 import { createOrder, sendRound, type RoundItemInput } from "@/lib/order-actions"
 import type { Branch } from "@/lib/branches"
@@ -58,8 +58,8 @@ interface CartExtra {
 
 interface CartLine {
   key: string
-  productId: string
-  productName: string
+  itemId: string
+  itemName: string
   variantId?: string
   variantName?: string
   unitPrice: number
@@ -76,7 +76,7 @@ function cartLineTotal(line: CartLine): number {
 
 function lineToInput(line: CartLine): RoundItemInput {
   return {
-    productId: line.productId,
+    itemId: line.itemId,
     variantId: line.variantId,
     quantity: line.quantity,
     notes: line.notes,
@@ -99,7 +99,7 @@ export function PosView({
   canRefund,
   branch,
 }: {
-  products: ProductListItem[]
+  products: ItemListItem[]
   categories: Category[]
   orders: Order[]
   canDraft: boolean
@@ -117,7 +117,7 @@ export function PosView({
   const [categoryId, setCategoryId] = React.useState("")
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [selectedProduct, setSelectedProduct] =
-    React.useState<ProductListItem | null>(null)
+    React.useState<ItemListItem | null>(null)
   const [charging, setCharging] = React.useState(false)
 
   const [orderId, setOrderId] = React.useState("")
@@ -465,7 +465,7 @@ export function PosView({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
-                        {line.productName}
+                        {line.itemName}
                         {line.variantName ? (
                           <span className="text-muted-foreground">
                             {" "}
@@ -499,7 +499,7 @@ export function PosView({
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      aria-label={`Quitar una unidad de ${line.productName}`}
+                      aria-label={`Quitar una unidad de ${line.itemName}`}
                       onClick={() => changeQuantity(line.key, -1)}
                     >
                       <MinusIcon />
@@ -511,7 +511,7 @@ export function PosView({
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      aria-label={`Añadir una unidad de ${line.productName}`}
+                      aria-label={`Añadir una unidad de ${line.itemName}`}
                       onClick={() => changeQuantity(line.key, 1)}
                     >
                       <PlusIcon />
@@ -521,7 +521,7 @@ export function PosView({
                       variant="ghost"
                       size="icon-sm"
                       className="ml-auto"
-                      aria-label={`Quitar ${line.productName} de la comanda`}
+                      aria-label={`Quitar ${line.itemName} de la comanda`}
                       onClick={() => removeLine(line.key)}
                     >
                       <Trash2Icon />
@@ -645,7 +645,7 @@ function AddItemDialog({
   onClose,
   onAdd,
 }: {
-  product: ProductListItem
+  product: ItemListItem
   onClose: () => void
   onAdd: (line: Omit<CartLine, "key">) => void
 }) {
@@ -816,8 +816,8 @@ function AddItemDialog({
             type="button"
             onClick={() =>
               onAdd({
-                productId: product.id,
-                productName: product.name,
+                itemId: product.id,
+                itemName: product.name,
                 variantId: variant?.id,
                 variantName: variant?.name,
                 unitPrice,

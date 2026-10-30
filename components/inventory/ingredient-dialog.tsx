@@ -46,6 +46,7 @@ import {
   type UnitCode,
 } from "@/lib/catalog"
 import { clearDraft, formValues, readDraft, writeDraft } from "@/lib/drafts"
+import { isCoreProductName } from "@/lib/core-products"
 
 export function IngredientDialog({
   open,
@@ -93,6 +94,8 @@ export function IngredientDialog({
       "UNIT"
   )
   const unitSymbol = unitLabel(displayUnit)
+  // Los insumos core conservan el nombre y la categoría sugeridos.
+  const coreLocked = Boolean(ingredient && isCoreProductName(ingredient.name))
   // Al editar solo se ofrecen unidades de la misma dimensión: la API rechaza
   // cambiar de masa a volumen o conteo.
   const unitChoices = isEdit
@@ -227,7 +230,13 @@ export function IngredientDialog({
                   required
                   maxLength={120}
                   placeholder="Leche entera"
+                  disabled={coreLocked}
                 />
+                {coreLocked ? (
+                  <p className="text-xs text-muted-foreground">
+                    El nombre de un insumo sugerido no se puede editar.
+                  </p>
+                ) : null}
               </Field>
 
               <Field>
@@ -266,6 +275,7 @@ export function IngredientDialog({
                   name="categoryId"
                   defaultValue={draft?.categoryId ?? ingredient?.category?.id ?? ""}
                   items={categoryItems}
+                  disabled={coreLocked}
                 >
                   <SelectTrigger
                     id="ingredient-category"

@@ -342,7 +342,7 @@ export function BulkIngredientsDialog({
 
         <div
           ref={scrollRef}
-          className="-mx-6 flex min-h-0 flex-1 flex-col overflow-auto border-t px-6 pb-3"
+          className="no-scrollbar -mx-6 flex min-h-0 flex-1 flex-col overflow-auto border-t px-6 pb-3"
         >
           <div className="flex min-w-[70rem] flex-col">
             {/* Cabecera de columnas */}

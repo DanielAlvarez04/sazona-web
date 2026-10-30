@@ -13,8 +13,8 @@ import {
   canManageCatalog,
   type Category,
   type Ingredient,
-  type ProductDetail,
-  type ProductListItem,
+  type ItemDetail,
+  type ItemListItem,
 } from "@/lib/catalog"
 import { requireUser } from "@/lib/session"
 
@@ -28,10 +28,10 @@ export default async function ProductDetailPage({
 
   const [productResponse, categoriesResponse, ingredientsResponse, productsResponse] =
     await Promise.all([
-      apiFetch(`/catalog/products/${encodeURIComponent(id)}`),
+      apiFetch(`/catalog/items/${encodeURIComponent(id)}`),
       apiFetch("/catalog/categories?includeInactive=true"),
       apiFetch("/inventory/ingredients"),
-      apiFetch("/catalog/products?includeInactive=true"),
+      apiFetch("/catalog/items?includeInactive=true"),
     ])
 
   if (productResponse.status === 404) {
@@ -61,10 +61,10 @@ export default async function ProductDetailPage({
   }
 
   const [product, categories, ingredients, products] = await Promise.all([
-    productResponse.json() as Promise<ProductDetail>,
+    productResponse.json() as Promise<ItemDetail>,
     categoriesResponse.json() as Promise<Category[]>,
     ingredientsResponse.json() as Promise<Ingredient[]>,
-    productsResponse.json() as Promise<ProductListItem[]>,
+    productsResponse.json() as Promise<ItemListItem[]>,
   ])
 
   return (

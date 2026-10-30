@@ -15,14 +15,14 @@ import {
 } from "@/components/ui/card"
 import { FieldError } from "@/components/ui/field"
 import { useActionForm } from "@/hooks/use-action-form"
-import type { Ingredient, ProductDetail } from "@/lib/catalog"
+import type { Ingredient, ItemDetail } from "@/lib/catalog"
 
 export function ProductExclusions({
   product,
   ingredients,
   canManage,
 }: {
-  product: ProductDetail
+  product: ItemDetail
   ingredients: Ingredient[]
   canManage: boolean
 }) {
