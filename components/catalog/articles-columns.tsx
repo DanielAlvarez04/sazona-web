@@ -114,14 +114,11 @@ export function ArticleActionsMenu({
   article,
   actions,
   triggerSize = "icon-xs",
-  triggerClassName,
 }: {
   article: ArticleListItem
   actions: ArticleRowActions
   /** Tamaño del botón de tres puntos (más grande en las tarjetas). */
   triggerSize?: ComponentProps<typeof Button>["size"]
-  /** Estilos extra del disparador (p. ej. sobre una imagen oscura). */
-  triggerClassName?: string
 }) {
   return (
     <DropdownMenu>
@@ -130,10 +127,7 @@ export function ArticleActionsMenu({
           <Button
             variant="ghost"
             size={triggerSize}
-            className={cn(
-              "text-muted-foreground aria-expanded:bg-muted",
-              triggerClassName
-            )}
+            className="text-muted-foreground aria-expanded:bg-muted"
             disabled={actions.isPending(article)}
             aria-label={`Acciones de ${article.name}`}
           />

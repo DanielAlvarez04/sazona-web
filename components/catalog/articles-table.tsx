@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ArticleListItem, Category } from "@/lib/catalog"
 
-import { ArticleCards, ArticleCardsFull } from "./article-cards"
+import { ArticleCards } from "./article-cards"
 import {
   ARTICLE_COLUMN_LABELS,
   createArticleColumns,
@@ -261,36 +261,26 @@ export function ArticlesTable({
             onSelectedChange={setCardSelected}
           />
         )}
-        cardsFullView={(rows) => (
-          <ArticleCardsFull
-            articles={rows}
-            actions={actions}
-            canSelect={canManage}
-            selectedIds={rowSelection}
-            onSelectedChange={setCardSelected}
-          />
-        )}
+        selectionActions={
+          canManage && selectedCount > 0 ? (
+            <Button
+              variant="destructive"
+              onClick={() =>
+                setPendingAction({
+                  kind: "delete",
+                  articles: selectedArticles,
+                })
+              }
+              disabled={busy}
+            >
+              <Trash2Icon />
+              {busy ? "Eliminando…" : `Eliminar ${selectedCount}`}
+            </Button>
+          ) : null
+        }
         actions={
           canManage ? (
             <>
-              {selectedCount > 0 ? (
-                <Button
-                  variant="destructive"
-                  onClick={() =>
-                    setPendingAction({
-                      kind: "delete",
-                      articles: selectedArticles,
-                    })
-                  }
-                  disabled={busy}
-                >
-                  <Trash2Icon />
-                  {busy
-                    ? "Eliminando…"
-                    : `Eliminar seleccionados (${selectedCount})`}
-                </Button>
-              ) : null}
-
               <Button onClick={onCreate}>
                 <PlusIcon className="size-4" />
                 Nuevo artículo

@@ -12,7 +12,7 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table"
-import { Columns3Icon, LayoutGridIcon, SearchIcon, SquareIcon, TableIcon, XIcon } from "lucide-react"
+import { Columns3Icon, LayoutGridIcon, SearchIcon, TableIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +54,7 @@ import {
 export const DATA_TABLE_ALL = "__all__"
 
 /** Vistas disponibles cuando el consumidor ofrece tarjetas. */
-export type DataTableViewMode = "table" | "cards" | "cards-full"
+export type DataTableViewMode = "table" | "cards"
 
 /** Todas las tablas comparten 12 filas por página salvo que se indique otra. */
 const DEFAULT_PAGE_SIZES = [12, 24, 48, 96]
@@ -110,6 +110,11 @@ export interface DataTableProps<TData extends RowData> {
   /** Acciones extra a la derecha de la barra (botones, menús…). */
   actions?: React.ReactNode
   /**
+   * Acciones de la selección en lote. Se pintan a la izquierda del selector de
+   * vista, sin desplazar el resto de acciones de la barra.
+   */
+  selectionActions?: React.ReactNode
+  /**
    * Vista activa. Si se indica junto con `onViewModeChange`, aparece un
    * selector tabla/tarjetas a la izquierda del botón de columnas.
    */
@@ -120,11 +125,6 @@ export interface DataTableProps<TData extends RowData> {
    * (ya filtradas, ordenadas y paginadas) para reutilizar la misma paginación.
    */
   cardsView?: (rows: TData[]) => React.ReactNode
-  /**
-   * Contenido de la vista «cards full»: mismas filas que `cardsView`, pero con
-   * tarjetas cuadradas a sangre (imagen de fondo e información en overlay).
-   */
-  cardsFullView?: (rows: TData[]) => React.ReactNode
 
   // Filas
   onRowClick?: (row: TData) => void
@@ -174,10 +174,10 @@ export function DataTable<TData extends RowData>({
   showColumnToggle = true,
   columnLabels,
   actions,
+  selectionActions,
   viewMode = "table",
   onViewModeChange,
   cardsView,
-  cardsFullView,
   onRowClick,
   rowClassName,
   rowContextMenu,
@@ -258,9 +258,80 @@ export function DataTable<TData extends RowData>({
   const resolveRowClassName = (row: TData) =>
     typeof rowClassName === "function" ? rowClassName(row) : rowClassName
 
+  /**
+   * Un filtro de la barra. `fullWidth` lo estira para la columna lateral.
+   *
+   * Se pinta dos veces (sidebar y barra móvil): ambos comparten el mismo estado
+   * controlado, así que solo uno es visible a la vez.
+   */
+  function renderFilter(filter: DataTableFilter, fullWidth = false) {
+    const selectedLabel =
+      filter.options.find((option) => option.value === filter.value)?.label ??
+      filter.allLabel
+
+    return (
+      <Select
+        key={filter.id}
+        value={filter.value}
+        onValueChange={(value) =>
+          filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
+        }
+        items={filter.options}
+      >
+        <SelectTrigger
+          // `w-auto` deja que el disparador crezca con el nombre elegido; así
+          // no se corta el texto de opciones largas.
+          className={fullWidth ? "w-full" : "w-auto min-w-40 max-w-64"}
+          aria-label={filter.ariaLabel}
+          title={selectedLabel}
+        >
+          <SelectValue placeholder={filter.placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {filter.options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
+
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex min-w-0 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+      {/* Filtros en columna (sidebar) desde `lg`. */}
+      {filters.length > 0 ? (
+        <aside
+          aria-label="Filtros"
+          className="hidden w-56 shrink-0 flex-col gap-2 lg:flex"
+        >
+          <p className="text-sm font-medium text-muted-foreground">Filtros</p>
+          {filters.map((filter) => (
+            <div key={filter.id} className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                {filter.placeholder}
+              </span>
+              {renderFilter(filter, true)}
+            </div>
+          ))}
+          {hasFilters && onClearFilters ? (
+            <Button
+              variant="ghost"
+              className="justify-start text-muted-foreground"
+              onClick={onClearFilters}
+            >
+              <XIcon className="size-4" />
+              Limpiar
+              <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                {activeFilterCount}
+              </Badge>
+            </Button>
+          ) : null}
+        </aside>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
         {/* Barra de herramientas: una sola fila con dos grupos. */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
@@ -285,61 +356,38 @@ export function DataTable<TData extends RowData>({
               </div>
             ) : null}
 
-            {filters.map((filter) => {
-              const selectedLabel =
-                filter.options.find((option) => option.value === filter.value)
-                  ?.label ?? filter.allLabel
+            {filters.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 lg:hidden">
+                {filters.map((filter) => renderFilter(filter))}
 
-              return (
-                <Select
-                  key={filter.id}
-                  value={filter.value}
-                  onValueChange={(value) =>
-                    filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
-                  }
-                  items={filter.options}
-                >
-                  <SelectTrigger
-                    // `w-auto` deja que el disparador crezca con el nombre
-                    // elegido; así no se corta el texto de opciones largas.
-                    className="w-auto min-w-40 max-w-64"
-                    aria-label={filter.ariaLabel}
-                    title={selectedLabel}
+                {hasFilters && onClearFilters ? (
+                  <Button
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={onClearFilters}
                   >
-                    <SelectValue placeholder={filter.placeholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filter.options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
-            })}
-
-            {hasFilters && onClearFilters ? (
-              <Button
-                variant="ghost"
-                className="text-muted-foreground"
-                onClick={onClearFilters}
-              >
-                <XIcon className="size-4" />
-                Limpiar
-                <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
-                  {activeFilterCount}
-                </Badge>
-              </Button>
+                    <XIcon className="size-4" />
+                    Limpiar
+                    <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                      {activeFilterCount}
+                    </Badge>
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
-          {showColumnToggle || actions || onViewModeChange ? (
+          {showColumnToggle ||
+          actions ||
+          selectionActions ||
+          onViewModeChange ? (
             <div
               role="group"
               aria-label="Acciones"
               className="flex shrink-0 flex-wrap items-center gap-2"
             >
+              {selectionActions}
+
               {onViewModeChange ? (
                 <div
                   role="group"
@@ -356,18 +404,6 @@ export function DataTable<TData extends RowData>({
                   >
                     <LayoutGridIcon className="size-4" />
                   </Button>
-                  {cardsFullView ? (
-                    <Button
-                      variant={viewMode === "cards-full" ? "secondary" : "ghost"}
-                      size="icon-sm"
-                      aria-pressed={viewMode === "cards-full"}
-                      aria-label="Vista de tarjetas grandes"
-                      title="Vista de tarjetas grandes"
-                      onClick={() => onViewModeChange("cards-full")}
-                    >
-                      <SquareIcon className="size-4" />
-                    </Button>
-                  ) : null}
                   <Button
                     variant={viewMode === "table" ? "secondary" : "ghost"}
                     size="icon-sm"
@@ -421,149 +457,148 @@ export function DataTable<TData extends RowData>({
             </div>
           ) : null}
         </div>
-      </div>
 
-      {viewMode === "cards" && cardsView ? (
-        rows.length > 0 ? (
-          cardsView(rows.map((row) => row.original))
+        {viewMode === "cards" && cardsView ? (
+          rows.length > 0 ? (
+            cardsView(rows.map((row) => row.original))
+          ) : (
+            <div className="rounded-lg border p-8 text-center whitespace-normal">
+              {emptyContent}
+            </div>
+          )
         ) : (
-          <div className="rounded-lg border p-8 text-center whitespace-normal">
-            {emptyContent}
-          </div>
-        )
-      ) : viewMode === "cards-full" && cardsFullView ? (
-        rows.length > 0 ? (
-          cardsFullView(rows.map((row) => row.original))
-        ) : (
-          <div className="rounded-lg border p-8 text-center whitespace-normal">
-            {emptyContent}
-          </div>
-        )
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table className={tableClassName}>
-            <TableHeader className="sticky top-0 z-10 bg-muted">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} colSpan={header.colSpan}>
-                      {header.isPlaceholder ? null : (
-                        <FlexRender header={header} />
-                      )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {rows.length > 0 ? (
-                rows.map((row) => {
-                  const tableRow = (
-                    <TableRow
-                      data-state={row.getIsSelected() ? "selected" : undefined}
-                      className={cn("h-max", resolveRowClassName(row.original))}
-                      onClick={
-                        onRowClick
-                          ? () => onRowClick(row.original)
-                          : undefined
-                      }
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          <FlexRender cell={cell} />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  )
-
-                  if (!rowContextMenu) {
-                    return (
-                      <React.Fragment key={row.id}>{tableRow}</React.Fragment>
-                    )
-                  }
-
-                  return (
-                    <ContextMenu key={row.id}>
-                      <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
-                      {rowContextMenu(row.original)}
-                    </ContextMenu>
-                  )
-                })
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columnCount}
-                    className="h-32 text-center whitespace-normal"
-                  >
-                    {emptyContent}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-muted-foreground">{summary}</div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="hidden items-center gap-2 sm:flex">
-            <Label
-              htmlFor={`${idPrefix}-rows-per-page`}
-              className="text-sm font-medium"
-            >
-              Filas por página
-            </Label>
-            <Select
-              value={`${pagination.pageSize}`}
-              onValueChange={(value) => {
-                if (!value) return
-                table.setPageSize(Number(value))
-              }}
-              items={pageSizeOptions.map((pageSize) => ({
-                label: `${pageSize}`,
-                value: `${pageSize}`,
-              }))}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-20"
-                id={`${idPrefix}-rows-per-page`}
-              >
-                <SelectValue placeholder={`${pagination.pageSize}`} />
-              </SelectTrigger>
-              <SelectContent side="top">
-                {pageSizeOptions.map((pageSize) => (
-                  <SelectItem key={pageSize} value={`${pageSize}`}>
-                    {pageSize}
-                  </SelectItem>
+          <div className="overflow-hidden rounded-lg border">
+            <Table className={tableClassName}>
+              <TableHeader className="sticky top-0 z-10 bg-muted">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder ? null : (
+                          <FlexRender header={header} />
+                        )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </TableHeader>
+              <TableBody>
+                {rows.length > 0 ? (
+                  rows.map((row) => {
+                    const tableRow = (
+                      <TableRow
+                        data-state={
+                          row.getIsSelected() ? "selected" : undefined
+                        }
+                        className={cn(
+                          "h-max",
+                          resolveRowClassName(row.original)
+                        )}
+                        onClick={
+                          onRowClick
+                            ? () => onRowClick(row.original)
+                            : undefined
+                        }
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            <FlexRender cell={cell} />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    )
 
-          <div className="flex w-fit items-center justify-center text-sm font-medium">
-            Página {pagination.pageIndex + 1} de {table.getPageCount()}
-          </div>
+                    if (!rowContextMenu) {
+                      return (
+                        <React.Fragment key={row.id}>{tableRow}</React.Fragment>
+                      )
+                    }
 
-          <div className="ml-auto flex items-center gap-2 sm:ml-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Siguiente
-            </Button>
+                    return (
+                      <ContextMenu key={row.id}>
+                        <ContextMenuTrigger asChild>
+                          {tableRow}
+                        </ContextMenuTrigger>
+                        {rowContextMenu(row.original)}
+                      </ContextMenu>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columnCount}
+                      className="h-32 text-center whitespace-normal"
+                    >
+                      {emptyContent}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground">{summary}</div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="hidden items-center gap-2 sm:flex">
+              <Label
+                htmlFor={`${idPrefix}-rows-per-page`}
+                className="text-sm font-medium"
+              >
+                Filas por página
+              </Label>
+              <Select
+                value={`${pagination.pageSize}`}
+                onValueChange={(value) => {
+                  if (!value) return
+                  table.setPageSize(Number(value))
+                }}
+                items={pageSizeOptions.map((pageSize) => ({
+                  label: `${pageSize}`,
+                  value: `${pageSize}`,
+                }))}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-20"
+                  id={`${idPrefix}-rows-per-page`}
+                >
+                  <SelectValue placeholder={`${pagination.pageSize}`} />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {pageSizeOptions.map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex w-fit items-center justify-center text-sm font-medium">
+              Página {pagination.pageIndex + 1} de {table.getPageCount()}
+            </div>
+
+            <div className="ml-auto flex items-center gap-2 sm:ml-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                Siguiente
+              </Button>
+            </div>
           </div>
         </div>
       </div>
