@@ -51,26 +51,28 @@ export async function setCoreCategoryGroupActive(
   )
 }
 
+export interface OrganizationNameInput {
+  name?: string
+  domain?: string
+}
+
 export async function renameOrganization(
-  formData: FormData
+  input: OrganizationNameInput
 ): Promise<ActionResult> {
-  const nameValue = formData.get("name")
-  const domainValue = formData.get("domain")
+  const name = input.name?.trim()
+  const domain = input.domain?.trim()
 
-  const name = typeof nameValue === "string" ? nameValue.trim() : ""
-  const domain =
-    typeof domainValue === "string" && domainValue.trim().length > 0
-      ? domainValue.trim()
-      : undefined
-
-  if (name.length < 2) {
+  if (name !== undefined && name.length < 2) {
     return { ok: false, message: "Escribe un nombre de al menos 2 caracteres." }
   }
 
   return mutateApi(
     "/organizations/current",
     "PATCH",
-    { name, domain },
+    {
+      ...(name !== undefined ? { name } : {}),
+      ...(domain !== undefined ? { domain } : {}),
+    },
     ["/settings", "/dashboard"]
   )
 }
@@ -78,23 +80,20 @@ export async function renameOrganization(
 /**
  * Cambia el IVA del negocio.
  *
- * El formulario trabaja en porcentaje (16) y la API guarda la fracción (0.16).
+ * Recibe la fracción (`0.16`), no el porcentaje: la conversión se hace en el
+ * formulario para poder comparar contra el valor actual.
  */
 export async function updateOrganizationTaxRate(
-  formData: FormData
+  taxRate: number
 ): Promise<ActionResult> {
-  const raw = formData.get("taxRate")
-  const percent =
-    typeof raw === "string" ? Number(raw.replace(",", ".")) : Number.NaN
-
-  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 1) {
     return { ok: false, message: "Escribe un IVA entre 0 y 100." }
   }
 
   return mutateApi(
     "/organizations/current",
     "PATCH",
-    { taxRate: percent / 100 },
+    { taxRate },
     ["/settings", "/catalog", "/dashboard"]
   )
 }
@@ -179,18 +178,25 @@ export async function createBranch(
   )
 }
 
-/** Actualiza nombre, dirección o teléfono de una sucursal. */
-export async function updateBranch(
-  formData: FormData
-): Promise<ActionResult> {
-  const id = text(formData, "id")
-  const name = text(formData, "name")
+/** Actualiza solo los campos enviados de una sucursal. */
+export interface BranchUpdateInput {
+  name?: string
+  address?: string
+  phone?: string
+  isActive?: boolean
+}
 
+export async function updateBranch(
+  id: string,
+  input: Partial<BranchUpdateInput>
+): Promise<ActionResult> {
   if (!id) {
     return { ok: false, message: "Sucursal no encontrada." }
   }
 
-  if (!name || name.length < 2) {
+  const name = input.name?.trim()
+
+  if (name !== undefined && name.length < 2) {
     return { ok: false, message: "Escribe el nombre de la sucursal." }
   }
 
@@ -198,9 +204,8 @@ export async function updateBranch(
     `/branches/${id}`,
     "PATCH",
     {
-      name,
-      address: text(formData, "address") ?? "",
-      phone: text(formData, "phone") ?? "",
+      ...input,
+      ...(name !== undefined ? { name } : {}),
     },
     BRANCH_PATHS
   )

@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation"
 import { Loader2Icon, SaveIcon } from "lucide-react"
+import { toast } from "sonner"
 
-import { updateItem } from "@/app/(app)/catalog/actions"
+import { updateItem, type ItemUpdateInput } from "@/app/(app)/catalog/actions"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -24,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Category, ItemDetail } from "@/lib/catalog"
+import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 
 export function ProductGeneralForm({
   product,
@@ -59,7 +61,38 @@ export function ProductGeneralForm({
               formData.set("categoryId", "")
             }
 
-            run(() => updateItem(product.id, formData))
+            const name = String(formData.get("name") ?? "").trim()
+            const description =
+              String(formData.get("description") ?? "").trim() || null
+            const sku = String(formData.get("sku") ?? "").trim() || null
+            const categoryId =
+              String(formData.get("categoryId") ?? "").trim() || null
+            const price = Number(
+              String(formData.get("price") ?? "").replace(",", ".")
+            )
+            const isActive = formData.get("isActive") === "on"
+            const isCombo = formData.get("isCombo") === "on"
+
+            const changes: Partial<ItemUpdateInput> = {
+              ...(sameText(product.name, name) ? {} : { name }),
+              ...(sameText(product.description, description)
+                ? {}
+                : { description }),
+              ...(sameText(product.sku, sku) ? {} : { sku }),
+              ...((product.category?.id ?? null) === categoryId
+                ? {}
+                : { categoryId }),
+              ...(sameNumber(product.price, price) ? {} : { price }),
+              ...(product.isActive === isActive ? {} : { isActive }),
+              ...(product.isCombo === isCombo ? {} : { isCombo }),
+            }
+
+            if (isEmptyPatch(changes)) {
+              toast.info("Sin cambios")
+              return
+            }
+
+            run(() => updateItem(product.id, changes))
           }}
         >
           <div className="grid gap-3 sm:grid-cols-2">

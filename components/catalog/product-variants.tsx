@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation"
 import { Loader2Icon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+import { toast } from "sonner"
 
 import {
   createVariant,
   deactivateVariant,
   updateVariant,
+  type VariantUpdateInput,
 } from "@/app/(app)/catalog/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,6 +23,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
 import { formatMoney, type ItemDetail, type Variant } from "@/lib/catalog"
+import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 
 export function ProductVariants({
   product,
@@ -80,7 +83,35 @@ function VariantRow({
         onSubmit={(event) => {
           event.preventDefault()
           const formData = new FormData(event.currentTarget)
-          saveForm.run(() => updateVariant(itemId, variant.id, formData))
+
+          const name = String(formData.get("name") ?? "").trim()
+          const rawAdjust = String(formData.get("priceAdjust") ?? "").trim()
+          const rawFactor = String(formData.get("recipeFactor") ?? "").trim()
+          const priceAdjust = rawAdjust
+            ? Number(rawAdjust.replace(",", "."))
+            : 0
+          const recipeFactor = rawFactor
+            ? Number(rawFactor.replace(",", "."))
+            : 1
+          const isActive = formData.get("isActive") === "on"
+
+          const changes: VariantUpdateInput = {
+            ...(sameText(variant.name, name) ? {} : { name }),
+            ...(sameNumber(variant.priceAdjust, priceAdjust)
+              ? {}
+              : { priceAdjust }),
+            ...(sameNumber(variant.recipeFactor, recipeFactor)
+              ? {}
+              : { recipeFactor }),
+            ...(variant.isActive === isActive ? {} : { isActive }),
+          }
+
+          if (isEmptyPatch(changes)) {
+            toast.info("Sin cambios")
+            return
+          }
+
+          saveForm.run(() => updateVariant(itemId, variant.id, changes))
         }}
       >
         <Field className="min-w-32 flex-1">

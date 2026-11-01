@@ -17,6 +17,7 @@ import {
   createBranch,
   setBranchActive,
   updateBranch,
+  type BranchUpdateInput,
 } from "@/app/(app)/settings/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,7 @@ import {
   RECOMMENDED_USERS_PER_BRANCH,
   type Branch,
 } from "@/lib/branches"
+import { isEmptyPatch, sameText } from "@/lib/diff"
 
 /**
  * Sucursales del negocio.
@@ -87,18 +89,32 @@ export function BranchesCard({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (editing) {
+      const changes: Partial<BranchUpdateInput> = {
+        ...(sameText(editing.name, name) ? {} : { name: name.trim() }),
+        ...(sameText(editing.address, address)
+          ? {}
+          : { address: address.trim() }),
+        ...(sameText(editing.phone, phone) ? {} : { phone: phone.trim() }),
+      }
+
+      if (isEmptyPatch(changes)) {
+        toast.info("Sin cambios")
+        resetForm()
+        return
+      }
+
+      form.run(() => updateBranch(editing.id, changes))
+      return
+    }
+
     const formData = new FormData()
     formData.append("name", name)
     formData.append("address", address)
     formData.append("phone", phone)
 
-    if (editingId) {
-      formData.append("id", editingId)
-    }
-
-    form.run(() =>
-      editingId ? updateBranch(formData) : createBranch(formData)
-    )
+    form.run(() => createBranch(formData))
   }
 
   async function toggleActive(branch: Branch) {

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Loader2Icon, SaveIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { replaceExclusions } from "@/app/(app)/catalog/actions"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ import {
 import { FieldError } from "@/components/ui/field"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Ingredient, ItemDetail } from "@/lib/catalog"
+import { sameStringSet } from "@/lib/diff"
 
 export function ProductExclusions({
   product,
@@ -81,7 +83,18 @@ export function ProductExclusions({
             <Button
               type="button"
               disabled={pending}
-              onClick={() => run(() => replaceExclusions(product.id, selected))}
+              onClick={() => {
+                const initial = product.ingredientExclusions.map(
+                  (item) => item.ingredient.id
+                )
+
+                if (sameStringSet(initial, selected)) {
+                  toast.info("Sin cambios")
+                  return
+                }
+
+                run(() => replaceExclusions(product.id, selected))
+              }}
             >
               {pending ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
               Guardar exclusiones

@@ -70,30 +70,25 @@ export async function createIngredientsBulk(
   )
 }
 
+export interface IngredientUpdateInput {
+  name?: string
+  displayUnit?: UnitCode
+  categoryId?: string
+  locationId?: string
+  unitCost?: number
+  maxStock?: number
+  minStock?: number
+  isActive?: boolean
+}
+
 export async function updateIngredient(
   id: string,
-  formData: FormData
+  input: Partial<IngredientUpdateInput>
 ): Promise<ActionResult> {
-  const payload: Record<string, unknown> = {
-    name: text(formData, "name"),
-    displayUnit: text(formData, "displayUnit") as UnitCode,
-    categoryId: text(formData, "categoryId"),
-    locationId: text(formData, "locationId"),
-    unitCost: numeric(formData, "unitCost"),
-    maxStock: numeric(formData, "maxStock"),
-    minStock: numeric(formData, "minStock"),
-  }
-
-  // El estado del insumo no se edita desde el diálogo: se activa o desactiva
-  // desde las acciones de la fila. Solo se envía si el formulario lo incluye.
-  if (formData.has("isActive")) {
-    payload.isActive = formData.get("isActive") === "on"
-  }
-
   return mutateApi(
     `/inventory/ingredients/${id}`,
     "PATCH",
-    payload,
+    input,
     INVENTORY_PATHS
   )
 }

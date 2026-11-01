@@ -3,20 +3,16 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Building2Icon } from "lucide-react"
+import { toast } from "sonner"
 
 import { renameOrganization } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
 import { AvailabilityLabel } from "@/components/availability-field"
-import type { AvailabilityStatus } from "@/components/availability-field"
-import {
-  FieldDescription,
-  FieldLabel,
-} from "@/components/ui/field"
+import { FieldDescription } from "@/components/ui/field"
 import { useDomainStatus } from "@/components/onboarding/domain-field"
-
-const IDLE: AvailabilityStatus = { state: "idle", message: null }
+import { isEmptyPatch, sameText } from "@/lib/diff"
 
 export function OrganizationCard({
   name,
@@ -67,8 +63,20 @@ export function OrganizationCard({
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
-        const formData = new FormData(event.currentTarget)
-        form.run(() => renameOrganization(formData))
+
+        const changes = {
+          ...(sameText(name, value) ? {} : { name: value.trim() }),
+          ...(sameText(domain, domainValue)
+            ? {}
+            : { domain: domainValue.trim() }),
+        }
+
+        if (isEmptyPatch(changes)) {
+          toast.info("Sin cambios")
+          return
+        }
+
+        form.run(() => renameOrganization(changes))
       }}
     >
       <div className="flex flex-col gap-2">

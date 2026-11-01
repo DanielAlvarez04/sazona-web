@@ -20,10 +20,6 @@ function numeric(formData: FormData, key: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
-function checkbox(formData: FormData, key: string): boolean {
-  return formData.get(key) === "on"
-}
-
 // ---------------------------------------------------------------------------
 // Categorías
 // ---------------------------------------------------------------------------
@@ -73,24 +69,27 @@ export async function createItem(
   )
 }
 
+export interface ItemUpdateInput {
+  name?: string
+  description?: string | null
+  sku?: string | null
+  categoryId?: string | null
+  price?: number
+  isCombo?: boolean
+  isActive?: boolean
+}
+
+/**
+ * Actualiza solo los campos recibidos.
+ *
+ * El formulario calcula el diff antes de llamar: si no hay cambios no se hace
+ * la petición y la API tampoco escribe columnas idénticas.
+ */
 export async function updateItem(
   itemId: string,
-  formData: FormData
+  input: Partial<ItemUpdateInput>
 ): Promise<ActionResult> {
-  return mutateApi(
-    `/catalog/items/${itemId}`,
-    "PATCH",
-    {
-      name: text(formData, "name"),
-      description: text(formData, "description") ?? null,
-      sku: text(formData, "sku") ?? null,
-      categoryId: text(formData, "categoryId") ?? null,
-      price: numeric(formData, "price"),
-      isCombo: checkbox(formData, "isCombo"),
-      isActive: checkbox(formData, "isActive"),
-    },
-    productPaths(itemId)
-  )
+  return mutateApi(`/catalog/items/${itemId}`, "PATCH", input, productPaths(itemId))
 }
 
 export async function deactivateItem(id: string): Promise<ActionResult> {
@@ -137,20 +136,22 @@ export async function createVariant(
   )
 }
 
+export interface VariantUpdateInput {
+  name?: string
+  priceAdjust?: number
+  recipeFactor?: number
+  isActive?: boolean
+}
+
 export async function updateVariant(
   itemId: string,
   variantId: string,
-  formData: FormData
+  input: VariantUpdateInput
 ): Promise<ActionResult> {
   return mutateApi(
     `/catalog/items/${itemId}/variants/${variantId}`,
     "PATCH",
-    {
-      name: text(formData, "name"),
-      priceAdjust: numeric(formData, "priceAdjust"),
-      recipeFactor: numeric(formData, "recipeFactor"),
-      isActive: checkbox(formData, "isActive"),
-    },
+    input,
     productPaths(itemId)
   )
 }
@@ -388,7 +389,7 @@ export async function createArticle(
 
 export async function updateArticle(
   articleId: string,
-  input: ArticleInput
+  input: Partial<ArticleInput>
 ): Promise<ActionResult> {
   return mutateApi(`/catalog/items/${articleId}`, "PATCH", input, [
     "/catalog",

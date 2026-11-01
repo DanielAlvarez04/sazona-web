@@ -128,36 +128,24 @@ export async function createInternalUser(
   )
 }
 
+export interface UserUpdateInput {
+  name?: string
+  surname?: string
+  password?: string
+  roles?: RoleCode[]
+  branchId?: string
+  isActive?: boolean
+}
+
+/**
+ * Actualiza solo los campos enviados. El diálogo calcula el diff antes de
+ * llamar; si no hay cambios no se hace la petición.
+ */
 export async function updateInternalUser(
   userId: string,
-  formData: FormData
+  input: UserUpdateInput
 ): Promise<ActionResult> {
-  const payload: Record<string, unknown> = {
-    roles: roles(formData),
-  }
-
-  const name = text(formData, "name")
-  if (name !== undefined) payload.name = name
-
-  const surname = text(formData, "surname")
-  if (surname !== undefined) payload.surname = surname
-
-  const password = text(formData, "password")
-  if (password !== undefined) payload.password = password
-
-  // Cadena vacía = acceso a todas las sucursales. Solo se envía si el
-  // formulario tiene el selector (organizaciones con sucursales activas).
-  if (formData.has("branchId")) {
-    payload.branchId = text(formData, "branchId") ?? ""
-  }
-
-  // El estado de la cuenta no se edita desde el diálogo: se activa o desactiva
-  // desde las acciones de la fila. Solo se envía si el formulario lo incluye.
-  if (formData.has("isActive")) {
-    payload.isActive = formData.get("isActive") === "on"
-  }
-
-  return mutateApi(`/users/${userId}`, "PATCH", payload, USER_PATHS)
+  return mutateApi(`/users/${userId}`, "PATCH", input, USER_PATHS)
 }
 
 export async function setInternalUserActive(

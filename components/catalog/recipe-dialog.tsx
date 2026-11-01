@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import {
   createRecipe,
   updateRecipe,
+  type RecipeIngredientInput,
   type RecipeInput,
 } from "@/app/(app)/catalog/actions"
 import {
@@ -52,8 +53,40 @@ import {
   type Recipe,
   type UnitCode,
 } from "@/lib/catalog"
+import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 
 const PRODUCTION_UNITS: UnitCode[] = ["KG", "G", "L", "ML", "UNIT"]
+
+/** Compara las líneas guardadas (en unidad visible) con las del formulario. */
+function sameIngredients(
+  recipe: Recipe,
+  rows: RecipeIngredientInput[]
+): boolean {
+  if (recipe.ingredients.length !== rows.length) return false
+
+  return rows.every((row, index) => {
+    const line = recipe.ingredients[index]
+
+    if (
+      line.ingredient.id !== row.ingredientId ||
+      !sameNumber(line.quantity, row.quantity) ||
+      (line.label ?? null) !== (row.label?.trim() || null) ||
+      line.isOptional !== Boolean(row.isOptional) ||
+      line.options.length !== (row.alternatives?.length ?? 0)
+    ) {
+      return false
+    }
+
+    return (row.alternatives ?? []).every((alternative, optionIndex) => {
+      const option = line.options[optionIndex]
+
+      return (
+        option.ingredient.id === alternative.ingredientId &&
+        sameNumber(option.quantity, alternative.quantity)
+      )
+    })
+  })
+}
 
 function rowsFrom(recipe: Recipe): IngredientRowState[] {
   return recipe.ingredients.map((line) => ({
@@ -200,9 +233,38 @@ export function RecipeDialog({
       }
     }
 
-    form.run(() =>
-      recipe ? updateRecipe(recipe.id, payload) : createRecipe(payload)
-    )
+    if (!recipe) {
+      form.run(() => createRecipe(payload))
+      return
+    }
+
+    // Solo se envían los campos que cambiaron; publicar/producir son acciones
+    // explícitas y siempre viajan si el usuario las pidió.
+    const changes: Partial<RecipeInput> = {
+      ...(sameText(recipe.name, payload.name) ? {} : { name: payload.name }),
+      ...(sameText(recipe.description, payload.description)
+        ? {}
+        : { description: payload.description }),
+      ...((recipe.categoryId ?? null) === payload.categoryId
+        ? {}
+        : { categoryId: payload.categoryId }),
+      ...(recipe.isActive === payload.isActive
+        ? {}
+        : { isActive: payload.isActive }),
+      ...(sameIngredients(recipe, parsedRows)
+        ? {}
+        : { ingredients: parsedRows }),
+      ...(payload.publish ? { publish: payload.publish } : {}),
+      ...(payload.produce ? { produce: payload.produce } : {}),
+    }
+
+    if (isEmptyPatch(changes)) {
+      toast.info("Sin cambios")
+      onOpenChange(false)
+      return
+    }
+
+    form.run(() => updateRecipe(recipe.id, changes))
   }
 
   return (

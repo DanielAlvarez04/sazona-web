@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { cn } from "cn"
 import { Loader2Icon, SaveIcon, UserPlusIcon, EyeIcon, EyeOffIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import {
   createInternalUser,
   updateInternalUser,
+  type UserUpdateInput,
 } from "@/app/(app)/users/actions"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
@@ -32,6 +34,7 @@ import {
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts"
+import { isEmptyPatch, sameStringSet, sameText } from "@/lib/diff"
 import {
   ROLE_OPTIONS,
   type InternalUser,
@@ -536,6 +539,7 @@ export function EditUserDialog({
 }) {
   const router = useRouter()
   const initialName = splitDisplayName(user.name ?? "")
+  const hasActiveBranches = branches.some((branch) => branch.isActive)
 
   // Borrador: lo editado se guarda al cerrar y se recupera al reabrir. Se
   // descarta solo cuando el formulario se guarda con éxito.
@@ -593,15 +597,31 @@ export function EditUserDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            const form = event.currentTarget
-            const formData = new FormData(form)
-            formData.delete("roles")
 
-            for (const role of roles) {
-              formData.append("roles", role)
+            // Solo se envían los campos que cambiaron. La contraseña vacía
+            // significa "conservar la actual".
+            const changes: UserUpdateInput = {
+              ...(sameText(initialName.first, name)
+                ? {}
+                : { name: name.trim() }),
+              ...(sameText(initialName.surname, surname)
+                ? {}
+                : { surname: surname.trim() }),
+              ...(password.trim() ? { password: password.trim() } : {}),
+              ...(sameStringSet(user.roles, roles) ? {} : { roles }),
+              ...(hasActiveBranches && (user.branchId ?? "") !== branchId
+                ? { branchId }
+                : {}),
             }
 
-            run(() => updateInternalUser(user.id, formData))
+            if (isEmptyPatch(changes)) {
+              toast.info("Sin cambios")
+              clearDraft(draftKey)
+              onClose()
+              return
+            }
+
+            run(() => updateInternalUser(user.id, changes))
           }}
         >
           <div className="flex flex-col gap-4">

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Loader2Icon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+import { toast } from "sonner"
 
 import { replaceComboComponents } from "@/app/(app)/catalog/actions"
 import { Button } from "@/components/ui/button"
@@ -110,6 +111,27 @@ export function ProductCombo({
     if (unique.size !== components.length) {
       // Duplicados: el formulario local lo señala sin llamar a la API.
       window.alert("Cada artículo/variante solo puede aparecer una vez.")
+      return
+    }
+
+    const key = (row: { itemId: string; variantId?: string }) =>
+      `${row.itemId}:${row.variantId ?? ""}`
+
+    const current = product.comboComponents.map((component) => ({
+      itemId: component.componentItem.id,
+      variantId: component.variant?.id ?? "",
+      quantity: component.quantity,
+    }))
+
+    const unchanged =
+      current.length === components.length &&
+      current.every((row) => {
+        const next = components.find((candidate) => key(candidate) === key(row))
+        return next?.quantity === row.quantity
+      })
+
+    if (unchanged) {
+      toast.info("Sin cambios")
       return
     }
 

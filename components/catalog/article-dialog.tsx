@@ -50,6 +50,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { ArticleListItem, Category } from "@/lib/catalog"
+import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 import { uploadItemImage } from "@/lib/uploads"
 
 /** Imagen del diálogo: la guardada en R2 o un archivo local sin subir. */
@@ -63,6 +64,26 @@ function round2(value: number): number {
 
 function toNumber(value: string): number {
   return Number(value.replace(",", "."))
+}
+
+/** Compara las presentaciones del formulario con las activas del artículo. */
+function variantsChanged(
+  article: ArticleListItem,
+  variants: NonNullable<ArticleInput["variants"]>
+): boolean {
+  const current = article.variants.filter((variant) => variant.isActive)
+
+  if (current.length !== variants.length) return true
+
+  return variants.some((variant, index) => {
+    const existing = current[index]
+
+    return (
+      !sameText(existing.name, variant.name) ||
+      !sameNumber(existing.priceAdjust, variant.priceAdjust ?? 0) ||
+      existing.isPrimary !== Boolean(variant.isPrimary)
+    )
+  })
 }
 
 /** Presentaciones activas del artículo, con el precio ya en valor absoluto. */
@@ -248,17 +269,40 @@ export function ArticleDialog({
       variants,
     }
 
+    const imagePending = image?.kind === "pending"
     // Si se quitó la imagen guardada, se borra también del bucket.
-    if (!image && article?.imageKey) {
-      payload.imageKey = null
+    const imageRemoved = !image && Boolean(article?.imageKey)
+
+    // En edición solo se envían los campos que realmente cambiaron.
+    const changes: Partial<ArticleInput> = article
+      ? {
+          ...(sameText(article.name, trimmedName) ? {} : { name: trimmedName }),
+          ...(sameText(article.description, payload.description)
+            ? {}
+            : { description: payload.description }),
+          ...((article.category?.id ?? null) === categoryId
+            ? {}
+            : { categoryId }),
+          ...(sameNumber(article.price, basePrice) ? {} : { price: basePrice }),
+          ...(variantsChanged(article, variants) ? { variants } : {}),
+          ...(imageRemoved ? { imageKey: null } : {}),
+        }
+      : payload
+
+    if (article && isEmptyPatch(changes) && !imagePending) {
+      toast.info("Sin cambios")
+      onOpenChange(false)
+      return
     }
 
     form.run(async () => {
       let itemId = article?.id
 
       if (article) {
-        const updated = await updateArticle(article.id, payload)
-        if (!updated.ok) return updated
+        if (!isEmptyPatch(changes)) {
+          const updated = await updateArticle(article.id, changes)
+          if (!updated.ok) return updated
+        }
       } else {
         const created = await createArticle(payload)
         if (!created.ok) return created

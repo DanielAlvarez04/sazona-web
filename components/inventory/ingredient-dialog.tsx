@@ -3,10 +3,12 @@
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { Loader2Icon, SaveIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import {
   createIngredient,
   updateIngredient,
+  type IngredientUpdateInput,
 } from "@/app/(app)/inventory/actions"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
@@ -47,6 +49,7 @@ import {
 } from "@/lib/catalog"
 import { clearDraft, formValues, readDraft, writeDraft } from "@/lib/drafts"
 import { isCoreProductName } from "@/lib/core-products"
+import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 
 export function IngredientDialog({
   open,
@@ -209,11 +212,65 @@ export function IngredientDialog({
             }
 
             setFormError(null)
-            run(() =>
-              ingredient
-                ? updateIngredient(ingredient.id, formData)
-                : createIngredient(formData)
-            )
+
+            if (!ingredient) {
+              run(() => createIngredient(formData))
+              return
+            }
+
+            const readNumber = (key: string) => {
+              const raw = String(formData.get(key) ?? "").trim()
+              if (!raw) return undefined
+              const parsed = Number(raw.replace(",", "."))
+              return Number.isFinite(parsed) ? parsed : undefined
+            }
+
+            const nextDisplayUnit = String(
+              formData.get("displayUnit") ?? ""
+            ) as UnitCode
+            const nextCategoryId = String(
+              formData.get("categoryId") ?? ""
+            ).trim()
+            const nextLocationId = String(
+              formData.get("locationId") ?? ""
+            ).trim()
+            const minStock = readNumber("minStock")
+            const maxStock = readNumber("maxStock")
+            const unitCost = readNumber("unitCost")
+
+            // Solo se envían los campos que cambiaron respecto al insumo.
+            const changes: Partial<IngredientUpdateInput> = {
+              ...(sameText(ingredient.name, name) ? {} : { name }),
+              ...(ingredient.displayUnit === nextDisplayUnit
+                ? {}
+                : { displayUnit: nextDisplayUnit }),
+              ...((ingredient.category?.id ?? "") === nextCategoryId
+                ? {}
+                : { categoryId: nextCategoryId }),
+              ...((ingredient.location?.id ?? "") === nextLocationId
+                ? {}
+                : { locationId: nextLocationId }),
+              ...(minStock === undefined ||
+              sameNumber(ingredient.minStock, minStock)
+                ? {}
+                : { minStock }),
+              ...(maxStock === undefined ||
+              sameNumber(ingredient.maxStock, maxStock)
+                ? {}
+                : { maxStock }),
+              ...(unitCost === undefined ||
+              sameNumber(ingredient.unitCost, unitCost)
+                ? {}
+                : { unitCost }),
+            }
+
+            if (isEmptyPatch(changes)) {
+              toast.info("Sin cambios")
+              onOpenChange(false)
+              return
+            }
+
+            run(() => updateIngredient(ingredient.id, changes))
           }}
         >
           <div className="flex flex-col gap-4">

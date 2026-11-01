@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Loader2Icon, SaveIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { updateOrganizationTaxRate } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
+import { sameNumber } from "@/lib/diff"
 
 /** Convierte `0.16` en `16` sin arrastrar decimales binarios. */
 function toPercent(taxRate: string): string {
@@ -63,8 +65,13 @@ export function TaxSettingsCard({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
-            const formData = new FormData(event.currentTarget)
-            run(() => updateOrganizationTaxRate(formData))
+
+            if (sameNumber(toPercent(taxRate), percent)) {
+              toast.info("Sin cambios")
+              return
+            }
+
+            run(() => updateOrganizationTaxRate(percent / 100))
           }}
         >
           <div className="flex flex-wrap items-end gap-3">
