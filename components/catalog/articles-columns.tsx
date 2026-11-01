@@ -114,11 +114,14 @@ export function ArticleActionsMenu({
   article,
   actions,
   triggerSize = "icon-xs",
+  triggerClassName,
 }: {
   article: ArticleListItem
   actions: ArticleRowActions
   /** Tamaño del botón de tres puntos (más grande en las tarjetas). */
   triggerSize?: ComponentProps<typeof Button>["size"]
+  /** Estilos extra del disparador (p. ej. sobre una imagen oscura). */
+  triggerClassName?: string
 }) {
   return (
     <DropdownMenu>
@@ -127,7 +130,10 @@ export function ArticleActionsMenu({
           <Button
             variant="ghost"
             size={triggerSize}
-            className="text-muted-foreground aria-expanded:bg-muted"
+            className={cn(
+              "text-muted-foreground aria-expanded:bg-muted",
+              triggerClassName
+            )}
             disabled={actions.isPending(article)}
             aria-label={`Acciones de ${article.name}`}
           />
@@ -186,10 +192,13 @@ export function ArticleActionsMenu({
 export function PresentationPreview({
   article,
   compact = false,
+  className,
 }: {
   article: ArticleListItem
   /** En tarjetas: solo icono y número, sin la etiqueta de texto. */
   compact?: boolean
+  /** Estilos extra del badge (p. ej. sobre una imagen oscura). */
+  className?: string
 }) {
   const variants = article.variants.filter((variant) => variant.isActive)
 
@@ -200,7 +209,8 @@ export function PresentationPreview({
         variant="outline"
         className={cn(
           "text-muted-foreground",
-          compact && "gap-0.5 px-1.5"
+          compact && "gap-0.5 px-1.5",
+          className
         )}
         title={compact ? "Única presentación" : undefined}
         aria-label="Única presentación"
@@ -221,7 +231,8 @@ export function PresentationPreview({
         className={cn(
           badgeVariants({ variant: "outline" }),
           "cursor-default tabular-nums",
-          compact && "gap-0.5 px-1.5"
+          compact && "gap-0.5 px-1.5",
+          className
         )}
         aria-label={`${variants.length} ${variants.length === 1 ? "presentación" : "presentaciones"}. Ver precios`}
       >

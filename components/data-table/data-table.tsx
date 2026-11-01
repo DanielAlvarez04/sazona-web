@@ -12,7 +12,7 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table"
-import { Columns3Icon, LayoutGridIcon, SearchIcon, TableIcon, XIcon } from "lucide-react"
+import { Columns3Icon, LayoutGridIcon, SearchIcon, SquareIcon, TableIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +54,7 @@ import {
 export const DATA_TABLE_ALL = "__all__"
 
 /** Vistas disponibles cuando el consumidor ofrece tarjetas. */
-export type DataTableViewMode = "table" | "cards"
+export type DataTableViewMode = "table" | "cards" | "cards-full"
 
 /** Todas las tablas comparten 12 filas por página salvo que se indique otra. */
 const DEFAULT_PAGE_SIZES = [12, 24, 48, 96]
@@ -120,6 +120,11 @@ export interface DataTableProps<TData extends RowData> {
    * (ya filtradas, ordenadas y paginadas) para reutilizar la misma paginación.
    */
   cardsView?: (rows: TData[]) => React.ReactNode
+  /**
+   * Contenido de la vista «cards full»: mismas filas que `cardsView`, pero con
+   * tarjetas cuadradas a sangre (imagen de fondo e información en overlay).
+   */
+  cardsFullView?: (rows: TData[]) => React.ReactNode
 
   // Filas
   onRowClick?: (row: TData) => void
@@ -172,6 +177,7 @@ export function DataTable<TData extends RowData>({
   viewMode = "table",
   onViewModeChange,
   cardsView,
+  cardsFullView,
   onRowClick,
   rowClassName,
   rowContextMenu,
@@ -350,6 +356,18 @@ export function DataTable<TData extends RowData>({
                   >
                     <LayoutGridIcon className="size-4" />
                   </Button>
+                  {cardsFullView ? (
+                    <Button
+                      variant={viewMode === "cards-full" ? "secondary" : "ghost"}
+                      size="icon-sm"
+                      aria-pressed={viewMode === "cards-full"}
+                      aria-label="Vista de tarjetas grandes"
+                      title="Vista de tarjetas grandes"
+                      onClick={() => onViewModeChange("cards-full")}
+                    >
+                      <SquareIcon className="size-4" />
+                    </Button>
+                  ) : null}
                   <Button
                     variant={viewMode === "table" ? "secondary" : "ghost"}
                     size="icon-sm"
@@ -408,6 +426,14 @@ export function DataTable<TData extends RowData>({
       {viewMode === "cards" && cardsView ? (
         rows.length > 0 ? (
           cardsView(rows.map((row) => row.original))
+        ) : (
+          <div className="rounded-lg border p-8 text-center whitespace-normal">
+            {emptyContent}
+          </div>
+        )
+      ) : viewMode === "cards-full" && cardsFullView ? (
+        rows.length > 0 ? (
+          cardsFullView(rows.map((row) => row.original))
         ) : (
           <div className="rounded-lg border p-8 text-center whitespace-normal">
             {emptyContent}

@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { ArticleListItem, Category } from "@/lib/catalog"
 
-import { ArticleCards } from "./article-cards"
+import { ArticleCards, ArticleCardsFull } from "./article-cards"
 import {
   ARTICLE_COLUMN_LABELS,
   createArticleColumns,
@@ -254,6 +254,15 @@ export function ArticlesTable({
         onViewModeChange={setViewMode}
         cardsView={(rows) => (
           <ArticleCards
+            articles={rows}
+            actions={actions}
+            canSelect={canManage}
+            selectedIds={rowSelection}
+            onSelectedChange={setCardSelected}
+          />
+        )}
+        cardsFullView={(rows) => (
+          <ArticleCardsFull
             articles={rows}
             actions={actions}
             canSelect={canManage}
