@@ -3,6 +3,7 @@
 import * as React from "react"
 import { PencilIcon, PowerIcon, UtensilsCrossedIcon } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -229,7 +230,7 @@ function FullArticleCard({
                 onSelectedChange(article.id, !!value)
               }
               aria-label={`Seleccionar ${article.name}`}
-              className="border-white/70 bg-black/30 data-checked:border-white data-checked:bg-white data-checked:text-black"
+              className="border-white/70 bg-black/30"
             />
           ) : (
             <span />
@@ -237,22 +238,35 @@ function FullArticleCard({
 
           <div className="flex items-center gap-1">
             {article.isActive ? null : (
-              <span className="rounded-full border border-amber-400/50 bg-black/40 px-2 py-0.5 text-[0.6875rem] font-semibold text-amber-300">
-                Inactivo
-              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="bg-black/35 text-white/90 shadow-sm ring-1 ring-white/20 backdrop-blur-sm hover:bg-black/55 hover:text-white"
+                aria-label={`Activar ${article.name}`}
+                title="Activar artículo"
+                onClick={() => actions.onActivate(article)}
+              >
+                <PowerIcon className="size-4" />
+              </Button>
             )}
             <ArticleActionsMenu
               article={article}
               actions={actions}
               triggerSize="icon-sm"
-              triggerClassName="text-white/90 hover:bg-white/15 hover:text-white"
+              triggerClassName="bg-black/35 text-white/90 shadow-sm ring-1 ring-white/20 backdrop-blur-sm hover:bg-black/55 hover:text-white aria-expanded:bg-black/60"
             />
           </div>
         </div>
 
         <div className="mt-auto flex min-w-0 flex-col gap-1">
+          {article.isActive ? null : (
+            <Badge className="self-start border-transparent bg-amber-400 text-amber-950">
+              Inactivo
+            </Badge>
+          )}
+
           <div className="flex min-w-0 items-center gap-1">
-            <span className="text-base font-bold leading-none tabular-nums drop-shadow-sm">
+            <span className="text-base font-bold leading-none tabular-nums text-white/80 drop-shadow-sm">
               {formatMoney(article.price)}
             </span>
             <PresentationPreview
@@ -269,30 +283,14 @@ function FullArticleCard({
             {article.name}
           </p>
 
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              className="bg-white/15 text-white hover:bg-white/25"
-              aria-label={`Editar ${article.name}`}
-              title="Editar artículo"
-              onClick={() => actions.onEdit(article)}
-            >
-              <PencilIcon className="size-4" />
-            </Button>
-            {article.isActive ? null : (
-              <Button
-                variant="secondary"
-                size="icon-sm"
-                className="bg-white/15 text-white hover:bg-white/25"
-                aria-label={`Activar ${article.name}`}
-                title="Activar artículo"
-                onClick={() => actions.onActivate(article)}
-              >
-                <PowerIcon className="size-4" />
-              </Button>
-            )}
-          </div>
+          <Button
+            size="sm"
+            className="mt-0.5 w-full shadow-sm"
+            onClick={() => actions.onEdit(article)}
+          >
+            <PencilIcon className="size-4" />
+            Editar
+          </Button>
         </div>
       </div>
     </Card>
