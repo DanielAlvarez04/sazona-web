@@ -97,6 +97,26 @@ export async function deactivateItem(id: string): Promise<ActionResult> {
   return mutateApi(`/catalog/items/${id}`, "DELETE", undefined, CATALOG_PATHS)
 }
 
+export async function activateItem(id: string): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/items/${id}`,
+    "PATCH",
+    { isActive: true },
+    CATALOG_PATHS
+  )
+}
+
+export async function deleteItems(
+  ids: string[]
+): Promise<ActionResult<{ deletedCount: number }>> {
+  return mutateApi<{ deletedCount: number }>(
+    "/catalog/items/bulk-delete",
+    "POST",
+    { ids },
+    CATALOG_PATHS
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Variantes
 // ---------------------------------------------------------------------------

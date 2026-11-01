@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { scrollAncestorToBottom } from "@/lib/scroll"
 import {
   InputGroup,
   InputGroupAddon,
@@ -96,6 +97,21 @@ export function PresentationRows({
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
+
+  /** Contenedor del botón de añadir; desde ahí se busca el scroll del diálogo. */
+  const addRowRef = React.useRef<HTMLDivElement>(null)
+  /** Nº de filas del render anterior, para detectar cuándo se añadió una. */
+  const previousRowCount = React.useRef(rows.length)
+
+  // El diálogo tiene scroll propio: al añadir una fila se baja hasta el final
+  // del contenedor para que la fila nueva y el footer queden siempre visibles,
+  // sin que el usuario tenga que hacer scroll a mano.
+  React.useEffect(() => {
+    const added = rows.length > previousRowCount.current
+    previousRowCount.current = rows.length
+
+    if (added) scrollAncestorToBottom(addRowRef.current)
+  }, [rows.length])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -188,7 +204,7 @@ export function PresentationRows({
         </SortableContext>
       </DndContext>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div ref={addRowRef} className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant="outline"

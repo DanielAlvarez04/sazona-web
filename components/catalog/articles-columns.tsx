@@ -1,18 +1,22 @@
 "use client"
 
-import Link from "next/link"
-import { createColumnHelper } from "@tanstack/react-table"
+import type { ComponentProps } from "react"
+import { createColumnHelper, type SortFn } from "@tanstack/react-table"
 import {
+  BookOpenIcon,
   ChevronDownIcon,
   ChevronsUpDownIcon,
   ChevronUpIcon,
   EllipsisVerticalIcon,
-  EyeIcon,
+  LayersIcon,
   PencilIcon,
   PowerIcon,
+  Trash2Icon,
+  UtensilsCrossedIcon,
 } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
+import { InfoHint } from "@/components/info-hint"
+import { Badge, badgeVariants } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -20,14 +24,17 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  formatMoney,
-  formatPercent,
-  type ArticleListItem,
-} from "@/lib/catalog"
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
+import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
 
@@ -43,23 +50,32 @@ function ArticleColumnHeader({
   title,
   column,
   align = "left",
+  hint,
 }: {
   title: string
   column: SortableColumn
   align?: "left" | "right"
+  /** Texto de ayuda que se muestra en un icono junto al título. */
+  hint?: string
 }) {
-  const sorted = column.getIsSorted()
+  const wrapper = cn(
+    "flex items-center gap-1",
+    align === "right" ? "justify-end" : undefined
+  )
 
   if (!column.getCanSort()) {
     return (
-      <span className={`font-medium ${align === "right" ? "block text-right" : ""}`}>
-        {title}
-      </span>
+      <div className={wrapper}>
+        <span className="font-medium">{title}</span>
+        {hint ? <InfoHint text={hint} /> : null}
+      </div>
     )
   }
 
+  const sorted = column.getIsSorted()
+
   return (
-    <div className={align === "right" ? "flex justify-end" : undefined}>
+    <div className={wrapper}>
       <Button
         variant="ghost"
         size="sm"
@@ -68,6 +84,8 @@ function ArticleColumnHeader({
         onClick={column.getToggleSortingHandler()}
       >
         {title}
+        {/* La ayuda va entre el título y los chevrones de ordenación. */}
+        {hint ? <InfoHint text={hint} /> : null}
         {sorted === "asc" ? (
           <ChevronUpIcon data-icon="inline-end" />
         ) : sorted === "desc" ? (
@@ -85,50 +103,78 @@ function ArticleColumnHeader({
 
 export interface ArticleRowActions {
   onEdit: (article: ArticleListItem) => void
+  onActivate: (article: ArticleListItem) => void
   onDeactivate: (article: ArticleListItem) => void
+  onDelete: (article: ArticleListItem) => void
   canManage: boolean
   isPending: (article: ArticleListItem) => boolean
 }
 
-function ArticleActionsMenu({
+export function ArticleActionsMenu({
   article,
   actions,
+  triggerSize = "icon-xs",
 }: {
   article: ArticleListItem
   actions: ArticleRowActions
+  /** Tamaño del botón de tres puntos (más grande en las tarjetas). */
+  triggerSize?: ComponentProps<typeof Button>["size"]
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" />}
-        disabled={actions.isPending(article)}
+        render={
+          <Button
+            variant="ghost"
+            size={triggerSize}
+            className="text-muted-foreground aria-expanded:bg-muted"
+            disabled={actions.isPending(article)}
+            aria-label={`Acciones de ${article.name}`}
+          />
+        }
       >
         <EllipsisVerticalIcon />
         <span className="sr-only">Acciones</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="min-w-40">
         <DropdownMenuGroup>
+          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => actions.onEdit(article)}>
             <PencilIcon />
             Editar artículo
           </DropdownMenuItem>
-          <DropdownMenuItem
-            render={<Link href={`/catalog/${article.id}`} />}
-          >
-            <EyeIcon />
-            Ver detalle
-          </DropdownMenuItem>
+          {actions.canManage ? (
+            article.isActive ? (
+              <DropdownMenuItem
+                className="text-amber-600 focus:bg-amber-500/10 focus:text-amber-600 dark:text-amber-400 dark:focus:text-amber-400"
+                onClick={() => actions.onDeactivate(article)}
+              >
+                <PowerIcon />
+                Desactivar
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                className="text-emerald-600 focus:bg-emerald-500/10 focus:text-emerald-600 dark:text-emerald-400 dark:focus:text-emerald-400"
+                onClick={() => actions.onActivate(article)}
+              >
+                <PowerIcon />
+                Activar
+              </DropdownMenuItem>
+            )
+          ) : null}
         </DropdownMenuGroup>
-        {actions.canManage && article.isActive ? (
+        {actions.canManage ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => actions.onDeactivate(article)}
-            >
-              <PowerIcon />
-              Desactivar
-            </DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => actions.onDelete(article)}
+              >
+                <Trash2Icon />
+                Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </>
         ) : null}
       </DropdownMenuContent>
@@ -136,6 +182,165 @@ function ArticleActionsMenu({
   )
 }
 
+/** Vista previa de las presentaciones con su precio absoluto. */
+export function PresentationPreview({
+  article,
+  compact = false,
+}: {
+  article: ArticleListItem
+  /** En tarjetas: solo icono y número, sin la etiqueta de texto. */
+  compact?: boolean
+}) {
+  const variants = article.variants.filter((variant) => variant.isActive)
+
+  if (variants.length === 0) {
+    // Sin presentaciones propias, el precio del artículo es la única.
+    return (
+      <Badge
+        variant="outline"
+        className={cn(
+          "text-muted-foreground",
+          compact && "gap-0.5 px-1.5"
+        )}
+        title={compact ? "Única presentación" : undefined}
+        aria-label="Única presentación"
+      >
+        <LayersIcon />
+        {compact ? 1 : "Única presentación"}
+      </Badge>
+    )
+  }
+
+  const base = Number(article.price)
+  const primary = variants.find((variant) => variant.isPrimary) ?? variants[0]
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger
+        render={<button type="button" />}
+        className={cn(
+          badgeVariants({ variant: "outline" }),
+          "cursor-default tabular-nums",
+          compact && "gap-0.5 px-1.5"
+        )}
+        aria-label={`${variants.length} ${variants.length === 1 ? "presentación" : "presentaciones"}. Ver precios`}
+      >
+        <LayersIcon />
+        {variants.length}
+        {compact ? null : (
+          <span>
+            {variants.length === 1 ? "Presentación" : "Presentaciones"}
+          </span>
+        )}
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-60 p-2">
+        <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+          {variants.length === 1 ? "Presentación" : "Presentaciones"}
+        </p>
+        <div className="flex flex-col gap-0.5">
+          {variants.map((variant) => {
+            const isPrimary = variant.id === primary.id
+
+            return (
+              <div
+                key={variant.id}
+                data-primary={isPrimary}
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-sm data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {variant.sku ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {variant.sku}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 truncate" title={variant.name}>
+                    {variant.name}
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatMoney(base + Number(variant.priceAdjust))}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
+/**
+ * Menús donde se usa el artículo.
+ *
+ * Todavía no existe el módulo de menús: la UI queda lista para cuando la API
+ * devuelva `menus` en el artículo.
+ */
+function MenuPreview({ article }: { article: ArticleListItem }) {
+  const menus = article.menus ?? []
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger
+        render={<button type="button" />}
+        className={cn(
+          badgeVariants({ variant: "outline" }),
+          menus.length === 0 && "text-muted-foreground",
+          "cursor-default tabular-nums"
+        )}
+        aria-label={`${menus.length} ${menus.length === 1 ? "menú" : "menús"}. Ver detalle`}
+      >
+        <UtensilsCrossedIcon />
+        {menus.length}
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-60 p-2">
+        <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+          {menus.length === 1 ? "Menú" : "Menús"}
+        </p>
+        {menus.length === 0 ? (
+          <p className="px-2 py-1 text-sm text-muted-foreground">
+            Aún no se usa en ningún menú.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {menus.map((menu) => (
+              <div
+                key={menu.id}
+                className="truncate rounded-md px-2 py-1 text-sm"
+                title={menu.name}
+              >
+                {menu.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
+/**
+ * Orden del nombre: primero los artículos activos y, dentro de cada grupo,
+ * alfabético. Así, al desactivar un artículo, cae al final de la tabla.
+ */
+const sortArticlesByName: SortFn<DataTableFeatures, ArticleListItem> = (
+  rowA,
+  rowB
+) => {
+  if (rowA.original.isActive !== rowB.original.isActive) {
+    return rowA.original.isActive ? -1 : 1
+  }
+
+  return rowA.original.name.localeCompare(rowB.original.name, "es", {
+    sensitivity: "base",
+  })
+}
+
+/**
+ * Definición de columnas de la tabla de artículos.
+ *
+ * Selección · SKU · Artículo · Precio · Categoría · Presentaciones · Menú ·
+ * Acciones. Los estilos siguen la tabla de insumos de `/inventory`.
+ */
 export function createArticleColumns(
   actions: ArticleRowActions,
   options: { selectable: boolean }
@@ -146,145 +351,172 @@ export function createArticleColumns(
           columnHelper.display({
             id: "select",
             header: ({ table }) => (
-              <Checkbox
-                aria-label="Seleccionar todos los artículos"
-                checked={table.getIsAllPageRowsSelected()}
-                indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(checked) =>
-                  table.toggleAllPageRowsSelected(checked === true)
-                }
-              />
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected()}
+                  indeterminate={
+                    table.getIsSomePageRowsSelected() &&
+                    !table.getIsAllPageRowsSelected()
+                  }
+                  onCheckedChange={(value) =>
+                    table.toggleAllPageRowsSelected(!!value)
+                  }
+                  aria-label="Seleccionar todos los artículos de la página"
+                />
+              </div>
             ),
             cell: ({ row }) => (
-              <Checkbox
-                aria-label={`Seleccionar ${row.original.name}`}
-                checked={row.getIsSelected()}
-                onCheckedChange={(checked) =>
-                  row.toggleSelected(checked === true)
-                }
-              />
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  disabled={!row.getCanSelect()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label={`Seleccionar ${row.original.name}`}
+                />
+              </div>
             ),
             enableSorting: false,
+            enableHiding: false,
+            enableGlobalFilter: false,
           }),
         ]
       : []),
+
+    columnHelper.accessor((article) => article.sku ?? "", {
+      id: "sku",
+      header: ({ column }) => (
+        <ArticleColumnHeader title="SKU" column={column} />
+      ),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {row.original.sku ?? "—"}
+        </span>
+      ),
+      enableSorting: false,
+    }),
 
     columnHelper.accessor("name", {
       id: "name",
       header: ({ column }) => (
         <ArticleColumnHeader title="Artículo" column={column} />
       ),
-      cell: ({ row }) => (
-        <div className="flex flex-col gap-1">
-          <Link
-            href={`/catalog/${row.original.id}`}
-            className="font-medium hover:underline"
-          >
-            {row.original.name}
-          </Link>
-          <span className="text-xs text-muted-foreground">
-            {row.original.sku ?? "Sin SKU"}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {row.original.isCombo ? <Badge>Combo</Badge> : null}
-            {(row.original.recipes?.length ?? row.original._count.recipes) > 0 ? (
-              <Badge variant="secondary">Con receta</Badge>
-            ) : (
-              <Badge variant="outline">Sin receta</Badge>
+      cell: ({ row }) => {
+        const hasRecipe =
+          (row.original.recipes?.length ?? row.original._count.recipes) > 0
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium whitespace-nowrap">
+              {row.original.name}
+            </span>
+            {hasRecipe ? (
+              <Badge
+                title="Publicado desde una receta"
+                aria-label="Publicado desde una receta"
+              >
+                <BookOpenIcon />
+              </Badge>
+            ) : null}
+            {row.original.isCombo ? (
+              <Badge variant="secondary">Combo</Badge>
+            ) : null}
+            {row.original.isActive ? null : (
+              <Badge
+                variant="outline"
+                className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              >
+                Inactivo
+              </Badge>
             )}
           </div>
-        </div>
-      ),
+        )
+      },
+      sortFn: sortArticlesByName,
     }),
-
-    columnHelper.accessor(
-      (article) => article.category?.name ?? "Sin categoría",
-      {
-        id: "category",
-        header: ({ column }) => (
-          <ArticleColumnHeader title="Categoría" column={column} />
-        ),
-        cell: ({ getValue }) => (
-          <span className="text-muted-foreground">{getValue()}</span>
-        ),
-      }
-    ),
 
     columnHelper.accessor((article) => Number(article.price), {
       id: "price",
       header: ({ column }) => (
-        <ArticleColumnHeader title="Precio" column={column} align="right" />
-      ),
-      cell: ({ getValue }) => (
-        <span className="block text-right tabular-nums">
-          {formatMoney(getValue())}
-        </span>
-      ),
-    }),
-
-    columnHelper.accessor(
-      (article) => (article.taxRate === null ? null : Number(article.taxRate)),
-      {
-        id: "taxRate",
-        header: ({ column }) => (
-          <ArticleColumnHeader title="IVA" column={column} align="right" />
-        ),
-        cell: ({ getValue }) => {
-          const value = getValue()
-          return (
-            <span className="block text-right text-muted-foreground">
-              {value === null ? "Sin IVA" : formatPercent(String(value))}
-            </span>
-          )
-        },
-      }
-    ),
-
-    columnHelper.accessor((article) => article.variants.length, {
-      id: "variants",
-      header: ({ column }) => (
         <ArticleColumnHeader
-          title="Presentaciones"
+          title="Precio"
           column={column}
           align="right"
+          hint="Precio del artículo y/o de la presentación principal"
         />
       ),
       cell: ({ getValue }) => (
-        <span className="block text-right tabular-nums">{getValue()}</span>
+        <div className="text-right whitespace-nowrap font-medium tabular-nums">
+          {formatMoney(getValue())}
+        </div>
       ),
+      sortFn: "basic",
     }),
 
-    columnHelper.accessor((article) => article.isActive, {
-      id: "status",
+    columnHelper.accessor((article) => article.category?.name ?? "", {
+      id: "category",
       header: ({ column }) => (
-        <ArticleColumnHeader title="Estado" column={column} />
+        <ArticleColumnHeader title="Categoría" column={column} />
       ),
-      cell: ({ getValue }) =>
-        getValue() ? (
-          <Badge variant="secondary">Activo</Badge>
-        ) : (
-          <Badge variant="outline">Inactivo</Badge>
-        ),
+      cell: ({ row }) => {
+        const category = row.original.category?.name
+
+        return (
+          <Badge variant="secondary" title={category ?? "Sin categoría"}>
+            {category ?? "Sin categoría"}
+          </Badge>
+        )
+      },
+      enableSorting: false,
+    }),
+
+    columnHelper.display({
+      id: "variants",
+      header: () => <span className="font-medium">Presentaciones</span>,
+      cell: ({ row }) => (
+        <div className="flex items-center">
+          <PresentationPreview article={row.original} />
+        </div>
+      ),
+      enableSorting: false,
+      enableGlobalFilter: false,
+    }),
+
+    columnHelper.display({
+      id: "menus",
+      header: () => <span className="font-medium">Menú</span>,
+      cell: ({ row }) => (
+        <div className="flex items-center">
+          <MenuPreview article={row.original} />
+        </div>
+      ),
+      enableSorting: false,
+      enableGlobalFilter: false,
     }),
 
     columnHelper.display({
       id: "actions",
       header: () => <span className="sr-only">Acciones</span>,
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div
+          className="flex items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
           <ArticleActionsMenu article={row.original} actions={actions} />
         </div>
       ),
       enableSorting: false,
+      enableHiding: false,
+      enableGlobalFilter: false,
     }),
   ])
 }
 
 export const ARTICLE_COLUMN_LABELS: Record<string, string> = {
+  select: "Selección",
+  sku: "SKU",
   name: "Artículo",
-  category: "Categoría",
   price: "Precio",
-  taxRate: "IVA",
+  category: "Categoría",
   variants: "Presentaciones",
-  status: "Estado",
+  menus: "Menú",
 }

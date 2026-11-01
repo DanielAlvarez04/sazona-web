@@ -203,10 +203,10 @@ export function ReportsView({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sales.topProducts.length === 0 ? (
+                      {sales.topItems.length === 0 ? (
                         <EmptyRow colSpan={3} text="Sin artículos vendidos." />
                       ) : (
-                        sales.topProducts.map((row) => (
+                        sales.topItems.map((row) => (
                           <TableRow key={row.name}>
                             <TableCell className="max-w-[220px] truncate">
                               {row.name}

@@ -229,13 +229,13 @@ export function DashboardView({
             <CardDescription>Por unidades, últimos {data.days} días.</CardDescription>
           </CardHeader>
           <CardContent>
-            {data.topProducts.length === 0 ? (
+            {data.topItems.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Aún no hay ventas registradas.
               </p>
             ) : (
               <ol className="flex flex-col gap-2">
-                {data.topProducts.map((product, index) => (
+                {data.topItems.map((product, index) => (
                   <li
                     key={product.name}
                     className="flex items-center justify-between gap-2 text-sm"

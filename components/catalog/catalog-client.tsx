@@ -9,7 +9,9 @@ import {
 import { toast } from "sonner"
 
 import {
+  activateItem,
   deactivateItem,
+  deleteItems,
   deleteRecipe,
   unpublishRecipe,
   updateRecipe,
@@ -133,18 +135,48 @@ export function CatalogClient({
     )
   }
 
-  function handleDeactivateArticle(article: ArticleListItem) {
-    if (
-      !window.confirm(
-        `¿Desactivar "${article.name}"? Dejará de aparecer en el punto de venta.`
-      )
-    ) {
-      return
-    }
-
-    rowForm.run(() =>
+  function handleDeactivateArticle(article: ArticleListItem): Promise<boolean> {
+    return rowForm.run(() =>
       deactivateItem(article.id).then((result) => {
-        if (result.ok) toast.success("Artículo desactivado")
+        if (result.ok) {
+          toast.success("Artículo desactivado")
+        } else {
+          toast.error(result.message ?? "No se pudo desactivar el artículo")
+        }
+        return result
+      })
+    )
+  }
+
+  function handleActivateArticle(article: ArticleListItem): Promise<boolean> {
+    return rowForm.run(() =>
+      activateItem(article.id).then((result) => {
+        if (result.ok) {
+          toast.success("Artículo activado")
+        } else {
+          toast.error(result.message ?? "No se pudo activar el artículo")
+        }
+        return result
+      })
+    )
+  }
+
+  function handleDeleteArticles(
+    targets: ArticleListItem[]
+  ): Promise<boolean> {
+    const ids = targets.map((article) => article.id)
+
+    return rowForm.run(() =>
+      deleteItems(ids).then((result) => {
+        if (result.ok) {
+          toast.success(
+            ids.length === 1
+              ? "Artículo eliminado"
+              : `${result.data?.deletedCount ?? ids.length} artículos eliminados`
+          )
+        } else {
+          toast.error(result.message ?? "No se pudieron eliminar los artículos")
+        }
         return result
       })
     )
@@ -178,7 +210,9 @@ export function CatalogClient({
               canManage={canManage}
               onCreate={openNewArticle}
               onEdit={openArticle}
+              onActivate={handleActivateArticle}
               onDeactivate={handleDeactivateArticle}
+              onDelete={handleDeleteArticles}
               onManageCategories={() => setCategoriesOpen(true)}
               onImportCsv={() => setImportOpen(true)}
             />

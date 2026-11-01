@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { KeyboardShortcutsProvider } from "@/components/keyboard/keyboard-shortcuts-provider";
 import { ThemeShortcut } from "@/components/keyboard/theme-shortcut";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeScript } from "@/components/theme-script";
 
 import type { Metadata, Viewport } from "next";
 
@@ -51,14 +52,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         inter.variable
       )}
     >
-      <head />
+      <head>
+        <ThemeScript defaultTheme="system" />
+      </head>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <ThemeProvider defaultTheme="system" disableTransitionOnChange>
           <KeyboardShortcutsProvider>
             <ThemeShortcut />
             <TooltipProvider>

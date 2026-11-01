@@ -1,10 +1,12 @@
 "use client"
 
+import * as React from "react"
 import { PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PRESENTATION_PRESETS } from "@/lib/catalog"
+import { scrollAncestorToBottom } from "@/lib/scroll"
 
 export interface PresentationRow {
   key: string
@@ -39,6 +41,21 @@ export function PresentationEditor({
   onChange: (rows: PresentationRow[]) => void
   disabled?: boolean
 }) {
+  /** Contenedor del botón de añadir; desde ahí se busca el scroll del diálogo. */
+  const addRowRef = React.useRef<HTMLDivElement>(null)
+  /** Nº de filas del render anterior, para detectar cuándo se añadió una. */
+  const previousRowCount = React.useRef(rows.length)
+
+  // El diálogo tiene scroll propio: al añadir una fila se baja hasta el final
+  // del contenedor para que la fila nueva y el footer queden siempre visibles,
+  // sin que el usuario tenga que hacer scroll a mano.
+  React.useEffect(() => {
+    const added = rows.length > previousRowCount.current
+    previousRowCount.current = rows.length
+
+    if (added) scrollAncestorToBottom(addRowRef.current)
+  }, [rows.length])
+
   function update(key: string, changes: Partial<PresentationRow>) {
     onChange(
       rows.map((row) => (row.key === key ? { ...row, ...changes } : row))
@@ -104,7 +121,7 @@ export function PresentationEditor({
       ))}
 
       {disabled ? null : (
-        <div className="flex flex-wrap items-center gap-2">
+        <div ref={addRowRef} className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"

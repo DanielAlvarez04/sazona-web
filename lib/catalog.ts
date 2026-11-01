@@ -226,6 +226,11 @@ export interface ItemListItem {
     variantId: string | null
     isActive: boolean
   }>
+  /**
+   * Menús donde se usa el artículo. Pendiente en la API: la UI del catálogo ya
+   * la consume para el hovercard de la columna "Menú".
+   */
+  menus?: Array<{ id: string; name: string }>
   _count: { recipes: number }
 }
 

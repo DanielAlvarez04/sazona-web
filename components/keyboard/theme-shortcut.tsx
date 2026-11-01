@@ -1,19 +1,17 @@
 "use client"
 
-import { useTheme } from "next-themes"
-
 import { useShortcut } from "@/components/keyboard/keyboard-shortcuts-provider"
+import { useTheme } from "@/components/theme-provider"
 
 /**
- * Conecta el comando `theme.toggle` (ver `lib/keyboard/shortcuts.ts`) con
- * `next-themes`. Se monta una sola vez en el layout raíz.
+ * Conecta el comando `theme.toggle` (ver `lib/keyboard/shortcuts.ts`) con el
+ * `ThemeProvider`. Se monta una sola vez en el layout raíz.
  */
 export function ThemeShortcut() {
   const { resolvedTheme, setTheme } = useTheme()
 
   useShortcut("theme.toggle", () => {
-    // Antes de montar `resolvedTheme` es `undefined`: en ese caso se elige el
-    // modo oscuro, que es el que el usuario no está viendo si arrancó en claro.
+    // Alterna siempre hacia el tema contrario al que se está viendo.
     setTheme(resolvedTheme === "dark" ? "light" : "dark")
   })
 

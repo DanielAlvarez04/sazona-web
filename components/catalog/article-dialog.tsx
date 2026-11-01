@@ -18,6 +18,7 @@ import {
   nextPresentationKey,
   type PresentationRow,
 } from "@/components/catalog/presentation-rows"
+import { InfoHint } from "@/components/info-hint"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import {
@@ -184,6 +185,11 @@ export function ArticleDialog({
       return
     }
 
+    if (!categoryId) {
+      form.setError("La categoría es obligatoria")
+      return
+    }
+
     const basePrice = toNumber(price)
 
     if (!Number.isFinite(basePrice) || basePrice < 0) {
@@ -237,7 +243,7 @@ export function ArticleDialog({
     const payload: ArticleInput = {
       name: trimmedName,
       description: description.trim() || null,
-      categoryId: categoryId || null,
+      categoryId,
       price: basePrice,
       variants,
     }
@@ -296,7 +302,7 @@ export function ArticleDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          {/* Grupo superior: imagen a la izquierda; nombre, categoría y precio. */}
+          {/* Grupo superior: imagen a la izquierda; nombre, precio y categoría. */}
           <div className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
             <ImageDropzone
               url={image?.url ?? null}
@@ -321,41 +327,12 @@ export function ArticleDialog({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="article-category">Categoría</FieldLabel>
-                  <Select
-                    value={categoryId || "none"}
-                    onValueChange={(value) =>
-                      setCategoryId(value === "none" ? "" : (value ?? ""))
-                    }
-                    items={[
-                      { value: "none", label: "Sin categoría" },
-                      ...categories.map((category) => ({
-                        value: category.id,
-                        label: category.name,
-                      })),
-                    ]}
-                  >
-                    <SelectTrigger id="article-category" className="w-full">
-                      <SelectValue placeholder="Sin categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin categoría</SelectItem>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    El SKU se genera solo a partir de la categoría.
-                  </p>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="article-price">
-                    Precio <span className="text-destructive">*</span>
-                  </FieldLabel>
+                  <div className="flex items-center gap-1.5">
+                    <FieldLabel htmlFor="article-price">
+                      Precio <span className="text-destructive">*</span>
+                    </FieldLabel>
+                    <InfoHint text="Precio final con IVA incluido. Con varias presentaciones, es el de la presentación principal." />
+                  </div>
                   <InputGroup>
                     <InputGroupAddon align="inline-start">
                       <InputGroupText>$</InputGroupText>
@@ -373,11 +350,31 @@ export function ArticleDialog({
                       <InputGroupText>MXN</InputGroupText>
                     </InputGroupAddon>
                   </InputGroup>
-                  <p className="text-xs text-muted-foreground">
-                    {multiple
-                      ? "Es el precio de la presentación principal."
-                      : "Precio final con IVA incluido."}
-                  </p>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="article-category">
+                    Categoría <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <Select
+                    value={categoryId}
+                    onValueChange={(value) => setCategoryId(value ?? "")}
+                    items={categories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    }))}
+                  >
+                    <SelectTrigger id="article-category" className="w-full">
+                      <SelectValue placeholder="Selecciona una categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
               </div>
             </div>
@@ -392,6 +389,9 @@ export function ArticleDialog({
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Descripción para el menú"
             />
+            <p className="text-xs text-muted-foreground">
+              El SKU se genera solo a partir de la categoría.
+            </p>
           </Field>
 
           <Separator />

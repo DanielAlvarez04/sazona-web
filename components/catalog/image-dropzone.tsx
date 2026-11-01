@@ -63,21 +63,29 @@ export function ImageDropzone({
           handleFile(event.dataTransfer.files?.[0])
         }}
         className={cn(
-          "relative flex min-h-40 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors",
+          // En móvil mantiene una altura mínima; en escritorio la altura la
+          // marca la columna de campos, para no dejar hueco bajo Nombre/Precio/
+          // Categoría ni estirar la imagen de más.
+          "relative flex min-h-40 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border border-dashed transition-colors sm:min-h-0",
           dragging && "border-primary bg-primary/5",
           disabled && "opacity-60"
         )}
       >
         {url ? (
           <>
-            {/* Vista previa: el bucket puede no estar en remotePatterns. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt="Imagen del artículo"
-              className="absolute inset-0 size-full object-cover"
-            />
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/85 p-1.5 backdrop-blur">
+            {/* Vista previa: el bucket puede no estar en remotePatterns. Se
+                recorta en un contenedor propio con el mismo radio porque el
+                `overflow-hidden` del padre no siempre recorta bien al hijo con
+                `backdrop-filter` (dejaba las esquinas rectas en el fondo). */}
+            <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt="Imagen del artículo"
+                className="size-full rounded-[inherit] object-cover"
+              />
+            </div>
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 rounded-b-[inherit] bg-background/85 p-1.5 backdrop-blur">
               <Button
                 type="button"
                 size="sm"

@@ -12,7 +12,7 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table"
-import { Columns3Icon, SearchIcon, XIcon } from "lucide-react"
+import { Columns3Icon, LayoutGridIcon, SearchIcon, TableIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -52,6 +52,9 @@ import {
 
 /** Valor centinela para "sin filtro" en los `Select` de la barra de filtros. */
 export const DATA_TABLE_ALL = "__all__"
+
+/** Vistas disponibles cuando el consumidor ofrece tarjetas. */
+export type DataTableViewMode = "table" | "cards"
 
 /** Todas las tablas comparten 12 filas por página salvo que se indique otra. */
 const DEFAULT_PAGE_SIZES = [12, 24, 48, 96]
@@ -106,6 +109,17 @@ export interface DataTableProps<TData extends RowData> {
   columnLabels?: Record<string, string>
   /** Acciones extra a la derecha de la barra (botones, menús…). */
   actions?: React.ReactNode
+  /**
+   * Vista activa. Si se indica junto con `onViewModeChange`, aparece un
+   * selector tabla/tarjetas a la izquierda del botón de columnas.
+   */
+  viewMode?: DataTableViewMode
+  onViewModeChange?: (mode: DataTableViewMode) => void
+  /**
+   * Contenido de la vista de tarjetas. Recibe las filas de la página actual
+   * (ya filtradas, ordenadas y paginadas) para reutilizar la misma paginación.
+   */
+  cardsView?: (rows: TData[]) => React.ReactNode
 
   // Filas
   onRowClick?: (row: TData) => void
@@ -155,6 +169,9 @@ export function DataTable<TData extends RowData>({
   showColumnToggle = true,
   columnLabels,
   actions,
+  viewMode = "table",
+  onViewModeChange,
+  cardsView,
   onRowClick,
   rowClassName,
   rowContextMenu,
@@ -220,6 +237,17 @@ export function DataTable<TData extends RowData>({
   const hasFilters = activeFilterCount > 0
   const showingFiltered = isFiltered ?? hasFilters
   const columnCount = table.getVisibleLeafColumns().length
+
+  const emptyContent = showingFiltered
+    ? (filteredEmptyState ??
+      emptyState ?? (
+        <p className="text-muted-foreground">
+          No hay resultados que coincidan con los filtros.
+        </p>
+      ))
+    : (emptyState ?? (
+        <p className="text-muted-foreground">Todavía no hay datos.</p>
+      ))
 
   const resolveRowClassName = (row: TData) =>
     typeof rowClassName === "function" ? rowClassName(row) : rowClassName
@@ -300,13 +328,42 @@ export function DataTable<TData extends RowData>({
             ) : null}
           </div>
 
-          {showColumnToggle || actions ? (
+          {showColumnToggle || actions || onViewModeChange ? (
             <div
               role="group"
               aria-label="Acciones"
               className="flex shrink-0 flex-wrap items-center gap-2"
             >
-              {showColumnToggle ? (
+              {onViewModeChange ? (
+                <div
+                  role="group"
+                  aria-label="Vista"
+                  className="flex items-center gap-0.5 rounded-md border p-0.5"
+                >
+                  <Button
+                    variant={viewMode === "cards" ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    aria-pressed={viewMode === "cards"}
+                    aria-label="Vista de tarjetas"
+                    title="Vista de tarjetas"
+                    onClick={() => onViewModeChange("cards")}
+                  >
+                    <LayoutGridIcon className="size-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "table" ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    aria-pressed={viewMode === "table"}
+                    aria-label="Vista de tabla"
+                    title="Vista de tabla"
+                    onClick={() => onViewModeChange("table")}
+                  >
+                    <TableIcon className="size-4" />
+                  </Button>
+                </div>
+              ) : null}
+
+              {showColumnToggle && viewMode === "table" ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -348,74 +405,78 @@ export function DataTable<TData extends RowData>({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
-        <Table className={tableClassName}>
-          <TableHeader className="sticky top-0 z-10 bg-muted">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : (
-                      <FlexRender header={header} />
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {rows.length > 0 ? (
-              rows.map((row) => {
-                const tableRow = (
-                  <TableRow
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                    className={cn("h-max", resolveRowClassName(row.original))}
-                    onClick={
-                      onRowClick
-                        ? () => onRowClick(row.original)
-                        : undefined
-                    }
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        <FlexRender cell={cell} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                )
-
-                if (!rowContextMenu) {
-                  return <React.Fragment key={row.id}>{tableRow}</React.Fragment>
-                }
-
-                return (
-                  <ContextMenu key={row.id}>
-                    <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
-                    {rowContextMenu(row.original)}
-                  </ContextMenu>
-                )
-              })
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columnCount}
-                  className="h-32 text-center whitespace-normal"
-                >
-                  {showingFiltered
-                    ? (filteredEmptyState ?? emptyState ?? (
-                        <p className="text-muted-foreground">
-                          No hay resultados que coincidan con los filtros.
-                        </p>
-                      ))
-                    : (emptyState ?? (
-                        <p className="text-muted-foreground">Todavía no hay datos.</p>
+      {viewMode === "cards" && cardsView ? (
+        rows.length > 0 ? (
+          cardsView(rows.map((row) => row.original))
+        ) : (
+          <div className="rounded-lg border p-8 text-center whitespace-normal">
+            {emptyContent}
+          </div>
+        )
+      ) : (
+        <div className="overflow-hidden rounded-lg border">
+          <Table className={tableClassName}>
+            <TableHeader className="sticky top-0 z-10 bg-muted">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} colSpan={header.colSpan}>
+                      {header.isPlaceholder ? null : (
+                        <FlexRender header={header} />
+                      )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {rows.length > 0 ? (
+                rows.map((row) => {
+                  const tableRow = (
+                    <TableRow
+                      data-state={row.getIsSelected() ? "selected" : undefined}
+                      className={cn("h-max", resolveRowClassName(row.original))}
+                      onClick={
+                        onRowClick
+                          ? () => onRowClick(row.original)
+                          : undefined
+                      }
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          <FlexRender cell={cell} />
+                        </TableCell>
                       ))}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                    </TableRow>
+                  )
+
+                  if (!rowContextMenu) {
+                    return (
+                      <React.Fragment key={row.id}>{tableRow}</React.Fragment>
+                    )
+                  }
+
+                  return (
+                    <ContextMenu key={row.id}>
+                      <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
+                      {rowContextMenu(row.original)}
+                    </ContextMenu>
+                  )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columnCount}
+                    className="h-32 text-center whitespace-normal"
+                  >
+                    {emptyContent}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">{summary}</div>

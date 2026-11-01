@@ -28,7 +28,7 @@ export interface DashboardOverview {
     count: number
   }[]
   salesSeries: { date: string; sales: number | null; payments: number }[]
-  topProducts: { name: string; quantity: number; revenue: number | null }[]
+  topItems: { name: string; quantity: number; revenue: number | null }[]
   inventory: {
     lowStockCount: number
     alerts: {
@@ -75,7 +75,7 @@ export interface SalesReport {
   byMethod: { method: PaymentMethod; total: number; count: number }[]
   byDay: { date: string; sales: number; count: number }[]
   byCashier: { name: string; total: number; count: number }[]
-  topProducts: { name: string; quantity: number; revenue: number }[]
+  topItems: { name: string; quantity: number; revenue: number }[]
 }
 
 export interface InventoryReport {
