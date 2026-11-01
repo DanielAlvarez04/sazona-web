@@ -303,7 +303,7 @@ function FullArticleCard({
           ) : (
             <>
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 className="flex-1 shadow-sm"
                 onClick={() => actions.onEdit(article)}
