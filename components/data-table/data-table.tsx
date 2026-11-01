@@ -258,79 +258,8 @@ export function DataTable<TData extends RowData>({
   const resolveRowClassName = (row: TData) =>
     typeof rowClassName === "function" ? rowClassName(row) : rowClassName
 
-  /**
-   * Un filtro de la barra. `fullWidth` lo estira para la columna lateral.
-   *
-   * Se pinta dos veces (sidebar y barra móvil): ambos comparten el mismo estado
-   * controlado, así que solo uno es visible a la vez.
-   */
-  function renderFilter(filter: DataTableFilter, fullWidth = false) {
-    const selectedLabel =
-      filter.options.find((option) => option.value === filter.value)?.label ??
-      filter.allLabel
-
-    return (
-      <Select
-        key={filter.id}
-        value={filter.value}
-        onValueChange={(value) =>
-          filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
-        }
-        items={filter.options}
-      >
-        <SelectTrigger
-          // `w-auto` deja que el disparador crezca con el nombre elegido; así
-          // no se corta el texto de opciones largas.
-          className={fullWidth ? "w-full" : "w-auto min-w-40 max-w-64"}
-          aria-label={filter.ariaLabel}
-          title={selectedLabel}
-        >
-          <SelectValue placeholder={filter.placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {filter.options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    )
-  }
-
   return (
-    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-      {/* Filtros en columna (sidebar) desde `lg`. */}
-      {filters.length > 0 ? (
-        <aside
-          aria-label="Filtros"
-          className="hidden w-56 shrink-0 flex-col gap-2 lg:flex"
-        >
-          <p className="text-sm font-medium text-muted-foreground">Filtros</p>
-          {filters.map((filter) => (
-            <div key={filter.id} className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">
-                {filter.placeholder}
-              </span>
-              {renderFilter(filter, true)}
-            </div>
-          ))}
-          {hasFilters && onClearFilters ? (
-            <Button
-              variant="ghost"
-              className="justify-start text-muted-foreground"
-              onClick={onClearFilters}
-            >
-              <XIcon className="size-4" />
-              Limpiar
-              <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
-                {activeFilterCount}
-              </Badge>
-            </Button>
-          ) : null}
-        </aside>
-      ) : null}
-
+    <div className="flex min-w-0 flex-col gap-4">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         {/* Barra de herramientas: una sola fila con dos grupos. */}
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -356,24 +285,52 @@ export function DataTable<TData extends RowData>({
               </div>
             ) : null}
 
-            {filters.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2 lg:hidden">
-                {filters.map((filter) => renderFilter(filter))}
+            {filters.map((filter) => {
+              const selectedLabel =
+                filter.options.find((option) => option.value === filter.value)
+                  ?.label ?? filter.allLabel
 
-                {hasFilters && onClearFilters ? (
-                  <Button
-                    variant="ghost"
-                    className="text-muted-foreground"
-                    onClick={onClearFilters}
+              return (
+                <Select
+                  key={filter.id}
+                  value={filter.value}
+                  onValueChange={(value) =>
+                    filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
+                  }
+                  items={filter.options}
+                >
+                  <SelectTrigger
+                    // `w-auto` deja que el disparador crezca con el nombre
+                    // elegido; así no se corta el texto de opciones largas.
+                    className="w-auto min-w-40 max-w-64"
+                    aria-label={filter.ariaLabel}
+                    title={selectedLabel}
                   >
-                    <XIcon className="size-4" />
-                    Limpiar
-                    <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
-                      {activeFilterCount}
-                    </Badge>
-                  </Button>
-                ) : null}
-              </div>
+                    <SelectValue placeholder={filter.placeholder} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filter.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            })}
+
+            {hasFilters && onClearFilters ? (
+              <Button
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={onClearFilters}
+              >
+                <XIcon className="size-4" />
+                Limpiar
+                <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                  {activeFilterCount}
+                </Badge>
+              </Button>
             ) : null}
           </div>
 
