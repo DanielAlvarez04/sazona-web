@@ -305,7 +305,7 @@ function FullArticleCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 shadow-sm"
+                className="flex-1 border-white/50 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 onClick={() => actions.onEdit(article)}
               >
                 <PencilIcon className="size-4" />
