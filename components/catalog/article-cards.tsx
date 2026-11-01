@@ -237,18 +237,6 @@ function FullArticleCard({
           )}
 
           <div className="flex items-center gap-1">
-            {article.isActive ? null : (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="bg-black/35 text-white/90 shadow-sm ring-1 ring-white/20 backdrop-blur-sm hover:bg-black/55 hover:text-white"
-                aria-label={`Activar ${article.name}`}
-                title="Activar artículo"
-                onClick={() => actions.onActivate(article)}
-              >
-                <PowerIcon className="size-4" />
-              </Button>
-            )}
             <ArticleActionsMenu
               article={article}
               actions={actions}
@@ -282,15 +270,53 @@ function FullArticleCard({
           >
             {article.name}
           </p>
+        </div>
 
-          <Button
-            size="sm"
-            className="mt-0.5 w-full shadow-sm"
-            onClick={() => actions.onEdit(article)}
-          >
-            <PencilIcon className="size-4" />
-            Editar
-          </Button>
+        {/*
+         * Grupo «actionable»: ocupa su espacio en la card pero arranca deslizado
+         * hacia abajo (fuera del borde, recortado por `overflow-hidden`) y solo
+         * aparece al pasar el cursor o al enfocar con el teclado.
+         */}
+        <div
+          role="group"
+          aria-label={`Acciones de ${article.name}`}
+          className={cn(
+            "mt-1 flex items-center gap-1 transition-[transform,opacity] duration-200 ease-out",
+            "pointer-events-none translate-y-[calc(100%+0.5rem)] opacity-0",
+            "group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100",
+            "group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100"
+          )}
+        >
+          {article.isActive ? (
+            <Button
+              size="sm"
+              className="w-full shadow-sm"
+              onClick={() => actions.onEdit(article)}
+            >
+              <PencilIcon className="size-4" />
+              Editar
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1 shadow-sm"
+                onClick={() => actions.onEdit(article)}
+              >
+                <PencilIcon className="size-4" />
+                Editar
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 shadow-sm"
+                onClick={() => actions.onActivate(article)}
+              >
+                <PowerIcon className="size-4" />
+                Activar
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Card>
