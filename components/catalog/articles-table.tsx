@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuContent,
   ContextMenuGroup,
@@ -45,6 +46,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Label } from "@/components/ui/label"
 import type { ArticleListItem, Category } from "@/lib/catalog"
 
 import { ArticleCards } from "./article-cards"
@@ -121,6 +123,26 @@ export function ArticlesTable({
     [filtered, rowSelection]
   )
   const selectedCount = selectedArticles.length
+
+  // Selección masiva sobre lo filtrado (no solo la página visible).
+  const allSelected =
+    filtered.length > 0 && filtered.every((article) => rowSelection[article.id])
+  const someSelected =
+    !allSelected && filtered.some((article) => rowSelection[article.id])
+
+  const toggleAllSelected = React.useCallback(
+    (selected: boolean) => {
+      setRowSelection((prev) => {
+        const next = { ...prev }
+        for (const article of filtered) {
+          if (selected) next[article.id] = true
+          else delete next[article.id]
+        }
+        return next
+      })
+    },
+    [filtered]
+  )
 
   const filters: DataTableFilter[] = []
 
@@ -245,6 +267,26 @@ export function ArticlesTable({
           value: globalFilter,
           onValueChange: setGlobalFilter,
         }}
+        selectionToggle={
+          canManage ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="articles-select-all"
+                checked={allSelected}
+                indeterminate={someSelected}
+                disabled={filtered.length === 0}
+                onCheckedChange={(value) => toggleAllSelected(!!value)}
+                aria-label="Seleccionar todos los artículos"
+              />
+              <Label
+                htmlFor="articles-select-all"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Todos
+              </Label>
+            </div>
+          ) : null
+        }
         filters={filters}
         activeFilterCount={activeFilterCount}
         onClearFilters={clearFilters}

@@ -62,8 +62,12 @@ function FullArticleCard({
         "data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
       )}
     >
-      {/* Imagen (o icono) de fondo, ocupando toda la tarjeta. */}
-      <div className="absolute inset-0 bg-muted">
+      {/*
+       * Imagen (o icono) de fondo. El contenedor sobresale 16 px por cada lado
+       * para que el desenfoque del hover no deje un borde translúcido: la card
+       * lo recorta con `overflow-hidden`.
+       */}
+      <div className="absolute -inset-4 bg-muted">
         {showFallback ? (
           <div className="flex size-full items-center justify-center text-muted-foreground">
             <UtensilsCrossedIcon className="size-12" aria-hidden />
@@ -75,7 +79,7 @@ function FullArticleCard({
             src={article.imageUrl ?? undefined}
             alt={article.name}
             className={cn(
-              "size-full object-cover transition-transform duration-300 group-hover:scale-105",
+              "size-full object-cover transition-[filter] duration-300 ease-out group-hover:blur-[16px]",
               !article.isActive && "grayscale"
             )}
             onError={handleError}
@@ -105,17 +109,20 @@ function FullArticleCard({
             article={article}
             actions={actions}
             triggerSize="icon-sm"
+            triggerClassName="text-white/90 hover:bg-white/15 hover:text-white aria-expanded:bg-white/15"
           />
         </div>
 
         {/*
          * La información queda alineada al borde inferior. Al pasar el cursor
-         * sube justo lo que mide el grupo «actionable» (32 px del botón + 4 px
-         * de separación) para dejarle sitio.
+         * (o al enfocar con el teclado) sube justo lo que mide el grupo
+         * «actionable» (32 px del botón + 4 px de separación) para dejarle
+         * sitio. Se usa `focus-visible` en lugar de `focus-within` para que un
+         * clic con el ratón no deje la tarjeta abierta.
          */}
-        <div className="mt-auto flex min-w-0 flex-col gap-1 transition-transform duration-200 ease-out group-hover:-translate-y-9 group-focus-within:-translate-y-9">
+        <div className="mt-auto flex min-w-0 flex-col gap-1 transition-transform duration-200 ease-out group-hover:-translate-y-9 group-has-[:focus-visible]:-translate-y-9">
           {article.isActive ? null : (
-            <Badge className="self-start border-transparent bg-amber-400 text-amber-950">
+            <Badge className="self-start border border-amber-300/40 bg-amber-400/20 text-amber-200 backdrop-blur-sm">
               Inactivo
             </Badge>
           )}
@@ -142,7 +149,8 @@ function FullArticleCard({
         {/*
          * Grupo «actionable»: vive fuera del borde inferior de la card (lo
          * recorta `overflow-hidden`) y entra deslizándose desde abajo al pasar
-         * el cursor o al enfocar con el teclado.
+         * el cursor o al enfocar con el teclado (`focus-visible`, no al hacer
+         * clic con el ratón).
          */}
         <div
           role="group"
@@ -150,7 +158,7 @@ function FullArticleCard({
           className={cn(
             "absolute inset-x-2 bottom-2 flex items-center gap-1",
             "translate-y-[calc(100%+0.5rem)] transition-transform duration-200 ease-out",
-            "group-hover:translate-y-0 group-focus-within:translate-y-0"
+            "group-hover:translate-y-0 group-has-[:focus-visible]:translate-y-0"
           )}
         >
           {article.isActive ? (

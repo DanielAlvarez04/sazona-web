@@ -97,6 +97,11 @@ export interface DataTableProps<TData extends RowData> {
 
   // Barra de herramientas
   search?: DataTableSearch
+  /**
+   * Control de selección masiva (p. ej. un checkbox «Todos»). Se pinta junto al
+   * buscador, dentro del grupo de filtros.
+   */
+  selectionToggle?: React.ReactNode
   filters?: DataTableFilter[]
   /** Nº de filtros activos; muestra "Limpiar" cuando es mayor que 0. */
   activeFilterCount?: number
@@ -167,6 +172,7 @@ export function DataTable<TData extends RowData>({
   getRowId,
   idPrefix = "data-table",
   search,
+  selectionToggle,
   filters = [],
   activeFilterCount = 0,
   onClearFilters,
@@ -284,6 +290,8 @@ export function DataTable<TData extends RowData>({
                 />
               </div>
             ) : null}
+
+            {selectionToggle}
 
             {filters.map((filter) => {
               const selectedLabel =
