@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { cookies } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
@@ -26,9 +27,15 @@ export default async function AppLayout({
     getActiveBranch(),
   ])
 
+  // El `SidebarProvider` guarda el estado en la cookie `sidebar_state`: se lee
+  // aquí para que el sidebar arranque colapsado si el usuario lo dejó así.
+  const cookieStore = await cookies()
+  const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
+
   return (
     <OfflineProvider userId={user.id}>
       <SidebarProvider
+        defaultOpen={sidebarOpen}
         style={
           {
             "--sidebar-width": "calc(var(--spacing) * 72)",
@@ -50,7 +57,7 @@ export default async function AppLayout({
             role: user.roles[0],
           }}
         />
-        <SidebarInset>
+        <SidebarInset className="ml-0!">
           <SiteHeader branchName={activeBranch?.name ?? null} />
           <div className="flex flex-1 flex-col">{children}</div>
         </SidebarInset>

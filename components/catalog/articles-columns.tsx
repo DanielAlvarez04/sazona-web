@@ -258,15 +258,8 @@ export function PresentationPreview({
                 data-primary={isPrimary}
                 className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-sm data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  {variant.sku ? (
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {variant.sku}
-                    </span>
-                  ) : null}
-                  <span className="min-w-0 truncate" title={variant.name}>
-                    {variant.name}
-                  </span>
+                <span className="min-w-0 truncate" title={variant.name}>
+                  {variant.name}
                 </span>
                 <span className="shrink-0 font-medium tabular-nums">
                   {formatMoney(base + Number(variant.priceAdjust))}

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Loader2Icon, SaveIcon } from "lucide-react"
+import { Loader2Icon, SaveIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -19,6 +19,17 @@ import {
   type PresentationRow,
 } from "@/components/catalog/presentation-rows"
 import { InfoHint } from "@/components/info-hint"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import {
@@ -143,6 +154,8 @@ export function ArticleDialog({
   const [rows, setRows] = useState<PresentationRow[]>(() =>
     initialRows(article)
   )
+  // Confirmación al apagar «Múltiples presentaciones» de un artículo guardado.
+  const [confirmDisableVariants, setConfirmDisableVariants] = useState(false)
 
   /** El nombre del artículo arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
@@ -169,22 +182,22 @@ export function ArticleDialog({
     })
   }
 
-  function handleMultipleChange(next: boolean) {
-    if (!next && article?.variants.some((variant) => variant.isActive)) {
-      if (
-        !window.confirm(
-          "Se desactivarán las presentaciones actuales del artículo. ¿Continuar?"
-        )
-      ) {
-        return
-      }
-    }
-
+  /** Aplica el cambio del interruptor (sin volver a pedir confirmación). */
+  function applyMultipleChange(next: boolean) {
     setMultiple(next)
 
     if (next && rows.length === 0) {
       setRows(defaultPresentationRows(name))
     }
+  }
+
+  function handleMultipleChange(next: boolean) {
+    if (!next && article?.variants.some((variant) => variant.isActive)) {
+      setConfirmDisableVariants(true)
+      return
+    }
+
+    applyMultipleChange(next)
   }
 
   function handleClear() {
@@ -496,6 +509,33 @@ export function ArticleDialog({
             {article ? "Guardar artículo" : "Crear artículo"}
           </Button>
         </DialogFooter>
+
+        <AlertDialog
+          open={confirmDisableVariants}
+          onOpenChange={setConfirmDisableVariants}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+                <TriangleAlertIcon />
+              </AlertDialogMedia>
+              <AlertDialogTitle>Desactivar presentaciones</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se desactivarán las presentaciones actuales del artículo.
+                ¿Continuar?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => applyMultipleChange(false)}
+              >
+                Desactivar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )

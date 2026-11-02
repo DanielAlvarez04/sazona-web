@@ -1,14 +1,25 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import type { ReactNode } from "react"
-import { BoxesIcon, PackageSearchIcon } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { BoxesIcon, PackageSearchIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
   setCoreIngredientCategoriesActive,
   setUseCoreSuggestions,
 } from "@/app/(app)/settings/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Card,
   CardContent,
@@ -74,22 +85,15 @@ export function InventoryPreferencesCard({
 }) {
   const router = useRouter()
   const form = useActionForm(() => router.refresh())
+  const [confirmDisableCategories, setConfirmDisableCategories] =
+    useState(false)
 
   const coreCategories = categories.filter((category) => category.isCore)
   const allActive =
     coreCategories.length > 0 &&
     coreCategories.every((category) => category.isActive)
 
-  function handleCategoriesToggle(checked: boolean) {
-    if (
-      !checked &&
-      !window.confirm(
-        "¿Desactivar todas las categorías core de inventario? Se quitarán de los insumos que las usen y no podrás clasificar insumos nuevos hasta reactivarlas."
-      )
-    ) {
-      return
-    }
-
+  function applyCategoriesToggle(checked: boolean) {
     form.run(() =>
       setCoreIngredientCategoriesActive(checked).then((result) => {
         if (result.ok) {
@@ -102,6 +106,15 @@ export function InventoryPreferencesCard({
         return result
       })
     )
+  }
+
+  function handleCategoriesToggle(checked: boolean) {
+    if (!checked) {
+      setConfirmDisableCategories(true)
+      return
+    }
+
+    applyCategoriesToggle(true)
   }
 
   function handleSuggestionsToggle(checked: boolean) {
@@ -166,6 +179,34 @@ export function InventoryPreferencesCard({
 
         {form.error ? <FieldError>{form.error}</FieldError> : null}
       </CardContent>
+
+      <AlertDialog
+        open={confirmDisableCategories}
+        onOpenChange={setConfirmDisableCategories}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Desactivar categorías</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Desactivar todas las categorías core de inventario? Se quitarán
+              de los insumos que las usen y no podrás clasificar insumos nuevos
+              hasta reactivarlas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => applyCategoriesToggle(false)}
+            >
+              Desactivar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

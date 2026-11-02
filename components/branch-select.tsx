@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useSidebar } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
+import { cn } from "cn"
 
 /** Valor de la opción que representa la vista consolidada. */
 const ALL = "all"
@@ -38,6 +40,9 @@ export function BranchSelect({
   locked?: boolean
 }) {
   const [pending, startTransition] = React.useTransition()
+  const { state } = useSidebar()
+  // Con el sidebar colapsado solo cabe el icono; el nombre vuelve al expandir.
+  const collapsed = state === "collapsed"
 
   const activeBranches = React.useMemo(
     () => branches.filter((branch) => branch.isActive),
@@ -82,6 +87,8 @@ export function BranchSelect({
     items.find((item) => item.value === activeBranchId)?.value ??
     (showAll ? ALL : items[0].value)
 
+  const selectedLabel = items.find((item) => item.value === selectedValue)?.label
+
   return (
     <Select
       items={items}
@@ -89,9 +96,19 @@ export function BranchSelect({
       onValueChange={handleChange}
       disabled={pending || locked || !showAll}
     >
-      <SelectTrigger className="w-full bg-background">
+      <SelectTrigger
+        size={collapsed ? "sm" : "default"}
+        className={cn(
+          "bg-background",
+          collapsed
+            ? "w-full justify-center px-0 [&>svg:last-of-type]:hidden"
+            : "w-full"
+        )}
+        aria-label="Sucursal activa"
+        title={selectedLabel}
+      >
         <Building2Icon className="size-4 text-muted-foreground" />
-        <SelectValue />
+        {collapsed ? null : <SelectValue />}
       </SelectTrigger>
       <SelectContent className="bg-background">
         {items.map((item) => (

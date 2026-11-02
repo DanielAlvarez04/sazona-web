@@ -291,8 +291,6 @@ export function DataTable<TData extends RowData>({
               </div>
             ) : null}
 
-            {selectionToggle}
-
             {filters.map((filter) => {
               const selectedLabel =
                 filter.options.find((option) => option.value === filter.value)
@@ -326,6 +324,8 @@ export function DataTable<TData extends RowData>({
                 </Select>
               )
             })}
+
+            {selectionToggle}
 
             {hasFilters && onClearFilters ? (
               <Button

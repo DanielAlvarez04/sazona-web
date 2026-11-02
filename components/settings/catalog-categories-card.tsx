@@ -1,10 +1,22 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { TagsIcon } from "lucide-react"
+import { useState } from "react"
+import { TagsIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { setCoreCategoryGroupActive } from "@/app/(app)/settings/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -96,30 +108,15 @@ export function CatalogCategoriesCard({
 }) {
   const router = useRouter()
   const form = useActionForm(() => router.refresh())
+  const [confirmToggle, setConfirmToggle] = useState<{
+    kind: CategoryKind
+    message: string
+  } | null>(null)
 
   const coreArticles = articleCategories.filter((category) => category.isCore)
   const coreRecipes = recipeCategories.filter((category) => category.isCore)
 
-  function handleToggle(kind: CategoryKind, checked: boolean) {
-    const categories = kind === "ARTICLE" ? coreArticles : coreRecipes
-    const countKey = kind === "ARTICLE" ? "items" : "recipes"
-    const usage = categories.reduce(
-      (total, category) => total + (category._count[countKey] ?? 0),
-      0
-    )
-    const noun = kind === "ARTICLE" ? "artículo(s)" : "receta(s)"
-
-    if (
-      !checked &&
-      !window.confirm(
-        usage > 0
-          ? `¿Desactivar todas las categorías de ${kind === "ARTICLE" ? "artículos" : "recetas"}? Se quitará la categoría a ${usage} ${noun}.`
-          : `¿Desactivar todas las categorías de ${kind === "ARTICLE" ? "artículos" : "recetas"}?`
-      )
-    ) {
-      return
-    }
-
+  function applyToggle(kind: CategoryKind, checked: boolean) {
     form.run(() =>
       setCoreCategoryGroupActive(kind, checked).then((result) => {
         if (result.ok) {
@@ -132,6 +129,30 @@ export function CatalogCategoriesCard({
         return result
       })
     )
+  }
+
+  function handleToggle(kind: CategoryKind, checked: boolean) {
+    if (checked) {
+      applyToggle(kind, true)
+      return
+    }
+
+    const categories = kind === "ARTICLE" ? coreArticles : coreRecipes
+    const countKey = kind === "ARTICLE" ? "items" : "recipes"
+    const usage = categories.reduce(
+      (total, category) => total + (category._count[countKey] ?? 0),
+      0
+    )
+    const noun = kind === "ARTICLE" ? "artículo(s)" : "receta(s)"
+    const label = kind === "ARTICLE" ? "artículos" : "recetas"
+
+    setConfirmToggle({
+      kind,
+      message:
+        usage > 0
+          ? `¿Desactivar todas las categorías de ${label}? Se quitará la categoría a ${usage} ${noun}.`
+          : `¿Desactivar todas las categorías de ${label}?`,
+    })
   }
 
   return (
@@ -178,6 +199,36 @@ export function CatalogCategoriesCard({
 
         {form.error ? <FieldError>{form.error}</FieldError> : null}
       </CardContent>
+
+      <AlertDialog
+        open={confirmToggle !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmToggle(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Desactivar categorías</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmToggle?.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (confirmToggle) applyToggle(confirmToggle.kind, false)
+              }}
+            >
+              Desactivar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

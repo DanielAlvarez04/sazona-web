@@ -5,6 +5,8 @@ import { useState } from "react"
 import {
   BoxesIcon,
   FlaskConicalIcon,
+  Trash2Icon,
+  UnlinkIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -24,6 +26,17 @@ import { ImportDialog } from "@/components/catalog/import-dialog"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipeDialog } from "@/components/catalog/recipe-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
@@ -66,6 +79,11 @@ export function CatalogClient({
 
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  // Confirmación de acciones destructivas sobre recetas.
+  const [confirmRecipe, setConfirmRecipe] = useState<{
+    kind: "unpublish" | "delete"
+    recipe: Recipe
+  } | null>(null)
 
   function openNewRecipe() {
     setEditingRecipe(null)
@@ -103,20 +121,7 @@ export function CatalogClient({
   }
 
   function handleUnpublish(recipe: Recipe) {
-    if (
-      !window.confirm(
-        `¿Quitar "${recipe.name}" de artículos? La receta seguirá existiendo.`
-      )
-    ) {
-      return
-    }
-
-    rowForm.run(() =>
-      unpublishRecipe(recipe.id).then((result) => {
-        if (result.ok) toast.success("Artículo desvinculado")
-        return result
-      })
-    )
+    setConfirmRecipe({ kind: "unpublish", recipe })
   }
 
   function handleDeleteRecipe(recipe: Recipe) {
@@ -125,10 +130,26 @@ export function CatalogClient({
       return
     }
 
-    if (!window.confirm(`¿Eliminar la receta "${recipe.name}"?`)) return
+    setConfirmRecipe({ kind: "delete", recipe })
+  }
+
+  /** Ejecuta la acción confirmada en el `AlertDialog`. */
+  function confirmRecipeAction() {
+    const pending = confirmRecipe
+    if (!pending) return
+
+    if (pending.kind === "unpublish") {
+      rowForm.run(() =>
+        unpublishRecipe(pending.recipe.id).then((result) => {
+          if (result.ok) toast.success("Artículo desvinculado")
+          return result
+        })
+      )
+      return
+    }
 
     rowForm.run(() =>
-      deleteRecipe(recipe.id).then((result) => {
+      deleteRecipe(pending.recipe.id).then((result) => {
         if (result.ok) toast.success("Receta eliminada")
         return result
       })
@@ -293,6 +314,52 @@ export function CatalogClient({
           <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
         </>
       ) : null}
+
+      <AlertDialog
+        open={confirmRecipe !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRecipe(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia
+              className={
+                confirmRecipe?.kind === "delete"
+                  ? "bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive"
+                  : undefined
+              }
+            >
+              {confirmRecipe?.kind === "delete" ? (
+                <Trash2Icon />
+              ) : (
+                <UnlinkIcon />
+              )}
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              {confirmRecipe?.kind === "delete"
+                ? "Eliminar receta"
+                : "Quitar de artículos"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmRecipe?.kind === "delete"
+                ? `¿Eliminar la receta «${confirmRecipe.recipe.name}»? Esta acción no se puede deshacer.`
+                : `¿Quitar «${confirmRecipe?.recipe.name ?? ""}» de artículos? La receta seguirá existiendo.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant={
+                confirmRecipe?.kind === "delete" ? "destructive" : "default"
+              }
+              onClick={confirmRecipeAction}
+            >
+              {confirmRecipe?.kind === "delete" ? "Eliminar" : "Quitar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

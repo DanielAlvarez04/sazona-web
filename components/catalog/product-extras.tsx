@@ -2,9 +2,20 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
+import { Loader2Icon, PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 
 import { createExtra, deactivateExtra } from "@/app/(app)/catalog/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -88,6 +99,7 @@ function ExtraRow({
 }) {
   const router = useRouter()
   const { pending, error, run } = useActionForm(() => router.refresh())
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
@@ -118,14 +130,35 @@ function ExtraRow({
           size="icon-sm"
           aria-label={`Desactivar ${extra.name}`}
           disabled={pending}
-          onClick={() => {
-            if (!window.confirm(`¿Desactivar el extra "${extra.name}"?`)) return
-            run(() => deactivateExtra(itemId, extra.id))
-          }}
+          onClick={() => setConfirmDeactivate(true)}
         >
           {pending ? <Loader2Icon className="animate-spin" /> : <Trash2Icon />}
         </Button>
       ) : null}
+
+      <AlertDialog open={confirmDeactivate} onOpenChange={setConfirmDeactivate}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Desactivar extra</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Desactivar el extra «{extra.name}»? Dejará de ofrecerse en el
+              punto de venta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => run(() => deactivateExtra(itemId, extra.id))}
+            >
+              Desactivar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

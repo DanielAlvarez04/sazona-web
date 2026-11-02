@@ -2,10 +2,26 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Loader2Icon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+import {
+  Loader2Icon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { replaceComboComponents } from "@/app/(app)/catalog/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -51,6 +67,10 @@ export function ProductCombo({
 }) {
   const router = useRouter()
   const { pending, error, run } = useActionForm(() => router.refresh())
+  // Aviso de validación del combo, mostrado con `AlertDialog`.
+  const [validationMessage, setValidationMessage] = useState<string | null>(
+    null
+  )
 
   const [rows, setRows] = useState<ComboRow[]>(() =>
     product.comboComponents.map((component) => ({
@@ -104,13 +124,13 @@ export function ProductCombo({
 
     if (components.length === 0) {
       // El combo no puede quedarse sin componentes.
-      window.alert("El combo debe tener al menos un componente.")
+      setValidationMessage("El combo debe tener al menos un componente.")
       return
     }
 
     if (unique.size !== components.length) {
       // Duplicados: el formulario local lo señala sin llamar a la API.
-      window.alert("Cada artículo/variante solo puede aparecer una vez.")
+      setValidationMessage("Cada artículo/variante solo puede aparecer una vez.")
       return
     }
 
@@ -303,6 +323,26 @@ export function ProductCombo({
 
         {error ? <FieldError>{error}</FieldError> : null}
       </CardContent>
+
+      <AlertDialog
+        open={validationMessage !== null}
+        onOpenChange={(open) => {
+          if (!open) setValidationMessage(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Revisa el combo</AlertDialogTitle>
+            <AlertDialogDescription>{validationMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Entendido</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

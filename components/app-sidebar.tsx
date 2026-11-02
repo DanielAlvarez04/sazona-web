@@ -18,6 +18,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
 import {
@@ -107,12 +108,13 @@ export function AppSidebar({
   )
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               className="data-[slot=sidebar-menu-button]:p-1.5!"
+              tooltip={organizationName ?? "Naranja Pimienta"}
               render={<Link href="/dashboard" />}
             >
               <GalleryVerticalEndIcon className="size-5!" />
@@ -134,6 +136,7 @@ export function AppSidebar({
             />
           </SidebarGroupContent>
         </SidebarGroup>
+        <SidebarSeparator />
         <NavMain items={data.navMain} label="Aplicación" />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>

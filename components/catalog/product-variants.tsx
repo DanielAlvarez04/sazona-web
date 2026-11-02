@@ -1,7 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Loader2Icon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+import { useState } from "react"
+import {
+  Loader2Icon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -10,6 +17,17 @@ import {
   updateVariant,
   type VariantUpdateInput,
 } from "@/app/(app)/catalog/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -75,6 +93,7 @@ function VariantRow({
   const router = useRouter()
   const saveForm = useActionForm(() => router.refresh())
   const deleteForm = useActionForm(() => router.refresh())
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
@@ -183,12 +202,7 @@ function VariantRow({
             size="icon-sm"
             aria-label={`Desactivar ${variant.name}`}
             disabled={deleteForm.pending}
-            onClick={() => {
-              if (!window.confirm(`¿Desactivar la variante "${variant.name}"?`)) {
-                return
-              }
-              deleteForm.run(() => deactivateVariant(itemId, variant.id))
-            }}
+            onClick={() => setConfirmDeactivate(true)}
           >
             <Trash2Icon />
           </Button>
@@ -197,6 +211,32 @@ function VariantRow({
 
       {saveForm.error ? <FieldError>{saveForm.error}</FieldError> : null}
       {deleteForm.error ? <FieldError>{deleteForm.error}</FieldError> : null}
+
+      <AlertDialog open={confirmDeactivate} onOpenChange={setConfirmDeactivate}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <TriangleAlertIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Desactivar presentación</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Desactivar la presentación «{variant.name}»? Dejará de estar
+              disponible en el punto de venta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() =>
+                deleteForm.run(() => deactivateVariant(itemId, variant.id))
+              }
+            >
+              Desactivar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

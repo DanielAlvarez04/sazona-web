@@ -31,12 +31,12 @@ function useArticleImage(article: ArticleListItem) {
 }
 
 /**
- * Tarjeta cuadrada con la imagen del artículo a sangre.
+ * Tarjeta con la imagen del artículo en relación de aspecto cuadrada.
  *
- * La información (precio, presentaciones y nombre) se agrupa en la parte baja
- * sobre un degradado oscuro para que se lea sobre cualquier imagen. Las
- * acciones quedan arriba a la derecha y el grupo «actionable» (editar/activar)
- * entra deslizándose desde abajo al pasar el cursor.
+ * La información (precio, presentaciones y nombre) va sobre la imagen,
+ * alineada al borde inferior, y las acciones (editar/activar) viven en un pie
+ * debajo de la imagen con el mismo fondo que el pie de los diálogos. La card no
+ * tiene efectos de hover.
  */
 function FullArticleCard({
   article,
@@ -54,117 +54,104 @@ function FullArticleCard({
   const { showFallback, handleError } = useArticleImage(article)
 
   return (
-    <Card
-      size="sm"
+    <div
       data-selected={selected || undefined}
       className={cn(
-        "group relative aspect-square gap-0 overflow-hidden p-0 py-0 transition-shadow",
+        "rounded-xl",
         "data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
       )}
     >
-      {/*
-       * Imagen (o icono) de fondo. El contenedor sobresale 16 px por cada lado
-       * para que el desenfoque del hover no deje un borde translúcido: la card
-       * lo recorta con `overflow-hidden`.
-       */}
-      <div className="absolute -inset-4 bg-muted">
-        {showFallback ? (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <UtensilsCrossedIcon className="size-12" aria-hidden />
-            <span className="sr-only">Sin imagen</span>
-          </div>
-        ) : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={article.imageUrl ?? undefined}
-            alt={article.name}
-            className={cn(
-              "size-full object-cover transition-[filter] duration-300 ease-out group-hover:blur-[16px]",
-              !article.isActive && "grayscale"
+      <Card size="sm" className="gap-0 overflow-hidden p-0 py-0">
+        {/* Imagen cuadrada con la información alineada al borde inferior. */}
+        <div className="relative aspect-square w-full">
+          <div className="absolute inset-0 bg-muted">
+            {showFallback ? (
+              <div className="flex size-full items-center justify-center text-muted-foreground">
+                <UtensilsCrossedIcon className="size-12" aria-hidden />
+                <span className="sr-only">Sin imagen</span>
+              </div>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={article.imageUrl ?? undefined}
+                alt={article.name}
+                className={cn(
+                  "size-full object-cover",
+                  !article.isActive && "grayscale"
+                )}
+                onError={handleError}
+              />
             )}
-            onError={handleError}
-          />
-        )}
-      </div>
-
-      {/* Degradado para que el texto se lea sobre la foto. */}
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/85 via-black/30 to-black/10" />
-
-      <div className="relative flex size-full flex-col p-2 text-white">
-        <div className="flex items-start justify-between gap-1">
-          {canSelect ? (
-            <Checkbox
-              checked={selected}
-              onCheckedChange={(value) =>
-                onSelectedChange(article.id, !!value)
-              }
-              aria-label={`Seleccionar ${article.name}`}
-              className="border-white/70 bg-black/30"
-            />
-          ) : (
-            <span />
-          )}
-
-          <ArticleActionsMenu
-            article={article}
-            actions={actions}
-            triggerSize="icon-sm"
-            triggerClassName="text-white/90 hover:bg-white/15 hover:text-white aria-expanded:bg-white/15"
-          />
-        </div>
-
-        {/*
-         * La información queda alineada al borde inferior. Al pasar el cursor
-         * (o al enfocar con el teclado) sube justo lo que mide el grupo
-         * «actionable» (32 px del botón + 4 px de separación) para dejarle
-         * sitio. Se usa `focus-visible` en lugar de `focus-within` para que un
-         * clic con el ratón no deje la tarjeta abierta.
-         */}
-        <div className="mt-auto flex min-w-0 flex-col gap-1 transition-transform duration-200 ease-out group-hover:-translate-y-9 group-has-[:focus-visible]:-translate-y-9">
-          {article.isActive ? null : (
-            <Badge className="self-start border border-amber-300/40 bg-amber-400/20 text-amber-200 backdrop-blur-sm">
-              Inactivo
-            </Badge>
-          )}
-
-          <div className="flex min-w-0 items-center gap-1">
-            <span className="text-base font-bold leading-none tabular-nums text-white/80 drop-shadow-sm">
-              {formatMoney(article.price)}
-            </span>
-            <PresentationPreview
-              article={article}
-              compact
-              className="border-white/40 bg-black/30 text-white/90 hover:bg-black/45 hover:text-white"
-            />
           </div>
 
-          <p
-            className="line-clamp-2 text-pretty text-sm font-semibold leading-snug drop-shadow-sm"
-            title={article.name}
-          >
-            {article.name}
-          </p>
+          {/* Degradado para que el texto se lea sobre la foto. */}
+          <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/85 via-black/30 to-black/10" />
+
+          <div className="relative flex size-full flex-col p-2 text-white">
+            <div className="flex items-start justify-between gap-1">
+              {canSelect ? (
+                <Checkbox
+                  checked={selected}
+                  onCheckedChange={(value) =>
+                    onSelectedChange(article.id, !!value)
+                  }
+                  aria-label={`Seleccionar ${article.name}`}
+                  className="border-white/70 bg-black/30"
+                />
+              ) : (
+                <span />
+              )}
+
+              <ArticleActionsMenu
+                article={article}
+                actions={actions}
+                triggerSize="icon-sm"
+                triggerClassName="text-white/90 hover:bg-white/15 hover:text-white aria-expanded:bg-white/15 [&_svg]:drop-shadow-[0_1px_2px_rgb(0_0_0/0.85)]"
+              />
+            </div>
+
+            {/*
+             * La información queda alineada al borde inferior de la imagen y
+             * siempre visible: la card no tiene efectos de hover.
+             */}
+            <div className="mt-auto flex min-w-0 flex-col gap-1">
+              {article.isActive ? null : (
+                <Badge className="self-start border border-amber-300/40 bg-amber-400/20 text-amber-200 backdrop-blur-sm">
+                  Inactivo
+                </Badge>
+              )}
+
+              <div className="flex min-w-0 items-center gap-1">
+                <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
+                  {formatMoney(article.price)}
+                </span>
+                <PresentationPreview
+                  article={article}
+                  compact
+                  className="border-white/40 bg-black/30 text-white/90 hover:bg-black/45 hover:text-white"
+                />
+              </div>
+
+              <p
+                className="line-clamp-2 text-pretty text-base font-semibold leading-snug drop-shadow-sm"
+                title={article.name}
+              >
+                {article.name}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/*
-         * Grupo «actionable»: vive fuera del borde inferior de la card (lo
-         * recorta `overflow-hidden`) y entra deslizándose desde abajo al pasar
-         * el cursor o al enfocar con el teclado (`focus-visible`, no al hacer
-         * clic con el ratón).
-         */}
+        {/* Footer con las acciones, mismo fondo que el pie de los diálogos. */}
         <div
           role="group"
           aria-label={`Acciones de ${article.name}`}
-          className={cn(
-            "absolute inset-x-2 bottom-2 flex items-center gap-1",
-            "translate-y-[calc(100%+0.5rem)] transition-transform duration-200 ease-out",
-            "group-hover:translate-y-0 group-has-[:focus-visible]:translate-y-0"
-          )}
+          className="flex items-center justify-end gap-1 border-t bg-muted px-2 py-2"
         >
           {article.isActive ? (
             <Button
               size="sm"
-              className="w-full shadow-sm"
+              className="w-max shadow-sm"
               onClick={() => actions.onEdit(article)}
             >
               <PencilIcon className="size-4" />
@@ -174,16 +161,15 @@ function FullArticleCard({
             <>
               <Button
                 variant="outline"
-                size="sm"
-                className="flex-1 border-white/50 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                size="icon-sm"
                 onClick={() => actions.onEdit(article)}
+                aria-label={`Editar ${article.name}`}
               >
                 <PencilIcon className="size-4" />
-                Editar
               </Button>
               <Button
                 size="sm"
-                className="flex-1 shadow-sm"
+                className="w-max shadow-sm"
                 onClick={() => actions.onActivate(article)}
               >
                 <PowerIcon className="size-4" />
@@ -192,8 +178,8 @@ function FullArticleCard({
             </>
           )}
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   )
 }
 

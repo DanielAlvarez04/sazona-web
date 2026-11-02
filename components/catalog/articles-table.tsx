@@ -146,6 +146,20 @@ export function ArticlesTable({
 
   const filters: DataTableFilter[] = []
 
+  filters.push({
+    id: "recipe",
+    ariaLabel: "Filtrar por receta",
+    placeholder: "Receta",
+    allLabel: "Todos",
+    value: recipeFilter,
+    onValueChange: setRecipeFilter,
+    options: [
+      { value: DATA_TABLE_ALL, label: "Todos" },
+      { value: "yes", label: "Con receta" },
+      { value: "no", label: "Sin receta" },
+    ],
+  })
+
   if (categories.length > 0) {
     filters.push({
       id: "category",
@@ -163,20 +177,6 @@ export function ArticlesTable({
       ],
     })
   }
-
-  filters.push({
-    id: "recipe",
-    ariaLabel: "Filtrar por receta",
-    placeholder: "Receta",
-    allLabel: "Todos",
-    value: recipeFilter,
-    onValueChange: setRecipeFilter,
-    options: [
-      { value: DATA_TABLE_ALL, label: "Todos" },
-      { value: "yes", label: "Con receta" },
-      { value: "no", label: "Sin receta" },
-    ],
-  })
 
   const activeFilterCount =
     (globalFilter.trim() ? 1 : 0) +
@@ -282,7 +282,7 @@ export function ArticlesTable({
                 htmlFor="articles-select-all"
                 className="text-sm font-medium text-muted-foreground"
               >
-                Todos
+                Seleccionar todos
               </Label>
             </div>
           ) : null
