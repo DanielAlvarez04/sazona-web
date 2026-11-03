@@ -279,6 +279,19 @@ export function KitchenView({
                                   · {item.variantName}
                                 </span>
                               ) : null}
+                              {(item.options ?? []).length > 0 ? (
+                                <span className="block text-xs text-muted-foreground">
+                                  {(item.options ?? [])
+                                    .map(
+                                      (option) =>
+                                        `${option.groupName}: ${
+                                          option.kitchenLabel ??
+                                          option.optionName
+                                        }`
+                                    )
+                                    .join(" · ")}
+                                </span>
+                              ) : null}
                               {item.extras.length > 0 ? (
                                 <span className="block text-xs text-muted-foreground">
                                   + {item.extras.map((extra) => extra.extraName).join(", ")}

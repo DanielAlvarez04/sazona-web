@@ -15,6 +15,8 @@ import {
   type Ingredient,
   type ItemDetail,
   type ItemListItem,
+  type OptionGroup,
+  type OptionGroupPreset,
 } from "@/lib/catalog"
 import { requireUser } from "@/lib/session"
 
@@ -26,13 +28,21 @@ export default async function ProductDetailPage({
   const { id } = await params
   const user = await requireUser()
 
-  const [productResponse, categoriesResponse, ingredientsResponse, productsResponse] =
-    await Promise.all([
-      apiFetch(`/catalog/items/${encodeURIComponent(id)}`),
-      apiFetch("/catalog/categories?includeInactive=true"),
-      apiFetch("/inventory/ingredients"),
-      apiFetch("/catalog/items?includeInactive=true"),
-    ])
+  const [
+    productResponse,
+    categoriesResponse,
+    ingredientsResponse,
+    productsResponse,
+    optionGroupsResponse,
+    optionPresetsResponse,
+  ] = await Promise.all([
+    apiFetch(`/catalog/items/${encodeURIComponent(id)}`),
+    apiFetch("/catalog/categories?includeInactive=true"),
+    apiFetch("/inventory/ingredients"),
+    apiFetch("/catalog/items?includeInactive=true"),
+    apiFetch("/catalog/option-groups"),
+    apiFetch("/catalog/option-groups/presets"),
+  ])
 
   if (productResponse.status === 404) {
     notFound()
@@ -42,7 +52,9 @@ export default async function ProductDetailPage({
     !productResponse.ok ||
     !categoriesResponse.ok ||
     !ingredientsResponse.ok ||
-    !productsResponse.ok
+    !productsResponse.ok ||
+    !optionGroupsResponse.ok ||
+    !optionPresetsResponse.ok
   ) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-10">
@@ -60,11 +72,20 @@ export default async function ProductDetailPage({
     )
   }
 
-  const [product, categories, ingredients, products] = await Promise.all([
+  const [
+    product,
+    categories,
+    ingredients,
+    products,
+    optionGroups,
+    optionPresets,
+  ] = await Promise.all([
     productResponse.json() as Promise<ItemDetail>,
     categoriesResponse.json() as Promise<Category[]>,
     ingredientsResponse.json() as Promise<Ingredient[]>,
     productsResponse.json() as Promise<ItemListItem[]>,
+    optionGroupsResponse.json() as Promise<OptionGroup[]>,
+    optionPresetsResponse.json() as Promise<OptionGroupPreset[]>,
   ])
 
   return (
@@ -73,6 +94,10 @@ export default async function ProductDetailPage({
       categories={categories}
       ingredients={ingredients}
       products={products}
+      optionGroups={optionGroups}
+      optionPresets={
+        user.organizationUseCoreOptionGroups ? optionPresets : []
+      }
       organizationTaxRate={user.organizationTaxRate}
       canManage={canManageCatalog(user.roles)}
     />

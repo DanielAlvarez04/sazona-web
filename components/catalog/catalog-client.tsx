@@ -5,6 +5,8 @@ import { useState } from "react"
 import {
   BoxesIcon,
   FlaskConicalIcon,
+  LayersIcon,
+  ListChecksIcon,
   Trash2Icon,
   UnlinkIcon,
 } from "lucide-react"
@@ -22,7 +24,9 @@ import { ArticleDialog } from "@/components/catalog/article-dialog"
 import { ArticlesTable } from "@/components/catalog/articles-table"
 import { CatalogSummary } from "@/components/catalog/catalog-summary"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
+import { CombosPanel } from "@/components/catalog/combos-panel"
 import { ImportDialog } from "@/components/catalog/import-dialog"
+import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipeDialog } from "@/components/catalog/recipe-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
@@ -44,6 +48,8 @@ import type {
   ArticleListItem,
   Category,
   Ingredient,
+  OptionGroup,
+  OptionGroupPreset,
   Recipe,
 } from "@/lib/catalog"
 
@@ -53,6 +59,8 @@ export function CatalogClient({
   articleCategories,
   recipeCategories,
   ingredients,
+  optionGroups,
+  optionPresets,
   canManage,
   branch,
 }: {
@@ -61,11 +69,14 @@ export function CatalogClient({
   articleCategories: Category[]
   recipeCategories: Category[]
   ingredients: Ingredient[]
+  optionGroups: OptionGroup[]
+  optionPresets: OptionGroupPreset[]
   canManage: boolean
   branch: Branch | null
 }) {
   const router = useRouter()
   const rowForm = useActionForm(() => router.refresh())
+  const regularArticles = articles.filter((article) => !article.isCombo)
 
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false)
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
@@ -215,18 +226,26 @@ export function CatalogClient({
             <FlaskConicalIcon className="size-4" />
             Recetas
           </TabsTrigger>
+          <TabsTrigger type="button" value="combos">
+            <LayersIcon className="size-4" />
+            Combos
+          </TabsTrigger>
+          <TabsTrigger type="button" value="grupos-opciones">
+            <ListChecksIcon className="size-4" />
+            Grupos de opciones
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="articulos" keepMounted>
           <div className="flex flex-col gap-4">
-            <CatalogSummary mode="articles" recipes={recipes} articles={articles} />
+            <CatalogSummary mode="articles" recipes={recipes} articles={regularArticles} />
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {rowForm.error}
               </p>
             ) : null}
             <ArticlesTable
-              articles={articles}
+              articles={regularArticles}
               categories={articleCategories}
               canManage={canManage}
               onCreate={openNewArticle}
@@ -263,6 +282,28 @@ export function CatalogClient({
             />
           </div>
         </TabsContent>
+
+        <TabsContent value="combos" keepMounted>
+          <CombosPanel
+            combos={articles.filter((article) => article.isCombo)}
+            products={articles.filter((article) => !article.isCombo)}
+            categories={articleCategories}
+            optionGroups={optionGroups}
+            optionPresets={optionPresets}
+            canManage={canManage}
+            onActivate={handleActivateArticle}
+            onDeactivate={handleDeactivateArticle}
+            onDelete={handleDeleteArticles}
+          />
+        </TabsContent>
+
+        <TabsContent value="grupos-opciones" keepMounted>
+          <OptionGroupsPanel
+            groups={optionGroups}
+            presets={optionPresets}
+            canManage={canManage}
+          />
+        </TabsContent>
       </Tabs>
 
       {canManage && recipeDialogOpen ? (
@@ -289,6 +330,8 @@ export function CatalogClient({
           }}
           article={editingArticle}
           categories={articleCategories}
+          optionGroups={optionGroups}
+          optionPresets={optionPresets}
         />
       ) : null}
 

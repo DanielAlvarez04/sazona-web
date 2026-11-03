@@ -16,6 +16,7 @@ export interface RoundItemInput {
   quantity: number
   notes?: string
   extras?: { extraId: string }[]
+  options?: { itemOptionValueId: string }[]
   excludedIngredientIds?: string[]
 }
 

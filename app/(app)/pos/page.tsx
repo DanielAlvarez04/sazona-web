@@ -10,6 +10,7 @@ import {
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
 import type { Category, ItemListItem } from "@/lib/catalog"
+import type { Menu } from "@/lib/menus"
 import {
   canConfirmPayments,
   canDraftOrders,
@@ -23,18 +24,25 @@ import { requireUser } from "@/lib/session"
 export default async function PointOfSalePage() {
   const user = await requireUser()
 
-  const [productsResponse, categoriesResponse, ordersResponse, branch] =
-    await Promise.all([
-      apiFetch("/catalog/items"),
-      apiFetch("/catalog/categories"),
-      apiFetch("/orders?status=OPEN"),
-      getActiveBranch(),
-    ])
+  const [
+    productsResponse,
+    categoriesResponse,
+    ordersResponse,
+    menusResponse,
+    branch,
+  ] = await Promise.all([
+    apiFetch("/catalog/items"),
+    apiFetch("/catalog/categories"),
+    apiFetch("/orders?status=OPEN"),
+    apiFetch("/catalog/menus"),
+    getActiveBranch(),
+  ])
 
   if (
     !productsResponse.ok ||
     !categoriesResponse.ok ||
-    !ordersResponse.ok
+    !ordersResponse.ok ||
+    !menusResponse.ok
   ) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-10">
@@ -52,10 +60,11 @@ export default async function PointOfSalePage() {
     )
   }
 
-  const [products, categories, orders] = await Promise.all([
+  const [products, categories, orders, menus] = await Promise.all([
     productsResponse.json() as Promise<ItemListItem[]>,
     categoriesResponse.json() as Promise<Category[]>,
     ordersResponse.json() as Promise<Order[]>,
+    menusResponse.json() as Promise<Menu[]>,
   ])
 
   return (
@@ -63,6 +72,7 @@ export default async function PointOfSalePage() {
       products={products}
       categories={categories}
       orders={orders}
+      menus={menus}
       canDraft={canDraftOrders(user.roles)}
       canSend={canSendOrders(user.roles)}
       canRegister={canRegisterPayments(user.roles)}

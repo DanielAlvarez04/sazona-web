@@ -46,12 +46,21 @@ import {
 } from "@/lib/catalog"
 import { createOrder, sendRound, type RoundItemInput } from "@/lib/order-actions"
 import type { Branch } from "@/lib/branches"
+import type { Menu } from "@/lib/menus"
 import { orderLabel, type Order } from "@/lib/orders"
+import { trackEvent } from "@/lib/analytics"
 
 import { ChargeDialog } from "./charge-dialog"
 
 interface CartExtra {
   id: string
+  name: string
+  price: number
+}
+
+interface CartOption {
+  itemOptionValueId: string
+  groupName: string
   name: string
   price: number
 }
@@ -66,6 +75,7 @@ interface CartLine {
   quantity: number
   notes?: string
   extras: CartExtra[]
+  options: CartOption[]
   excludedIngredientIds: string[]
   excludedNames: string[]
 }
@@ -81,6 +91,12 @@ function lineToInput(line: CartLine): RoundItemInput {
     quantity: line.quantity,
     notes: line.notes,
     extras: line.extras.map((extra) => ({ extraId: extra.id })),
+    options:
+      line.options.length > 0
+        ? line.options.map((option) => ({
+            itemOptionValueId: option.itemOptionValueId,
+          }))
+        : undefined,
     excludedIngredientIds:
       line.excludedIngredientIds.length > 0
         ? line.excludedIngredientIds
@@ -92,6 +108,7 @@ export function PosView({
   products,
   categories,
   orders,
+  menus,
   canDraft,
   canSend,
   canRegister,
@@ -102,6 +119,7 @@ export function PosView({
   products: ItemListItem[]
   categories: Category[]
   orders: Order[]
+  menus: Menu[]
   canDraft: boolean
   canSend: boolean
   canRegister: boolean
@@ -115,6 +133,7 @@ export function PosView({
 
   const [search, setSearch] = React.useState("")
   const [categoryId, setCategoryId] = React.useState("")
+  const [menuId, setMenuId] = React.useState("")
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [selectedProduct, setSelectedProduct] =
     React.useState<ItemListItem | null>(null)
@@ -133,19 +152,43 @@ export function PosView({
 
     return products.filter((product) => {
       if (categoryId && product.category?.id !== categoryId) return false
+      if (
+        menuId &&
+        !(product.menus ?? []).some(
+          (menu) => menu.id === menuId && menu.isActive
+        )
+      ) {
+        return false
+      }
       if (!needle) return true
       return (
         product.name.toLowerCase().includes(needle) ||
         (product.sku ?? "").toLowerCase().includes(needle)
       )
     })
-  }, [products, search, categoryId])
+  }, [products, search, categoryId, menuId])
+
+  const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
   const addLine = (line: Omit<CartLine, "key">) => {
     setCart((current) => [
       ...current,
       { ...line, key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
     ])
+
+    // La posición dentro del menú filtrado alimenta las sugerencias de orden.
+    const position = filtered.findIndex((product) => product.id === line.itemId)
+
+    trackEvent({
+      name: "pos.item_added",
+      itemId: line.itemId,
+      menuId: menuId || undefined,
+      quantity: line.quantity,
+      metadata: {
+        position: position >= 0 ? position : null,
+        categoryId: categoryId || null,
+      },
+    })
   }
 
   const changeQuantity = (key: string, delta: number) => {
@@ -382,7 +425,50 @@ export function PosView({
                 ))}
               </SelectContent>
             </Select>
+            <Select
+              value={menuId || "all"}
+              onValueChange={(value) => {
+                const next = value === "all" ? "" : (value ?? "")
+                setMenuId(next)
+
+                if (next) {
+                  trackEvent({
+                    name: "pos.menu_filtered",
+                    menuId: next,
+                  })
+                }
+              }}
+              items={[
+                { value: "all", label: "Todos los menús" },
+                ...menus.map((menu) => ({
+                  value: menu.id,
+                  label: `${menu.name}${
+                    menu.isAvailableNow ? "" : " · fuera de horario"
+                  }`,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-56" aria-label="Filtrar por menú">
+                <SelectValue placeholder="Todos los menús" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los menús</SelectItem>
+                {menus.map((menu) => (
+                  <SelectItem key={menu.id} value={menu.id}>
+                    {menu.name}
+                    {menu.isAvailableNow ? "" : " · fuera de horario"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          {selectedMenu && !selectedMenu.isAvailableNow ? (
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              «{selectedMenu.name}» está fuera de horario. Puedes consultarlo,
+              pero revisa la disponibilidad antes de enviar la comanda.
+            </p>
+          ) : null}
 
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
@@ -476,6 +562,16 @@ export function PosView({
                       {line.extras.length > 0 ? (
                         <p className="text-xs text-muted-foreground">
                           + {line.extras.map((extra) => extra.name).join(", ")}
+                        </p>
+                      ) : null}
+                      {line.options.length > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {line.options
+                            .map(
+                              (option) =>
+                                `${option.groupName}: ${option.name}`
+                            )
+                            .join(" · ")}
                         </p>
                       ) : null}
                       {line.excludedNames.length > 0 ? (
@@ -652,19 +748,66 @@ function AddItemDialog({
   const variants = product.variants.filter((variant) => variant.isActive)
   const extras = product.extras.filter((extra) => extra.isActive)
   const exclusions = product.ingredientExclusions ?? []
+  const groups = (product.optionGroups ?? []).filter(
+    (group) =>
+      group.group &&
+      group.values.some((value) => value.isActive && value.value.isActive)
+  )
 
-  const [variantId, setVariantId] = React.useState(variants[0]?.id ?? "")
+  const [variantId, setVariantId] = React.useState(
+    (variants.find((candidate) => candidate.isPrimary) ?? variants[0])?.id ?? ""
+  )
   const [extraIds, setExtraIds] = React.useState<string[]>([])
   const [excludedIds, setExcludedIds] = React.useState<string[]>([])
+  const [selectedOptions, setSelectedOptions] = React.useState<
+    Record<string, string[]>
+  >(() =>
+    Object.fromEntries(
+      groups.map((group) => [
+        group.id,
+        group.values
+          .filter(
+            (value) => value.isActive && value.value.isActive && value.isDefault
+          )
+          .map((value) => value.id),
+      ])
+    )
+  )
   const [quantity, setQuantity] = React.useState(1)
   const [notes, setNotes] = React.useState("")
 
   const variant = variants.find((candidate) => candidate.id === variantId)
   const selectedExtras = extras.filter((extra) => extraIds.includes(extra.id))
+  const selectedCartOptions = groups.flatMap((group) =>
+    group.values
+      .filter((value) => selectedOptions[group.id]?.includes(value.id))
+      .map((value) => ({
+        itemOptionValueId: value.id,
+        groupName: group.group.name,
+        name: value.value.name,
+        price: Number(value.priceDelta),
+      }))
+  )
   const unitPrice =
     Number(product.price) +
     Number(variant?.priceAdjust ?? 0) +
-    selectedExtras.reduce((sum, extra) => sum + Number(extra.price), 0)
+    selectedExtras.reduce((sum, extra) => sum + Number(extra.price), 0) +
+    selectedCartOptions.reduce((sum, option) => sum + option.price, 0)
+
+  function chooseOption(groupId: string, valueId: string, multiple: boolean) {
+    setSelectedOptions((current) => {
+      const ids = current[groupId] ?? []
+
+      if (!multiple) return { ...current, [groupId]: [valueId] }
+
+      return {
+        ...current,
+        [groupId]: ids.includes(valueId)
+          ? ids.filter((id) => id !== valueId)
+          : [...ids, valueId],
+      }
+    })
+  }
 
   const toggle = (list: string[], id: string, setter: (next: string[]) => void) => {
     setter(list.includes(id) ? list.filter((value) => value !== id) : [...list, id])
@@ -716,6 +859,78 @@ function AddItemDialog({
               </Select>
             </div>
           ) : null}
+
+          {groups.map((group) => {
+            const chosen = selectedOptions[group.id] ?? []
+            const max = group.maxSelect ?? group.values.length
+
+            return (
+              <div key={group.id} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {group.group.name}
+                    {group.isRequired ? (
+                      <span className="text-destructive"> *</span>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {group.selection === "SINGLE"
+                      ? "Elige una"
+                      : `Hasta ${max}`}
+                  </span>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.values
+                    .filter(
+                      (value) => value.isActive && value.value.isActive
+                    )
+                    .map((value) => {
+                      const checked = chosen.includes(value.id)
+                      const disabled =
+                        group.selection === "MULTIPLE" &&
+                        !checked &&
+                        chosen.length >= max
+
+                      return (
+                        <label
+                          key={value.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg border border-border/60 p-2 text-sm"
+                        >
+                          {group.selection === "SINGLE" ? (
+                            <input
+                              type="radio"
+                              name={`pos-group-${group.id}`}
+                              className="size-4 accent-primary"
+                              checked={checked}
+                              onChange={() =>
+                                chooseOption(group.id, value.id, false)
+                              }
+                              aria-label={value.value.name}
+                            />
+                          ) : (
+                            <Checkbox
+                              checked={checked}
+                              disabled={disabled}
+                              onCheckedChange={() =>
+                                chooseOption(group.id, value.id, true)
+                              }
+                              aria-label={value.value.name}
+                            />
+                          )}
+                          <span className="flex-1">{value.value.name}</span>
+                          {Number(value.priceDelta) !== 0 ? (
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              +{formatMoney(value.priceDelta)}
+                            </span>
+                          ) : null}
+                        </label>
+                      )
+                    })}
+                </div>
+              </div>
+            )
+          })}
 
           {extras.length > 0 ? (
             <div className="flex flex-col gap-2">
@@ -814,7 +1029,18 @@ function AddItemDialog({
           </Button>
           <Button
             type="button"
-            onClick={() =>
+            onClick={() => {
+              const missing = groups.find(
+                (group) =>
+                  group.isRequired &&
+                  (selectedOptions[group.id]?.length ?? 0) === 0
+              )
+
+              if (missing) {
+                toast.error(`Elige ${missing.group.name}`)
+                return
+              }
+
               onAdd({
                 itemId: product.id,
                 itemName: product.name,
@@ -828,6 +1054,7 @@ function AddItemDialog({
                   name: extra.name,
                   price: Number(extra.price),
                 })),
+                options: selectedCartOptions,
                 excludedIngredientIds: excludedIds,
                 excludedNames: exclusions
                   .filter((exclusion) =>
@@ -835,7 +1062,7 @@ function AddItemDialog({
                   )
                   .map((exclusion) => exclusion.ingredient.name),
               })
-            }
+            }}
           >
             Añadir a la comanda
           </Button>

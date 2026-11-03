@@ -51,6 +51,18 @@ export async function setCoreCategoryGroupActive(
   )
 }
 
+/** Activa/desactiva los grupos de opciones core sugeridos. */
+export async function setCoreOptionGroupsActive(
+  isActive: boolean
+): Promise<ActionResult> {
+  return mutateApi(
+    "/catalog/option-groups/core-status",
+    "PATCH",
+    { isActive },
+    ["/settings", "/catalog"]
+  )
+}
+
 export interface OrganizationNameInput {
   name?: string
   domain?: string

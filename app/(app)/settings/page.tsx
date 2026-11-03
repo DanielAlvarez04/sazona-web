@@ -11,6 +11,7 @@ import {
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
+import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
 import { InventoryPreferencesCard } from "@/components/settings/inventory-preferences-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
@@ -39,6 +40,7 @@ import {
   type Ingredient,
   type IngredientCategory,
   type IngredientLocation,
+  type OptionGroupPreset,
 } from "@/lib/catalog"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
@@ -89,6 +91,7 @@ export default async function SettingsPage({
     activeBranch,
     articleCategoriesResponse,
     recipeCategoriesResponse,
+    optionPresetsResponse,
   ] = await Promise.all([
     apiFetch("/inventory/ingredients?includeInactive=true"),
     apiFetch("/inventory/ingredient-categories?includeInactive=true"),
@@ -96,6 +99,7 @@ export default async function SettingsPage({
     getActiveBranch(),
     apiFetch("/catalog/categories?includeInactive=true&kind=article"),
     apiFetch("/catalog/categories?includeInactive=true&kind=recipe"),
+    apiFetch("/catalog/option-groups/presets"),
   ])
   const ingredients: Ingredient[] = ingredientsResponse.ok
     ? ((await ingredientsResponse.json()) as Ingredient[])
@@ -111,6 +115,9 @@ export default async function SettingsPage({
     : []
   const recipeCategories: Category[] = recipeCategoriesResponse.ok
     ? ((await recipeCategoriesResponse.json()) as Category[])
+    : []
+  const optionPresets: OptionGroupPreset[] = optionPresetsResponse.ok
+    ? ((await optionPresetsResponse.json()) as OptionGroupPreset[])
     : []
   const inventoryLoaded = ingredientsResponse.ok
   const catalogLoaded =
@@ -356,13 +363,20 @@ export default async function SettingsPage({
           </>
         }
         catalog={
-          <CatalogCategoriesCard
-            articleCategories={articleCategories}
-            recipeCategories={recipeCategories}
-            canManage={
-              catalogCategoriesLoaded && canManageCatalog(user.roles)
-            }
-          />
+          <>
+            <CatalogCategoriesCard
+              articleCategories={articleCategories}
+              recipeCategories={recipeCategories}
+              canManage={
+                catalogCategoriesLoaded && canManageCatalog(user.roles)
+              }
+            />
+            <CoreOptionGroupsCard
+              presets={optionPresets}
+              active={user.organizationUseCoreOptionGroups}
+              canManage={canManageCatalog(user.roles)}
+            />
+          </>
         }
         inventory={
           <>

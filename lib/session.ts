@@ -22,6 +22,8 @@ export interface SessionUser {
   organizationTaxRate: string
   /** La organización usa la sección de insumos core sugeridos. */
   organizationUseCoreSuggestions: boolean
+  /** La organización usa los grupos de opciones core sugeridos. */
+  organizationUseCoreOptionGroups: boolean
 }
 
 interface MeResponse {
@@ -42,6 +44,7 @@ interface MeResponse {
     domain?: string | null
     taxRate?: string | null
     useCoreSuggestions?: boolean | null
+    useCoreOptionGroups?: boolean | null
   } | null
 }
 
@@ -78,6 +81,8 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       organizationTaxRate: data.organization?.taxRate ?? "0.16",
       organizationUseCoreSuggestions:
         data.organization?.useCoreSuggestions ?? true,
+      organizationUseCoreOptionGroups:
+        data.organization?.useCoreOptionGroups ?? true,
     }
   } catch {
     return null

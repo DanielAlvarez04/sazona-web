@@ -197,6 +197,111 @@ export interface Extra {
   ingredients?: ExtraIngredient[]
 }
 
+// ---------------------------------------------------------------------------
+// Opciones configurables (grupos, valores, efectos y promociones)
+// ---------------------------------------------------------------------------
+
+export type OptionSelection = "SINGLE" | "MULTIPLE"
+export type OptionEffectAction = "ADD" | "REPLACE" | "REMOVE"
+export type PromotionType = "PERCENT" | "FIXED" | "BOGO"
+
+/** Valor de la biblioteca del negocio (sin precio: el precio es por artículo). */
+export interface OptionValue {
+  id: string
+  name: string
+  kitchenLabel: string | null
+  sortOrder: number
+  isActive: boolean
+}
+
+/** Grupo de la biblioteca del negocio ("Salsas", "Proteínas", "Extras"). */
+export interface OptionGroup {
+  id: string
+  name: string
+  description: string | null
+  sortOrder: number
+  isActive: boolean
+  values: OptionValue[]
+  _count?: { itemGroups: number }
+}
+
+/**
+ * Los grupos de exclusión ("Sin cebolla", "Sin queso"...) no cambian el precio
+ * del artículo: la opción solo quita un ingrediente.
+ */
+export function isNoPriceOptionGroup(name: string): boolean {
+  return /^sin\b/i.test(name.trim())
+}
+
+/** Plantillas sugeridas por la app (se copian a la biblioteca al usarlas). */
+export interface OptionGroupPreset {
+  name: string
+  description: string
+  values: Array<{ name: string; kitchenLabel?: string }>
+}
+
+export interface OptionEffect {
+  id?: string
+  action: OptionEffectAction
+  recipeIngredientId: string | null
+  ingredientId: string | null
+  quantity: string | null
+}
+
+/** Valor del grupo aplicado a un artículo, con su precio y default. */
+export interface ItemOptionValue {
+  id: string
+  valueId: string
+  priceDelta: string
+  isDefault: boolean
+  sortOrder: number
+  isActive: boolean
+  value: {
+    id: string
+    name: string
+    kitchenLabel: string | null
+    isActive: boolean
+  }
+  effects?: OptionEffect[]
+}
+
+/** Asignación de un grupo a un artículo y sus reglas de selección. */
+export interface ItemOptionGroup {
+  id: string
+  groupId: string
+  isRequired: boolean
+  selection: OptionSelection
+  minSelect: number
+  maxSelect: number | null
+  sortOrder: number
+  group: { id: string; name: string; description?: string | null }
+  values: ItemOptionValue[]
+}
+
+export interface ComboPromotion {
+  id: string
+  name: string
+  type: PromotionType
+  value: string
+  startsAt: string | null
+  endsAt: string | null
+  daysOfWeek: number[]
+  startTime: string | null
+  endTime: string | null
+  isActive: boolean
+}
+
+export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
+  PERCENT: "Descuento %",
+  FIXED: "Descuento fijo",
+  BOGO: "2x1",
+}
+
+export const OPTION_SELECTION_LABELS: Record<OptionSelection, string> = {
+  SINGLE: "Elegir una",
+  MULTIPLE: "Elegir varias",
+}
+
 export interface ItemListItem {
   id: string
   name: string
@@ -220,6 +325,12 @@ export interface ItemListItem {
   variants: Variant[]
   extras: Extra[]
   ingredientExclusions: Exclusion[]
+  /** Grupos de opciones configurados (salsas, proteínas, extras, "sin…"). */
+  optionGroups?: ItemOptionGroup[]
+  /** Promociones del combo (solo combos). */
+  promotions?: ComboPromotion[]
+  /** Componentes del combo (solo combos). */
+  comboComponents?: ComboComponent[]
   recipes?: Array<{
     id: string
     name: string
@@ -227,10 +338,10 @@ export interface ItemListItem {
     isActive: boolean
   }>
   /**
-   * Menús donde se usa el artículo. Pendiente en la API: la UI del catálogo ya
-   * la consume para el hovercard de la columna "Menú".
+   * Menús donde se usa el artículo. La API los devuelve con su estado para
+   * distinguir los inactivos igual que se hace con los artículos.
    */
-  menus?: Array<{ id: string; name: string }>
+  menus?: Array<{ id: string; name: string; isActive: boolean }>
   _count: { recipes: number }
 }
 

@@ -31,6 +31,7 @@ import {
   Settings2Icon,
   ShoppingCartIcon,
   UsersIcon,
+  UtensilsCrossedIcon,
 } from "lucide-react"
 
 const data = {
@@ -54,6 +55,11 @@ const data = {
       title: "Catálogo",
       url: "/catalog",
       icon: <CoffeeIcon />,
+    },
+    {
+      title: "Menús",
+      url: "/menus",
+      icon: <UtensilsCrossedIcon />,
     },
     {
       title: "Inventario",

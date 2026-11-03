@@ -309,10 +309,22 @@ function MenuPreview({ article }: { article: ArticleListItem }) {
             {menus.map((menu) => (
               <div
                 key={menu.id}
-                className="truncate rounded-md px-2 py-1 text-sm"
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm"
                 title={menu.name}
               >
-                {menu.name}
+                <span
+                  className={cn(
+                    "truncate",
+                    !menu.isActive && "text-muted-foreground"
+                  )}
+                >
+                  {menu.name}
+                </span>
+                {!menu.isActive ? (
+                  <Badge variant="outline" className="text-[10px]">
+                    Inactivo
+                  </Badge>
+                ) : null}
               </div>
             ))}
           </div>

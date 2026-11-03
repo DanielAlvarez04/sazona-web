@@ -1,6 +1,13 @@
 ﻿"use server"
 
-import type { ImportResult, UnitCode } from "@/lib/catalog"
+import type {
+  ImportResult,
+  OptionEffectAction,
+  OptionGroup,
+  OptionSelection,
+  PromotionType,
+  UnitCode,
+} from "@/lib/catalog"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 
 const CATALOG_PATHS = ["/catalog"]
@@ -334,6 +341,7 @@ export interface ArticleInput {
   price: number
   /** Clave del objeto en R2; `null` quita la imagen. */
   imageKey?: string | null
+  isCombo?: boolean
   variants?: Array<{
     name: string
     priceAdjust?: number
@@ -342,6 +350,49 @@ export interface ArticleInput {
     isActive?: boolean
     isPrimary?: boolean
   }>
+  comboComponents?: ComboComponentInput[]
+  optionGroups?: OptionGroupAssignmentInput[]
+  promotions?: ComboPromotionInput[]
+}
+
+export interface OptionGroupAssignmentInput {
+  groupId: string
+  isRequired?: boolean
+  selection?: OptionSelection
+  minSelect?: number
+  maxSelect?: number
+  sortOrder?: number
+  values: Array<{
+    valueId: string
+    priceDelta?: number
+    isDefault?: boolean
+    sortOrder?: number
+    isActive?: boolean
+    effects?: Array<{
+      action: OptionEffectAction
+      recipeIngredientId?: string
+      ingredientId?: string
+      quantity?: number
+    }>
+  }>
+}
+
+export interface OptionGroupInput {
+  name: string
+  description?: string
+  values: Array<{ name: string; kitchenLabel?: string }>
+}
+
+export interface ComboPromotionInput {
+  name: string
+  type: PromotionType
+  value?: number
+  startsAt?: string | null
+  endsAt?: string | null
+  daysOfWeek?: number[]
+  startTime?: string | null
+  endTime?: string | null
+  isActive?: boolean
 }
 
 export interface PresignImageInput {
@@ -442,6 +493,113 @@ export async function replaceComboComponents(
     "PUT",
     { components },
     productPaths(itemId)
+  )
+}
+
+export async function replaceComboPromotions(
+  itemId: string,
+  promotions: ComboPromotionInput[]
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/items/${itemId}/promotions`,
+    "PUT",
+    { promotions },
+    productPaths(itemId)
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Biblioteca de grupos de opciones
+// ---------------------------------------------------------------------------
+
+export async function createOptionGroup(
+  input: OptionGroupInput
+): Promise<ActionResult<OptionGroup>> {
+  return mutateApi<OptionGroup>(
+    "/catalog/option-groups",
+    "POST",
+    input,
+    CATALOG_PATHS
+  )
+}
+
+export interface OptionGroupUpdateInput {
+  name?: string
+  description?: string | null
+  sortOrder?: number
+  isActive?: boolean
+}
+
+export interface OptionValueInput {
+  name: string
+  kitchenLabel?: string
+  sortOrder?: number
+}
+
+export interface OptionValueUpdateInput {
+  name?: string
+  kitchenLabel?: string | null
+  sortOrder?: number
+  isActive?: boolean
+}
+
+export async function updateOptionGroup(
+  groupId: string,
+  input: OptionGroupUpdateInput
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/option-groups/${groupId}`,
+    "PATCH",
+    input,
+    CATALOG_PATHS
+  )
+}
+
+export async function deactivateOptionGroup(
+  groupId: string
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/option-groups/${groupId}`,
+    "DELETE",
+    undefined,
+    CATALOG_PATHS
+  )
+}
+
+export async function createOptionValue(
+  groupId: string,
+  input: OptionValueInput
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/option-groups/${groupId}/values`,
+    "POST",
+    input,
+    CATALOG_PATHS
+  )
+}
+
+export async function updateOptionValue(
+  groupId: string,
+  valueId: string,
+  input: OptionValueUpdateInput
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/option-groups/${groupId}/values/${valueId}`,
+    "PATCH",
+    input,
+    CATALOG_PATHS
+  )
+}
+
+export async function deactivateOptionValue(
+  groupId: string,
+  valueId: string
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/option-groups/${groupId}/values/${valueId}`,
+    "DELETE",
+    undefined,
+    CATALOG_PATHS
   )
 }
 

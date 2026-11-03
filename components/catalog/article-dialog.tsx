@@ -13,6 +13,13 @@ import {
 } from "@/app/(app)/catalog/actions"
 import { ImageDropzone } from "@/components/catalog/image-dropzone"
 import {
+  OptionGroupsEditor,
+  optionGroupDrafts,
+  optionGroupPayload,
+  optionGroupsSignature,
+  type OptionGroupDraft,
+} from "@/components/catalog/option-groups-editor"
+import {
   PresentationRows,
   defaultPresentationRows,
   nextPresentationKey,
@@ -58,9 +65,16 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
-import type { ArticleListItem, Category } from "@/lib/catalog"
+import { isNoPriceOptionGroup } from "@/lib/catalog"
+import type {
+  ArticleListItem,
+  Category,
+  OptionGroup,
+  OptionGroupPreset,
+} from "@/lib/catalog"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 import { uploadItemImage } from "@/lib/uploads"
 
@@ -126,11 +140,15 @@ export function ArticleDialog({
   onOpenChange,
   article,
   categories,
+  optionGroups,
+  optionPresets,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   article: ArticleListItem | null
   categories: Category[]
+  optionGroups: OptionGroup[]
+  optionPresets: OptionGroupPreset[]
 }) {
   const router = useRouter()
   const form = useActionForm(() => {
@@ -154,8 +172,16 @@ export function ArticleDialog({
   const [rows, setRows] = useState<PresentationRow[]>(() =>
     initialRows(article)
   )
+  const [groups, setGroups] = useState<OptionGroupDraft[]>(() =>
+    optionGroupDrafts(article?.optionGroups)
+  )
+  const [optionsEnabled, setOptionsEnabled] = useState(
+    () => (article?.optionGroups?.length ?? 0) > 0
+  )
   // Confirmación al apagar «Múltiples presentaciones» de un artículo guardado.
   const [confirmDisableVariants, setConfirmDisableVariants] = useState(false)
+  // Confirmación al apagar las opciones de un artículo ya guardado.
+  const [confirmDisableOptions, setConfirmDisableOptions] = useState(false)
 
   /** El nombre del artículo arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
@@ -200,6 +226,16 @@ export function ArticleDialog({
     applyMultipleChange(next)
   }
 
+  /** Apagar las opciones no borra el borrador: solo lo excluye al guardar. */
+  function handleOptionsChange(next: boolean) {
+    if (!next && (article?.optionGroups?.length ?? 0) > 0) {
+      setConfirmDisableOptions(true)
+      return
+    }
+
+    setOptionsEnabled(next)
+  }
+
   function handleClear() {
     setName("")
     setDescription("")
@@ -208,6 +244,8 @@ export function ArticleDialog({
     setImage(null)
     setMultiple(false)
     setRows([])
+    setGroups([])
+    setOptionsEnabled(false)
     form.setError(null)
   }
 
@@ -274,12 +312,48 @@ export function ArticleDialog({
       }
     }
 
+    const activeGroups = optionsEnabled ? groups : []
+
+    for (const group of activeGroups) {
+      if (group.values.length === 0) {
+        form.setError(`El grupo «${group.groupName}» no tiene opciones`)
+        return
+      }
+
+      if (group.isRequired && !group.values.some((item) => item.isActive)) {
+        form.setError(
+          `El grupo obligatorio «${group.groupName}» necesita al menos una opción disponible`
+        )
+        return
+      }
+
+      for (const item of group.values) {
+        if (!item.isActive || isNoPriceOptionGroup(group.groupName)) continue
+
+        const delta = Number(item.priceDelta)
+        if (!Number.isFinite(delta) || delta < 0) {
+          form.setError(`Revisa el cargo de «${item.name}»`)
+          return
+        }
+      }
+    }
+
+    const groupsChanged = optionsEnabled
+      ? article
+        ? optionGroupsSignature(groups) !==
+          optionGroupsSignature(optionGroupDrafts(article.optionGroups))
+        : groups.length > 0
+      : (article?.optionGroups?.length ?? 0) > 0
+
     const payload: ArticleInput = {
       name: trimmedName,
       description: description.trim() || null,
       categoryId,
       price: basePrice,
       variants,
+      ...(optionsEnabled && groups.length > 0
+        ? { optionGroups: optionGroupPayload(groups) }
+        : {}),
     }
 
     const imagePending = image?.kind === "pending"
@@ -298,6 +372,9 @@ export function ArticleDialog({
             : { categoryId }),
           ...(sameNumber(article.price, basePrice) ? {} : { price: basePrice }),
           ...(variantsChanged(article, variants) ? { variants } : {}),
+          ...(groupsChanged
+            ? { optionGroups: optionGroupPayload(activeGroups) }
+            : {}),
           ...(imageRemoved ? { imageKey: null } : {}),
         }
       : payload
@@ -453,37 +530,90 @@ export function ArticleDialog({
 
           <Separator />
 
-          <section className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="article-multiple" className="text-sm font-medium">
-                  Múltiples presentaciones
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Crea más presentaciones y elige cuál es la principal. Si no
-                  indicas un precio propio, cada presentación conserva el de la
-                  principal.
-                </p>
-              </div>
-              <Switch
-                id="article-multiple"
-                checked={multiple}
-                disabled={form.pending}
-                onCheckedChange={handleMultipleChange}
-              />
-            </div>
+          <Tabs defaultValue="opciones" className="gap-4">
+            <TabsList>
+              <TabsTrigger type="button" value="opciones">
+                Opciones
+              </TabsTrigger>
+              <TabsTrigger type="button" value="presentaciones">
+                Presentaciones
+              </TabsTrigger>
+            </TabsList>
 
-            {multiple ? (
-              <PresentationRows
-                rows={rows}
-                onChange={setRows}
-                articleName={name}
-                articlePrice={price}
-                onArticlePriceChange={setPrice}
-                disabled={form.pending}
-              />
-            ) : null}
-          </section>
+            <TabsContent value="opciones" keepMounted>
+              <section className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="article-options"
+                      className="text-sm font-medium"
+                    >
+                      Opciones del artículo
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Grupos como salsa, proteína, leche o extras. Marca las
+                      opciones que podrá elegir el mesero en la comanda; activa
+                      «Múltiples opciones» si puede elegir más de una.
+                    </p>
+                  </div>
+                  <Switch
+                    id="article-options"
+                    checked={optionsEnabled}
+                    disabled={form.pending}
+                    onCheckedChange={handleOptionsChange}
+                  />
+                </div>
+
+                <OptionGroupsEditor
+                  library={optionGroups}
+                  presets={optionPresets}
+                  value={groups}
+                  onChange={setGroups}
+                  disabled={form.pending}
+                  hideHeader
+                  suggestionsOnly={!optionsEnabled}
+                  onGroupAdded={() => setOptionsEnabled(true)}
+                />
+              </section>
+            </TabsContent>
+
+            <TabsContent value="presentaciones" keepMounted>
+              <section className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="article-multiple"
+                      className="text-sm font-medium"
+                    >
+                      Múltiples presentaciones
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Crea más presentaciones y elige cuál es la principal. Si no
+                      indicas un precio propio, cada presentación conserva el de
+                      la principal.
+                    </p>
+                  </div>
+                  <Switch
+                    id="article-multiple"
+                    checked={multiple}
+                    disabled={form.pending}
+                    onCheckedChange={handleMultipleChange}
+                  />
+                </div>
+
+                {multiple ? (
+                  <PresentationRows
+                    rows={rows}
+                    onChange={setRows}
+                    articleName={name}
+                    articlePrice={price}
+                    onArticlePriceChange={setPrice}
+                    disabled={form.pending}
+                  />
+                ) : null}
+              </section>
+            </TabsContent>
+          </Tabs>
 
           {form.error ? <FieldError>{form.error}</FieldError> : null}
         </div>
@@ -530,6 +660,33 @@ export function ArticleDialog({
               <AlertDialogAction
                 variant="destructive"
                 onClick={() => applyMultipleChange(false)}
+              >
+                Desactivar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={confirmDisableOptions}
+          onOpenChange={setConfirmDisableOptions}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+                <TriangleAlertIcon />
+              </AlertDialogMedia>
+              <AlertDialogTitle>Desactivar opciones</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se quitarán los grupos configurados de este artículo. Los grupos
+                de la biblioteca no se borran. ¿Continuar?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => setOptionsEnabled(false)}
               >
                 Desactivar
               </AlertDialogAction>

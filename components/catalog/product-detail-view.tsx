@@ -5,6 +5,7 @@ import { ProductCombo } from "@/components/catalog/product-combo"
 import { ProductExclusions } from "@/components/catalog/product-exclusions"
 import { ProductExtras } from "@/components/catalog/product-extras"
 import { ProductGeneralForm } from "@/components/catalog/product-general-form"
+import { ProductOptions } from "@/components/catalog/product-options"
 import { ProductVariants } from "@/components/catalog/product-variants"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -14,6 +15,8 @@ import type {
   Ingredient,
   ItemDetail,
   ItemListItem,
+  OptionGroup,
+  OptionGroupPreset,
 } from "@/lib/catalog"
 
 export function ProductDetailView({
@@ -21,6 +24,8 @@ export function ProductDetailView({
   categories,
   ingredients,
   products,
+  optionGroups,
+  optionPresets,
   organizationTaxRate,
   canManage,
 }: {
@@ -28,6 +33,8 @@ export function ProductDetailView({
   categories: Category[]
   ingredients: Ingredient[]
   products: ItemListItem[]
+  optionGroups: OptionGroup[]
+  optionPresets: OptionGroupPreset[]
   organizationTaxRate: string
   canManage: boolean
 }) {
@@ -74,6 +81,13 @@ export function ProductDetailView({
         </div>
 
         <ProductVariants product={product} canManage={canManage} />
+
+        <ProductOptions
+          product={product}
+          library={optionGroups}
+          presets={optionPresets}
+          canManage={canManage}
+        />
 
         <ProductExtras
           product={product}

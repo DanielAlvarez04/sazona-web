@@ -93,6 +93,15 @@ export interface OrderItemExclusion {
   }
 }
 
+export interface OrderItemOption {
+  id: string
+  itemOptionValueId: string | null
+  groupName: string
+  optionName: string
+  kitchenLabel: string | null
+  priceDelta: string
+}
+
 export interface OrderItem {
   id: string
   itemId: string
@@ -105,7 +114,10 @@ export interface OrderItem {
   quantity: number
   notes: string | null
   subtotal: string
+  /** Descuento aplicado por una promoción del combo. */
+  discountAmount: string
   extras: OrderItemExtra[]
+  options: OrderItemOption[]
   exclusions: OrderItemExclusion[]
 }
 
