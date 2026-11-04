@@ -264,7 +264,7 @@ export function ArticlesTable({
         layout="sidebar"
         search={{
           label: "Buscar artículo",
-          placeholder: "Buscar por nombre o SKU...",
+          placeholder: "Buscar por nombre",
           value: globalFilter,
           onValueChange: setGlobalFilter,
         }}

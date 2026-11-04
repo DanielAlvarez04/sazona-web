@@ -230,7 +230,7 @@ export function RecipesTable({
       layout="sidebar"
       search={{
         label: "Buscar receta",
-        placeholder: "Buscar por nombre...",
+        placeholder: "Buscar por nombre",
         value: globalFilter,
         onValueChange: setGlobalFilter,
       }}
