@@ -399,7 +399,7 @@ export function DataTable<TData extends RowData>({
           render={
             <Button
               variant="outline"
-              className={isSidebar ? "w-full justify-start" : undefined}
+              className={isSidebar ? "justify-start" : undefined}
               aria-label="Mostrar u ocultar columnas"
             />
           }
@@ -430,13 +430,17 @@ export function DataTable<TData extends RowData>({
       </DropdownMenu>
     ) : null
 
-  // En sidebar, la acción principal, el menú de tres puntos y el selector de
-  // vista comparten una sola fila.
-  const sidebarActionRow =
-    actions || viewToggle ? (
+  // En sidebar, la acción principal y el menú de tres puntos comparten una
+  // fila; el selector de vista y el botón de columnas van en la siguiente.
+  const sidebarPrimaryActions = actions ? (
+    <div className="flex flex-wrap items-center gap-2">{actions}</div>
+  ) : null
+
+  const sidebarViewRow =
+    viewToggle || columnToggle ? (
       <div className="flex flex-wrap items-center gap-2">
-        {actions}
         {viewToggle}
+        {columnToggle}
       </div>
     ) : null
 
@@ -454,9 +458,9 @@ export function DataTable<TData extends RowData>({
       >
         {isSidebar ? (
           <>
-            {sidebarActionRow}
+            {sidebarPrimaryActions}
+            {sidebarViewRow}
             {selectionActions}
-            {columnToggle}
           </>
         ) : (
           <>
@@ -610,7 +614,7 @@ export function DataTable<TData extends RowData>({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {isSidebar ? (
-        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-6">
           <aside className="flex min-w-0 flex-col gap-4">
             {actionsGroup}
             {actionsGroup ? <Separator /> : null}
