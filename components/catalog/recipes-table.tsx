@@ -22,6 +22,7 @@ import {
   type DataTableViewMode,
 } from "@/components/data-table/data-table"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuContent,
@@ -281,7 +282,7 @@ export function RecipesTable({
       )}
       actions={
         canManage ? (
-          <>
+          <ButtonGroup>
             <Button onClick={onCreate}>
               <PlusIcon className="size-4" />
               Nueva receta
@@ -304,7 +305,7 @@ export function RecipesTable({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </>
+          </ButtonGroup>
         ) : null
       }
       rowContextMenu={(recipe) => (

@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuContent,
@@ -323,7 +324,7 @@ export function ArticlesTable({
         }
         actions={
           canManage ? (
-            <>
+            <ButtonGroup>
               <Button onClick={onCreate}>
                 <PlusIcon className="size-4" />
                 Nuevo artículo
@@ -353,7 +354,7 @@ export function ArticlesTable({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </>
+            </ButtonGroup>
           ) : null
         }
         rowContextMenu={(article) => (
