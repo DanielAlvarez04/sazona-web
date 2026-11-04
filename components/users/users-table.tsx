@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  ChevronDownIcon,
   PencilIcon,
   Trash2Icon,
   UserCheckIcon,
@@ -23,6 +24,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   ContextMenuContent,
   ContextMenuGroup,
@@ -435,21 +443,32 @@ export function UsersTable({
               </Button>
             ) : null}
 
-            {inactiveCount > 0 ? (
-              <Button
-                variant="outline"
-                onClick={() => setConfirmingPurge(true)}
-                disabled={busy}
-              >
-                <Trash2Icon />
-                {`Eliminar inactivos (${inactiveCount})`}
+            <ButtonGroup>
+              <Button onClick={() => setCreating(true)}>
+                <UserPlusIcon />
+                <span className="hidden lg:inline">Añadir usuario</span>
               </Button>
-            ) : null}
 
-            <Button onClick={() => setCreating(true)}>
-              <UserPlusIcon />
-              <span className="hidden lg:inline">Añadir usuario</span>
-            </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<Button variant="default" size="icon" />}
+                >
+                  <ChevronDownIcon className="size-4" />
+                  <span className="sr-only">Más acciones</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setConfirmingPurge(true)}
+                    disabled={busy || inactiveCount === 0}
+                  >
+                    <Trash2Icon />
+                    Eliminar inactivos
+                    {inactiveCount > 0 ? ` (${inactiveCount})` : ""}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
           </>
         }
         rowContextMenu={(user) => {

@@ -324,10 +324,10 @@ export function ArticlesTable({
         }
         actions={
           canManage ? (
-            <ButtonGroup>
-              <Button onClick={onCreate}>
-                <PlusIcon className="size-4" />
-                Nuevo artículo
+            <ButtonGroup className="w-full">
+              <Button onClick={onCreate} className="min-w-0 flex-1">
+                <PlusIcon className="size-4 shrink-0" />
+                <span className="truncate">Nuevo artículo</span>
               </Button>
 
               <DropdownMenu>

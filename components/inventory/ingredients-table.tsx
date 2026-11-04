@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
-  EllipsisVerticalIcon,
+  ChevronDownIcon,
   FileTextIcon,
   ListPlusIcon,
   MinusIcon,
@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import {
   ContextMenuContent,
   ContextMenuGroup,
@@ -340,35 +341,37 @@ export function IngredientsTable({
                 </Button>
               ) : null}
 
-              <Button onClick={onCreate}>
-                <PlusIcon className="size-4" />
-                Nuevo insumo
-              </Button>
+              <ButtonGroup className="w-max">
+                <Button onClick={onCreate} className="min-w-0">
+                  <PlusIcon className="size-4 shrink-0" />
+                  <span className="truncate">Nuevo insumo</span>
+                </Button>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={<Button variant="outline" size="icon" />}
-                >
-                  <EllipsisVerticalIcon className="size-4" />
-                  <span className="sr-only">Más acciones</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={onBulkCreate}
-                    className="flex items-center gap-2"
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={<Button variant="default" size="icon" />}
                   >
-                    <ListPlusIcon className="size-4" />
-                    Añadir varios
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={onImportCsv}
-                    className="flex items-center gap-2"
-                  >
-                    <FileTextIcon className="size-4" />
-                    Importar CSV
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <ChevronDownIcon className="size-4" />
+                    <span className="sr-only">Más acciones</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={onBulkCreate}
+                      className="flex items-center gap-2"
+                    >
+                      <ListPlusIcon className="size-4" />
+                      Añadir varios
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={onImportCsv}
+                      className="flex items-center gap-2"
+                    >
+                      <FileTextIcon className="size-4" />
+                      Importar CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ButtonGroup>
             </>
           ) : null
         }

@@ -278,7 +278,6 @@ export function DataTable<TData extends RowData>({
     <div
       role="group"
       aria-label="Filtros"
-      style={isSidebar ? { contain: "inline-size" } : undefined}
       className={cn(
         "flex min-w-0",
         isSidebar
@@ -293,7 +292,7 @@ export function DataTable<TData extends RowData>({
           className={cn(
             "relative",
             isSidebar
-              ? "w-full"
+              ? "w-48"
               : "w-full sm:w-auto sm:min-w-40 sm:max-w-64"
           )}
         >
@@ -329,6 +328,7 @@ export function DataTable<TData extends RowData>({
             <SelectTrigger
               // En sidebar el filtro ocupa el ancho de la columna; en línea
               // crece con el nombre elegido para no cortar opciones largas.
+              style={isSidebar ? { contain: "inline-size" } : undefined}
               className={cn(
                 isSidebar ? "w-full" : "w-auto min-w-40 max-w-64"
               )}
@@ -434,12 +434,12 @@ export function DataTable<TData extends RowData>({
   // En sidebar, la acción principal y el menú de tres puntos comparten una
   // fila; el selector de vista y el botón de columnas van en la siguiente.
   const sidebarPrimaryActions = actions ? (
-    <div className="flex w-max flex-wrap items-center gap-2">{actions}</div>
+    <div className="flex w-full flex-wrap items-center gap-2">{actions}</div>
   ) : null
 
   const sidebarViewRow =
     viewToggle || columnToggle ? (
-      <div className="flex w-max flex-wrap items-center gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2">
         {viewToggle}
         {columnToggle}
       </div>
@@ -450,10 +450,11 @@ export function DataTable<TData extends RowData>({
       <div
         role="group"
         aria-label="Acciones"
+        style={isSidebar ? { contain: "inline-size" } : undefined}
         className={cn(
           "flex",
           isSidebar
-            ? "flex-col items-stretch gap-3"
+            ? "w-full flex-col items-stretch gap-3"
             : "shrink-0 flex-wrap items-center gap-2"
         )}
       >
@@ -622,7 +623,9 @@ export function DataTable<TData extends RowData>({
             {selectionActions ? (
               <>
                 <Separator />
-                {selectionActions}
+                <div className="flex w-full" style={{ contain: "inline-size" }}>
+                  {selectionActions}
+                </div>
               </>
             ) : null}
           </aside>
