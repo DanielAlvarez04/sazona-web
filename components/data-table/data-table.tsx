@@ -434,15 +434,12 @@ export function DataTable<TData extends RowData>({
   // En sidebar, la acción principal y el menú de tres puntos comparten una
   // fila; el selector de vista y el botón de columnas van en la siguiente.
   const sidebarPrimaryActions = actions ? (
-    <div className="flex flex-wrap items-center gap-2">{actions}</div>
+    <div className="flex w-max flex-wrap items-center gap-2">{actions}</div>
   ) : null
 
   const sidebarViewRow =
     viewToggle || columnToggle ? (
-      <div
-        className="flex w-full flex-wrap items-center gap-2"
-        style={{ contain: "inline-size" }}
-      >
+      <div className="flex w-max flex-wrap items-center gap-2">
         {viewToggle}
         {columnToggle}
       </div>
