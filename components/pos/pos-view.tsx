@@ -51,6 +51,7 @@ import type { Branch } from "@/lib/branches"
 import type { Menu } from "@/lib/menus"
 import { orderLabel, type Order } from "@/lib/orders"
 import { trackEvent } from "@/lib/analytics"
+import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { ChargeDialog } from "./charge-dialog"
 
@@ -413,7 +414,8 @@ export function PosView({
               ]}
             >
               <SelectTrigger
-                className="w-52"
+                data-active={Boolean(categoryId)}
+                className={cn("w-52", categoryId && ACTIVE_FILTER_OUTLINE)}
                 aria-label="Filtrar por categoría"
               >
                 <SelectValue placeholder="Todas las categorías" />
@@ -450,7 +452,11 @@ export function PosView({
                 })),
               ]}
             >
-              <SelectTrigger className="w-56" aria-label="Filtrar por menú">
+              <SelectTrigger
+                data-active={Boolean(menuId)}
+                className={cn("w-56", menuId && ACTIVE_FILTER_OUTLINE)}
+                aria-label="Filtrar por menú"
+              >
                 <SelectValue placeholder="Todos los menús" />
               </SelectTrigger>
               <SelectContent>

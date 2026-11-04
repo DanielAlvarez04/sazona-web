@@ -145,7 +145,7 @@ export function RecipeActionsMenu({
               <Undo2Icon />
               Quitar artículo
             </DropdownMenuItem>
-          ) : (
+          ) : recipe.producesIngredient ? null : (
             <DropdownMenuItem onClick={() => actions.onPublish(recipe)}>
               <UploadIcon />
               Publicar como artículo
@@ -240,7 +240,10 @@ export function createRecipeColumns(
     }),
 
     columnHelper.accessor(
-      (recipe) => recipe.category?.name ?? "Sin categoría",
+      (recipe) =>
+        recipe.category?.name ??
+        recipe.producesIngredient?.category?.name ??
+        "Sin categoría",
       {
         id: "category",
         header: ({ column }) => (

@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { ACTIVE_FILTER_OUTLINE } from "@/lib/utils"
 
 import {
   dataTableFeatures,
@@ -318,6 +319,7 @@ export function DataTable<TData extends RowData>({
         const selectedLabel =
           filter.options.find((option) => option.value === filter.value)
             ?.label ?? filter.allLabel
+        const isActive = filter.value !== DATA_TABLE_ALL
 
         return (
           <Select
@@ -332,8 +334,10 @@ export function DataTable<TData extends RowData>({
               // En sidebar el filtro ocupa el ancho de la columna; en línea
               // crece con el nombre elegido para no cortar opciones largas.
               style={isSidebar ? { contain: "inline-size" } : undefined}
+              data-active={isActive}
               className={cn(
-                isSidebar ? "w-full" : "w-auto min-w-40 max-w-64"
+                isSidebar ? "w-full" : "w-auto min-w-40 max-w-64",
+                isActive && ACTIVE_FILTER_OUTLINE
               )}
               aria-label={filter.ariaLabel}
               title={selectedLabel}
@@ -439,21 +443,22 @@ export function DataTable<TData extends RowData>({
   const cardColumnsControl =
     viewMode === "cards" && onViewModeChange ? (
       <ButtonGroup
-        aria-label="Columnas de las tarjetas"
+        aria-label="Tamaño de las tarjetas"
         className="min-w-0 flex-1"
       >
         <ButtonGroupText className="h-9 flex-1 px-2 text-xs">
-          Columnas
+          Tamaño
         </ButtonGroupText>
+        {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}
         <Button
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Menos columnas"
-          title="Menos columnas"
-          disabled={cardColumns <= 4}
+          aria-label="Tarjetas más pequeñas"
+          title="Tarjetas más pequeñas"
+          disabled={cardColumns >= 7}
           onClick={() =>
-            setCardColumns((current) => Math.max(4, current - 1))
+            setCardColumns((current) => Math.min(7, current + 1))
           }
         >
           <MinusIcon className="size-4" />
@@ -462,11 +467,11 @@ export function DataTable<TData extends RowData>({
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Más columnas"
-          title="Más columnas"
-          disabled={cardColumns >= 7}
+          aria-label="Tarjetas más grandes"
+          title="Tarjetas más grandes"
+          disabled={cardColumns <= 4}
           onClick={() =>
-            setCardColumns((current) => Math.min(7, current + 1))
+            setCardColumns((current) => Math.max(4, current - 1))
           }
         >
           <PlusIcon className="size-4" />

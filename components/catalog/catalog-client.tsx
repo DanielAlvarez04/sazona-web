@@ -20,7 +20,10 @@ import {
   unpublishRecipe,
   updateRecipe,
 } from "@/app/(app)/catalog/actions"
-import { ArticleDialog } from "@/components/catalog/article-dialog"
+import {
+  ProductDialog,
+  type ProductSaveAs,
+} from "@/components/catalog/product-dialog"
 import { ArticlesTable } from "@/components/catalog/articles-table"
 import { CatalogSummary } from "@/components/catalog/catalog-summary"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
@@ -47,6 +50,7 @@ import type {
   ArticleListItem,
   Category,
   Ingredient,
+  IngredientCategory,
   OptionGroup,
   OptionGroupPreset,
   Recipe,
@@ -57,6 +61,7 @@ export function CatalogClient({
   articles,
   articleCategories,
   recipeCategories,
+  ingredientCategories,
   ingredients,
   optionGroups,
   optionPresets,
@@ -67,6 +72,7 @@ export function CatalogClient({
   articles: ArticleListItem[]
   articleCategories: Category[]
   recipeCategories: Category[]
+  ingredientCategories: IngredientCategory[]
   ingredients: Ingredient[]
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
@@ -75,15 +81,19 @@ export function CatalogClient({
 }) {
   const router = useRouter()
   const rowForm = useActionForm(() => router.refresh())
-  const regularArticles = articles.filter((article) => !article.isCombo)
+  // Los artículos archivados no se listan, pero el diálogo los necesita para
+  // conservar presentaciones, opciones y precio al cambiar de chip.
+  const visibleArticles = articles.filter((article) => !article.isArchived)
+  const regularArticles = visibleArticles.filter((article) => !article.isCombo)
 
+  const [tab, setTab] = useState("articulos")
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<"article" | "recipe">("article")
+  const [initialSaveAs, setInitialSaveAs] =
+    useState<ProductSaveAs>("article")
   const [editingArticle, setEditingArticle] = useState<ArticleListItem | null>(
     null
   )
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
-  const [publishIntent, setPublishIntent] = useState(false)
   const [producing, setProducing] = useState<Recipe | null>(null)
 
   const [categoriesOpen, setCategoriesOpen] = useState(false)
@@ -94,43 +104,49 @@ export function CatalogClient({
     recipe: Recipe
   } | null>(null)
 
-  function openNewRecipe() {
-    setDialogMode("recipe")
+  function openNewProduct(saveAs: ProductSaveAs) {
+    setInitialSaveAs(saveAs)
     setEditingArticle(null)
     setEditingRecipe(null)
-    setPublishIntent(false)
     setDialogOpen(true)
+  }
+
+  /** Artículo vinculado o borrador archivado que comparte la entrada. */
+  function articleOfRecipe(recipe: Recipe): ArticleListItem | null {
+    if (recipe.itemId) {
+      return articles.find((article) => article.id === recipe.itemId) ?? null
+    }
+
+    if (!recipe.catalogEntryId) return null
+
+    return (
+      articles.find(
+        (article) => article.catalogEntryId === recipe.catalogEntryId
+      ) ?? null
+    )
   }
 
   function openRecipe(recipe: Recipe, publish = false) {
-    setDialogMode("recipe")
     setEditingRecipe(recipe)
-    setEditingArticle(
-      recipe.itemId
-        ? (articles.find((article) => article.id === recipe.itemId) ?? null)
-        : null
+    setEditingArticle(articleOfRecipe(recipe))
+    setInitialSaveAs(
+      recipe.producesIngredientId
+        ? "ingredient"
+        : publish || recipe.itemId
+          ? "article"
+          : "recipe"
     )
-    setPublishIntent(publish || Boolean(recipe.itemId))
-    setDialogOpen(true)
-  }
-
-  function openNewArticle() {
-    setDialogMode("article")
-    setEditingArticle(null)
-    setEditingRecipe(null)
-    setPublishIntent(true)
     setDialogOpen(true)
   }
 
   function openArticle(article: ArticleListItem) {
-    setDialogMode("article")
     setEditingArticle(article)
     setEditingRecipe(
       recipes.find(
         (recipe) => recipe.itemId === article.id && !recipe.variantId
       ) ?? null
     )
-    setPublishIntent(true)
+    setInitialSaveAs("article")
     setDialogOpen(true)
   }
 
@@ -232,7 +248,7 @@ export function CatalogClient({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <Tabs defaultValue="articulos" className="gap-4">
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
         <TabsList>
           <TabsTrigger type="button" value="articulos">
             <BoxesIcon className="size-4" />
@@ -264,7 +280,7 @@ export function CatalogClient({
               articles={regularArticles}
               categories={articleCategories}
               canManage={canManage}
-              onCreate={openNewArticle}
+              onCreate={() => openNewProduct("article")}
               onEdit={openArticle}
               onActivate={handleActivateArticle}
               onDeactivate={handleDeactivateArticle}
@@ -277,7 +293,11 @@ export function CatalogClient({
 
         <TabsContent value="recetas" keepMounted>
           <div className="flex flex-col gap-4">
-            <CatalogSummary mode="recipes" recipes={recipes} articles={articles} />
+            <CatalogSummary
+              mode="recipes"
+              recipes={recipes}
+              articles={visibleArticles}
+            />
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {rowForm.error}
@@ -287,7 +307,7 @@ export function CatalogClient({
               recipes={recipes}
               categories={recipeCategories}
               canManage={canManage}
-              onCreate={openNewRecipe}
+              onCreate={() => openNewProduct("recipe")}
               onEdit={(recipe) => openRecipe(recipe)}
               onPublish={(recipe) => openRecipe(recipe, true)}
               onUnpublish={handleUnpublish}
@@ -301,8 +321,8 @@ export function CatalogClient({
 
         <TabsContent value="combos" keepMounted>
           <CombosPanel
-            combos={articles.filter((article) => article.isCombo)}
-            products={articles.filter((article) => !article.isCombo)}
+            combos={visibleArticles.filter((article) => article.isCombo)}
+            products={visibleArticles.filter((article) => !article.isCombo)}
             categories={articleCategories}
             optionGroups={optionGroups}
             optionPresets={optionPresets}
@@ -323,23 +343,23 @@ export function CatalogClient({
       </Tabs>
 
       {canManage && dialogOpen ? (
-        <ArticleDialog
+        <ProductDialog
           open
           onOpenChange={(open) => {
-            if (!open) {
-              setDialogOpen(false)
-              setPublishIntent(false)
-            }
+            if (!open) setDialogOpen(false)
           }}
-          mode={dialogMode}
           article={editingArticle}
           recipe={editingRecipe}
+          initialSaveAs={initialSaveAs}
           categories={articleCategories}
           recipeCategories={recipeCategories}
+          ingredientCategories={ingredientCategories}
           ingredients={ingredients}
           optionGroups={optionGroups}
           optionPresets={optionPresets}
-          initialArticle={publishIntent}
+          onSaved={(saveAs) =>
+            setTab(saveAs === "article" ? "articulos" : "recetas")
+          }
         />
       ) : null}
 

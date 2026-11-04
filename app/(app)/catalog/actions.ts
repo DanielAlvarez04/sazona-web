@@ -252,12 +252,14 @@ export interface RecipePublishInput {
     recipeFactor?: number
     sortOrder?: number
     isActive?: boolean
+    isPrimary?: boolean
   }>
 }
 
 export interface RecipeInput {
   name: string
   description?: string | null
+  notes?: string | null
   categoryId?: string | null
   isActive?: boolean
   /** Artículo existente al que se vincula la receta (sin volver a publicarlo). */
@@ -265,7 +267,14 @@ export interface RecipeInput {
   variantId?: string
   ingredients?: RecipeIngredientInput[]
   publish?: RecipePublishInput
-  produce?: { displayUnit: UnitCode; yieldQuantity: number }
+  produce?: {
+    displayUnit: UnitCode
+    yieldQuantity: number
+    /** Categoría de inventario del insumo producido. */
+    categoryId?: string
+    /** Stock mínimo en la unidad del rendimiento. */
+    minStock?: number
+  }
   /** Apaga el switch «Insumo»: desvincula el insumo producido. */
   clearProduce?: boolean
   /** Clave en R2 de la imagen propia de la receta; `null` la quita. */
@@ -326,6 +335,28 @@ export async function unpublishRecipe(
     `/catalog/recipes/${recipeId}/publish`,
     "DELETE",
     undefined,
+    ["/catalog"]
+  )
+}
+
+export interface RecipeDraftItemInput {
+  price?: number
+  variants?: ArticleInput["variants"]
+  optionGroups?: ArticleInput["optionGroups"]
+}
+
+/**
+ * Guarda el borrador de artículo de una receta (presentaciones y opciones)
+ * sin publicarla. El artículo queda archivado y se reutiliza al publicar.
+ */
+export async function saveRecipeDraftItem(
+  recipeId: string,
+  input: RecipeDraftItemInput
+): Promise<ActionResult<ArticleListItem>> {
+  return mutateApi<ArticleListItem>(
+    `/catalog/recipes/${recipeId}/draft-item`,
+    "PUT",
+    input,
     ["/catalog"]
   )
 }

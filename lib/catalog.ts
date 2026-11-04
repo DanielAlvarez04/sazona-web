@@ -247,6 +247,8 @@ export interface OptionEffect {
   replacesIngredientId: string | null
   ingredientId: string | null
   quantity: string | null
+  /** Multiplicador de la cantidad al agregar (solo UI; no se persiste). */
+  multiplier?: number
   unit?: UnitCode
 }
 
@@ -332,6 +334,8 @@ export const OPTION_SELECTION_LABELS: Record<OptionSelection, string> = {
 
 export interface ItemListItem {
   id: string
+  /** Entrada de catálogo compartida con la receta. */
+  catalogEntryId: string | null
   name: string
   description: string | null
   sku: string | null
@@ -347,6 +351,8 @@ export interface ItemListItem {
   price: string
   taxRate: string | null
   isActive: boolean
+  /** Despublicado como artículo: no aparece en Artículos ni en menús. */
+  isArchived: boolean
   isCombo: boolean
   sortOrder: number
   category: { id: string; name: string } | null
@@ -389,11 +395,15 @@ export interface ComboComponent {
 export interface RecipeIngredientRef {
   id: string
   name: string
+  sku?: string | null
   baseUnit: UnitCode
   displayUnit: UnitCode
   currentStock?: string
+  /** Solo para el insumo producido por la receta. */
+  minStock?: string
   unitCost?: string | null
   isActive?: boolean
+  category?: { id: string; name: string; isCore: boolean } | null
 }
 
 export interface RecipeIngredient {
@@ -418,8 +428,12 @@ export interface RecipeIngredientOption {
 
 export interface Recipe {
   id: string
+  /** Entrada de catálogo compartida con el artículo publicado o el borrador. */
+  catalogEntryId: string | null
   name: string
   description: string | null
+  /** Notas de preparación, tiempos, conservación, etc. */
+  notes: string | null
   /** Imagen propia de la receta (también visible en el tab Recetas). */
   imageKey: string | null
   imageUrl: string | null

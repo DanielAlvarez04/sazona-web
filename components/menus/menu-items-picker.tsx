@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatMoney, type ArticleListItem, type Category } from "@/lib/catalog"
+import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 import type { MenuItemInput } from "@/app/(app)/menus/actions"
 
 export function MenuItemsPicker({
@@ -122,7 +123,11 @@ export function MenuItemsPicker({
               })),
             ]}
           >
-            <SelectTrigger className="w-40" aria-label="Filtrar por categoría">
+            <SelectTrigger
+              data-active={Boolean(categoryId)}
+              className={cn("w-40", categoryId && ACTIVE_FILTER_OUTLINE)}
+              aria-label="Filtrar por categoría"
+            >
               <SelectValue placeholder="Todas" />
             </SelectTrigger>
             <SelectContent>

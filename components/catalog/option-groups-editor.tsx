@@ -42,6 +42,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { OptionValueEffects } from "@/components/catalog/option-value-effects"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import type {
   ArticleInput,
@@ -58,7 +63,6 @@ import {
   isNoPriceOptionGroup,
   type Ingredient,
 } from "@/lib/catalog"
-import type { RecipeRow } from "@/components/catalog/recipe-rows"
 import {
   Collapsible,
   CollapsibleContent,
@@ -142,18 +146,29 @@ export function optionGroupPayload(
       scaleFactor: Number(value.scaleFactor) || 1,
       isActive: value.isActive,
       isDefault: value.isDefault,
-      effects: value.effects.map((effect) => ({
-        action: effect.action,
-        ...(effect.recipeIngredientId
-          ? { recipeIngredientId: effect.recipeIngredientId }
-          : {}),
-        ...(effect.replacesIngredientId
-          ? { replacesIngredientId: effect.replacesIngredientId }
-          : {}),
-        ...(effect.ingredientId ? { ingredientId: effect.ingredientId } : {}),
-        ...(effect.quantity ? { quantity: Number(effect.quantity) } : {}),
-        ...(effect.unit ? { unit: effect.unit } : {}),
-      })),
+      effects: value.effects
+        .filter(
+          (effect) =>
+            effect.action !== "ADD" ||
+            (effect.ingredientId && Number(effect.quantity) > 0)
+        )
+        .map((effect) => ({
+          action: effect.action,
+          ...(effect.recipeIngredientId
+            ? { recipeIngredientId: effect.recipeIngredientId }
+            : {}),
+          ...(effect.replacesIngredientId
+            ? { replacesIngredientId: effect.replacesIngredientId }
+            : {}),
+          ...(effect.ingredientId ? { ingredientId: effect.ingredientId } : {}),
+          ...(effect.quantity
+            ? {
+                quantity:
+                  Number(effect.quantity) * (effect.multiplier ?? 1),
+              }
+            : {}),
+          ...(effect.unit ? { unit: effect.unit } : {}),
+        })),
     }))
 
     // El POS necesita una opción preseleccionada en los grupos de una sola
@@ -229,7 +244,7 @@ export function OptionGroupsEditor({
   disabled,
   hideHeader = false,
   ingredients,
-  recipeRows,
+  effectsEnabled = false,
 }: {
   /** Biblioteca de grupos de la organización. */
   library: OptionGroup[]
@@ -241,8 +256,8 @@ export function OptionGroupsEditor({
   hideHeader?: boolean
   /** Inventario para buscar el insumo de un efecto. */
   ingredients?: Ingredient[]
-  /** Filas de la receta para elegir el slot a reemplazar/quitar. */
-  recipeRows?: RecipeRow[]
+  /** Solo se pueden configurar efectos si la receta está activa. */
+  effectsEnabled?: boolean
 }) {
   // Operación en curso contra la API (crear grupo u opción).
   const [pending, setPending] = React.useState<string | null>(null)
@@ -616,23 +631,6 @@ export function OptionGroupsEditor({
     onChange(next)
   }
 
-  const slotOptions = React.useMemo(() => {
-    const unique = new Map<string, string>()
-
-    for (const row of recipeRows ?? []) {
-      if (!row.ingredientId || unique.has(row.ingredientId)) continue
-      const name = ingredients?.find(
-        (ingredient) => ingredient.id === row.ingredientId
-      )?.name
-      unique.set(row.ingredientId, name ?? "Insumo")
-    }
-
-    return [...unique].map(([ingredientId, name]) => ({
-      ingredientId,
-      name,
-    }))
-  }, [recipeRows, ingredients])
-
   return (
     <div className="flex flex-col gap-3">
       {hideHeader ? null : (
@@ -705,7 +703,7 @@ export function OptionGroupsEditor({
                 index={index}
                 disabled={disabled}
                 ingredients={ingredients}
-                slotOptions={slotOptions}
+                effectsEnabled={effectsEnabled}
                 onUpdate={(changes) => updateGroup(group.groupId, changes)}
                 onUpdateValue={(valueKey, changes) =>
                   updateValue(group.groupId, valueKey, changes)
@@ -894,7 +892,7 @@ function SortableGroupCard({
   index,
   disabled,
   ingredients,
-  slotOptions,
+  effectsEnabled,
   onUpdate,
   onUpdateValue,
   onAddValue,
@@ -905,7 +903,7 @@ function SortableGroupCard({
   index: number
   disabled?: boolean
   ingredients?: Ingredient[]
-  slotOptions: Array<{ ingredientId: string; name: string }>
+  effectsEnabled?: boolean
   onUpdate: (changes: Partial<OptionGroupDraft>) => void
   onUpdateValue: (
     valueKey: string,
@@ -1150,7 +1148,7 @@ function SortableGroupCard({
                     index={index}
                     disabled={disabled}
                     ingredients={ingredients}
-                    slotOptions={slotOptions}
+                    effectsEnabled={effectsEnabled}
                     onUpdateValue={(changes) =>
                       onUpdateValue(item.key, changes)
                     }
@@ -1180,7 +1178,7 @@ function SortableOptionValue({
   onUpdateValue,
   onRemove,
   ingredients,
-  slotOptions,
+  effectsEnabled,
 }: {
   group: OptionGroupDraft
   item: OptionGroupDraftValue
@@ -1189,9 +1187,8 @@ function SortableOptionValue({
   onUpdateValue: (changes: Partial<OptionGroupDraftValue>) => void
   onRemove: () => void
   ingredients?: Ingredient[]
-  slotOptions: Array<{ ingredientId: string; name: string }>
+  effectsEnabled?: boolean
 }) {
-  const [effectsOpen, setEffectsOpen] = React.useState(false)
   const {
     attributes,
     listeners,
@@ -1273,25 +1270,43 @@ function SortableOptionValue({
         </div>
       )}
 
-      {ingredients ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Efectos de receta"
-          aria-expanded={effectsOpen}
-          disabled={disabled}
-          className={cn(
-            "shrink-0",
-            item.effects.length > 0 ? "text-chart-2" : "text-muted-foreground"
-          )}
-          onClick={() => setEffectsOpen((current) => !current)}
-        >
-          <FlaskConicalIcon />
-          {item.effects.length > 0 ? (
-            <span className="text-[10px]">{item.effects.length}</span>
-          ) : null}
-        </Button>
+      {ingredients && effectsEnabled ? (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Efectos de receta"
+                disabled={disabled}
+                className={cn(
+                  "shrink-0",
+                  item.effects.length > 0
+                    ? "text-chart-2"
+                    : "text-muted-foreground"
+                )}
+              />
+            }
+          >
+            <FlaskConicalIcon />
+            {item.effects.length > 0 ? (
+              <span className="text-[10px]">{item.effects.length}</span>
+            ) : null}
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-[40rem] max-w-[calc(100vw-2rem)] p-3"
+          >
+            <OptionValueEffects
+              effects={item.effects}
+              priceDelta={item.priceDelta}
+              ingredients={ingredients}
+              disabled={disabled}
+              onChange={(effects) => onUpdateValue({ effects })}
+            />
+          </PopoverContent>
+        </Popover>
       ) : null}
 
       {item.valueId ? null : (
@@ -1308,20 +1323,6 @@ function SortableOptionValue({
         </Button>
       )}
       </div>
-
-      {effectsOpen && ingredients ? (
-        <OptionValueEffects
-          effects={item.effects}
-          scaleFactor={item.scaleFactor}
-          priceDelta={item.priceDelta}
-          ingredients={ingredients}
-          slotOptions={slotOptions}
-          disabled={disabled}
-          onChange={(effects, scaleFactor) =>
-            onUpdateValue({ effects, scaleFactor })
-          }
-        />
-      ) : null}
     </div>
   )
 }

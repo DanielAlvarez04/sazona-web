@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import type { Category, Recipe } from "@/lib/catalog"
+import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { RecipeCards } from "./recipe-cards"
 import {
@@ -237,7 +238,12 @@ export function RecipesTable({
       }}
       selectionToggle={
         canManage ? (
-          <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 shadow-xs dark:bg-input/30">
+          <div
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 shadow-xs dark:bg-input/30",
+              (allSelected || someSelected) && ACTIVE_FILTER_OUTLINE
+            )}
+          >
             <Checkbox
               id="recipes-select-all"
               checked={allSelected}
@@ -248,7 +254,12 @@ export function RecipesTable({
             />
             <Label
               htmlFor="recipes-select-all"
-              className="text-sm font-medium whitespace-nowrap text-muted-foreground"
+              className={cn(
+                "text-sm font-medium whitespace-nowrap",
+                allSelected || someSelected
+                  ? "text-foreground"
+                  : "text-muted-foreground"
+              )}
             >
               Seleccionar todos
             </Label>
@@ -285,7 +296,7 @@ export function RecipesTable({
           <ButtonGroup className="w-full">
             <Button onClick={onCreate} className="min-w-0 flex-1">
               <PlusIcon className="size-4 shrink-0" />
-              <span className="truncate">Nueva receta</span>
+              <span className="truncate">Nuevo producto</span>
             </Button>
 
             <DropdownMenu>
@@ -327,7 +338,7 @@ export function RecipesTable({
                 <Undo2Icon />
                 Quitar artículo
               </ContextMenuItem>
-            ) : (
+            ) : recipe.producesIngredient ? null : (
               <ContextMenuItem onClick={() => onPublish(recipe)}>
                 <UploadIcon />
                 Publicar como artículo

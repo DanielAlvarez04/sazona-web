@@ -14,6 +14,7 @@ import {
   type ArticleListItem,
   type Category,
   type Ingredient,
+  type IngredientCategory,
   type OptionGroup,
   type OptionGroupPreset,
   type Recipe,
@@ -28,15 +29,18 @@ export default async function CatalogPage() {
     productsResponse,
     articleCategoriesResponse,
     recipeCategoriesResponse,
+    ingredientCategoriesResponse,
     ingredientsResponse,
     optionGroupsResponse,
     optionPresetsResponse,
     branch,
   ] = await Promise.all([
     apiFetch("/catalog/recipes?includeInactive=true"),
-    apiFetch("/catalog/items?includeInactive=true"),
+    // `includeArchived` trae los borradores de artículo de las recetas.
+    apiFetch("/catalog/items?includeInactive=true&includeArchived=true"),
     apiFetch("/catalog/categories?kind=article"),
     apiFetch("/catalog/categories?kind=recipe"),
+    apiFetch("/inventory/ingredient-categories"),
     apiFetch("/inventory/ingredients?includeInactive=true"),
     apiFetch("/catalog/option-groups"),
     apiFetch("/catalog/option-groups/presets"),
@@ -48,6 +52,7 @@ export default async function CatalogPage() {
     !productsResponse.ok ||
     !articleCategoriesResponse.ok ||
     !recipeCategoriesResponse.ok ||
+    !ingredientCategoriesResponse.ok ||
     !ingredientsResponse.ok ||
     !optionGroupsResponse.ok ||
     !optionPresetsResponse.ok
@@ -73,6 +78,7 @@ export default async function CatalogPage() {
     articles,
     articleCategories,
     recipeCategories,
+    ingredientCategories,
     ingredients,
     optionGroups,
     optionPresets,
@@ -81,6 +87,7 @@ export default async function CatalogPage() {
     productsResponse.json() as Promise<ArticleListItem[]>,
     articleCategoriesResponse.json() as Promise<Category[]>,
     recipeCategoriesResponse.json() as Promise<Category[]>,
+    ingredientCategoriesResponse.json() as Promise<IngredientCategory[]>,
     ingredientsResponse.json() as Promise<Ingredient[]>,
     optionGroupsResponse.json() as Promise<OptionGroup[]>,
     optionPresetsResponse.json() as Promise<OptionGroupPreset[]>,
@@ -92,6 +99,7 @@ export default async function CatalogPage() {
       articles={articles}
       articleCategories={articleCategories}
       recipeCategories={recipeCategories}
+      ingredientCategories={ingredientCategories}
       ingredients={ingredients}
       optionGroups={optionGroups}
       optionPresets={
