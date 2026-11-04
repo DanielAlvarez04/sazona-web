@@ -236,7 +236,7 @@ export function RecipesTable({
       }}
       selectionToggle={
         canManage ? (
-          <div className="flex items-center gap-2">
+          <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 shadow-xs dark:bg-input/30">
             <Checkbox
               id="recipes-select-all"
               checked={allSelected}
@@ -247,7 +247,7 @@ export function RecipesTable({
             />
             <Label
               htmlFor="recipes-select-all"
-              className="text-sm font-medium text-muted-foreground"
+              className="text-sm font-medium whitespace-nowrap text-muted-foreground"
             >
               Seleccionar todos
             </Label>

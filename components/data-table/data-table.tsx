@@ -286,6 +286,8 @@ export function DataTable<TData extends RowData>({
           : "flex-1 flex-wrap items-center gap-2"
       )}
     >
+      {selectionToggle}
+
       {search ? (
         <div
           className={cn(
@@ -345,8 +347,6 @@ export function DataTable<TData extends RowData>({
           </Select>
         )
       })}
-
-      {selectionToggle}
 
       {hasFilters && onClearFilters ? (
         <Button
@@ -461,7 +461,6 @@ export function DataTable<TData extends RowData>({
           <>
             {sidebarPrimaryActions}
             {sidebarViewRow}
-            {selectionActions}
           </>
         ) : (
           <>
@@ -620,6 +619,12 @@ export function DataTable<TData extends RowData>({
             {actionsGroup}
             {actionsGroup ? <Separator /> : null}
             {filtersGroup}
+            {selectionActions ? (
+              <>
+                <Separator />
+                {selectionActions}
+              </>
+            ) : null}
           </aside>
 
           <div className="flex min-w-0 flex-col gap-4">

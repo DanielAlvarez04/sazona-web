@@ -146,20 +146,6 @@ export function ArticlesTable({
 
   const filters: DataTableFilter[] = []
 
-  filters.push({
-    id: "recipe",
-    ariaLabel: "Filtrar por receta",
-    placeholder: "Receta",
-    allLabel: "Todos",
-    value: recipeFilter,
-    onValueChange: setRecipeFilter,
-    options: [
-      { value: DATA_TABLE_ALL, label: "Todos" },
-      { value: "yes", label: "Con receta" },
-      { value: "no", label: "Sin receta" },
-    ],
-  })
-
   if (categories.length > 0) {
     filters.push({
       id: "category",
@@ -177,6 +163,20 @@ export function ArticlesTable({
       ],
     })
   }
+
+  filters.push({
+    id: "recipe",
+    ariaLabel: "Filtrar por receta",
+    placeholder: "Receta",
+    allLabel: "Todos",
+    value: recipeFilter,
+    onValueChange: setRecipeFilter,
+    options: [
+      { value: DATA_TABLE_ALL, label: "Todos" },
+      { value: "yes", label: "Con receta" },
+      { value: "no", label: "Sin receta" },
+    ],
+  })
 
   const activeFilterCount =
     (globalFilter.trim() ? 1 : 0) +
@@ -270,7 +270,7 @@ export function ArticlesTable({
         }}
         selectionToggle={
           canManage ? (
-            <div className="flex items-center gap-2">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 shadow-xs dark:bg-input/30">
               <Checkbox
                 id="articles-select-all"
                 checked={allSelected}
@@ -281,7 +281,7 @@ export function ArticlesTable({
               />
               <Label
                 htmlFor="articles-select-all"
-                className="text-sm font-medium text-muted-foreground"
+                className="text-sm font-medium whitespace-nowrap text-muted-foreground"
               >
                 Seleccionar todos
               </Label>
