@@ -7,9 +7,16 @@ import { toast } from "sonner"
 
 import {
   createArticle,
+  createRecipe,
+  deactivateItem,
+  publishRecipe,
+  unpublishRecipe,
   updateArticle,
   updateArticleImage,
+  updateRecipe,
   type ArticleInput,
+  type RecipeIngredientInput,
+  type RecipeInput,
 } from "@/app/(app)/catalog/actions"
 import { ImageDropzone } from "@/components/catalog/image-dropzone"
 import {
@@ -25,6 +32,12 @@ import {
   nextPresentationKey,
   type PresentationRow,
 } from "@/components/catalog/presentation-rows"
+import {
+  RecipeRows,
+  emptyRecipeRow,
+  recipeRowsFrom,
+  type RecipeRow,
+} from "@/components/catalog/recipe-rows"
 import { InfoHint } from "@/components/info-hint"
 import {
   AlertDialog,
@@ -68,15 +81,23 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
-import { isNoPriceOptionGroup } from "@/lib/catalog"
+import {
+  UNIT_DEFINITIONS,
+  convertUnitValue,
+  isNoPriceOptionGroup,
+  roundQuantity,
+} from "@/lib/catalog"
 import type {
   ArticleListItem,
   Category,
+  Ingredient,
   OptionGroup,
   OptionGroupPreset,
+  Recipe,
+  UnitCode,
 } from "@/lib/catalog"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
-import { uploadItemImage } from "@/lib/uploads"
+import { uploadItemImage, uploadRecipeImage } from "@/lib/uploads"
 
 /** Imagen del diálogo: la guardada en R2 o un archivo local sin subir. */
 type DialogImage =
@@ -135,37 +156,175 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
   }))
 }
 
+/** Unidad visible por defecto para el rendimiento de un insumo producido. */
+function defaultYieldUnit(baseUnit: UnitCode | null | undefined): UnitCode {
+  if (baseUnit === "G") return "KG"
+  if (baseUnit === "ML") return "L"
+  return "UNIT"
+}
+
+/** Rendimiento guardado, convertido a una unidad legible. */
+function initialYield(recipe: Recipe | null): {
+  quantity: string
+  unit: UnitCode
+} {
+  if (
+    !recipe?.producesIngredientId ||
+    !recipe.yieldQuantity ||
+    !recipe.yieldUnit
+  ) {
+    return { quantity: "", unit: "KG" }
+  }
+
+  const unit =
+    recipe.producesIngredient?.displayUnit ??
+    defaultYieldUnit(recipe.yieldUnit)
+  const converted = convertUnitValue(
+    Number(recipe.yieldQuantity),
+    recipe.yieldUnit,
+    unit
+  )
+
+  return {
+    quantity:
+      converted === null ? recipe.yieldQuantity : String(roundQuantity(converted)),
+    unit,
+  }
+}
+
+/** Filas iniciales: siempre al menos una fila visible para capturar insumos. */
+function initialRecipeRows(recipe: Recipe | null): RecipeRow[] {
+  if (!recipe) return [emptyRecipeRow()]
+
+  const rows = recipeRowsFrom(recipe)
+  return rows.length > 0 ? rows : [emptyRecipeRow()]
+}
+
+function sameRecipeIngredients(
+  recipe: Recipe,
+  rows: RecipeIngredientInput[]
+): boolean {
+  /** Compara la cantidad del formulario con la guardada (ambas en su unidad). */
+  function sameLineQuantity(
+    quantity: string | number,
+    unit: UnitCode | undefined,
+    stored: string,
+    displayUnit: UnitCode
+  ): boolean {
+    const from = unit ?? displayUnit
+    const converted =
+      from === displayUnit
+        ? Number(quantity)
+        : convertUnitValue(Number(quantity), from, displayUnit)
+
+    return converted !== null && sameNumber(stored, converted)
+  }
+
+  if (recipe.ingredients.length !== rows.length) return false
+
+  return rows.every((row, index) => {
+    const line = recipe.ingredients[index]
+    if (!line) return false
+
+    if (
+      line.ingredient.id !== row.ingredientId ||
+      !sameLineQuantity(
+        row.quantity,
+        row.unit as UnitCode | undefined,
+        line.quantity,
+        line.ingredient.displayUnit
+      ) ||
+      (line.label ?? null) !== (row.label?.trim() || null) ||
+      line.isOptional !== Boolean(row.isOptional) ||
+      line.options.length !== (row.alternatives?.length ?? 0)
+    ) {
+      return false
+    }
+
+    return (row.alternatives ?? []).every((alternative, optionIndex) => {
+      const option = line.options[optionIndex]
+      if (!option) return false
+
+      return (
+        option.ingredient.id === alternative.ingredientId &&
+        sameLineQuantity(
+          alternative.quantity,
+          alternative.unit as UnitCode | undefined,
+          option.quantity,
+          option.ingredient.displayUnit
+        )
+      )
+    })
+  })
+}
+
 export function ArticleDialog({
   open,
   onOpenChange,
+  mode,
   article,
+  recipe,
   categories,
+  recipeCategories,
+  ingredients,
   optionGroups,
   optionPresets,
+  initialArticle,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Entidad con la que se abrió el diálogo (define el texto y los valores). */
+  mode: "article" | "recipe"
   article: ArticleListItem | null
+  recipe: Recipe | null
   categories: Category[]
+  recipeCategories: Category[]
+  ingredients: Ingredient[]
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
+  /** Abre el diálogo con el switch «Publicar como artículo» encendido. */
+  initialArticle?: boolean
 }) {
   const router = useRouter()
   const form = useActionForm(() => {
-    toast.success(article ? "Artículo actualizado" : "Artículo creado")
+    toast.success(
+      mode === "recipe"
+        ? recipe
+          ? "Receta actualizada"
+          : "Receta creada"
+        : article
+          ? "Artículo actualizado"
+          : "Artículo creado"
+    )
     router.refresh()
     onOpenChange(false)
   })
 
-  const [name, setName] = useState(article?.name ?? "")
-  const [description, setDescription] = useState(article?.description ?? "")
-  const [categoryId, setCategoryId] = useState(article?.category?.id ?? "")
-  const [price, setPrice] = useState(article?.price ?? "")
-  const [image, setImage] = useState<DialogImage | null>(() =>
-    article?.imageKey && article.imageUrl
-      ? { kind: "existing", key: article.imageKey, url: article.imageUrl }
-      : null
+  const [articleEnabled, setArticleEnabled] = useState(
+    () => Boolean(article) || Boolean(initialArticle)
   )
+  const [ingredientEnabled, setIngredientEnabled] = useState(
+    () => Boolean(recipe?.producesIngredientId)
+  )
+  const [name, setName] = useState(article?.name ?? recipe?.name ?? "")
+  const [description, setDescription] = useState(
+    article?.description ?? recipe?.description ?? ""
+  )
+  const [articleCategoryId, setArticleCategoryId] = useState(
+    article?.category?.id ?? ""
+  )
+  const [recipeCategoryId, setRecipeCategoryId] = useState(
+    recipe?.categoryId ?? ""
+  )
+  const [price, setPrice] = useState(
+    article?.price ?? recipe?.item?.price ?? ""
+  )
+  const [image, setImage] = useState<DialogImage | null>(() => {
+    const key = article?.imageKey ?? recipe?.imageKey
+    const url = article?.imageUrl ?? recipe?.imageUrl
+
+    return key && url ? { kind: "existing", key, url } : null
+  })
   const [multiple, setMultiple] = useState(
     () => (article?.variants.filter((variant) => variant.isActive).length ?? 0) > 0
   )
@@ -178,18 +337,48 @@ export function ArticleDialog({
   const [optionsEnabled, setOptionsEnabled] = useState(
     () => (article?.optionGroups?.length ?? 0) > 0
   )
+  const [recipeRows, setRecipeRows] = useState<RecipeRow[]>(() =>
+    initialRecipeRows(recipe)
+  )
+  // El tab Receta se muestra por defecto; el switch solo oculta la captura.
+  const [recipeEnabled, setRecipeEnabled] = useState(true)
+
+  const storedYield = initialYield(recipe)
+  const [yieldQuantity, setYieldQuantity] = useState(storedYield.quantity)
+  const [yieldUnit, setYieldUnit] = useState<UnitCode>(storedYield.unit)
+
   // Confirmación al apagar «Múltiples presentaciones» de un artículo guardado.
   const [confirmDisableVariants, setConfirmDisableVariants] = useState(false)
   // Confirmación al apagar las opciones de un artículo ya guardado.
   const [confirmDisableOptions, setConfirmDisableOptions] = useState(false)
+  // Confirmación al despublicar la receta (el artículo se elimina o desactiva).
+  const [confirmDisableArticle, setConfirmDisableArticle] = useState(false)
+
+  // Cada tab usa su propio catálogo: artículos -> categorías de artículo,
+  // recetas -> categorías de receta. Si un artículo publicado heredó una
+  // categoría de receta, se conserva visible al editarlo desde Artículos.
+  const categoryOptions: Array<{ id: string; name: string }> =
+    mode === "article"
+      ? article?.category &&
+        !categories.some((category) => category.id === article.category?.id)
+        ? [
+            { id: article.category.id, name: article.category.name },
+            ...categories,
+          ]
+        : categories
+      : recipeCategories
+
+  const categoryValue =
+    mode === "article" ? articleCategoryId : recipeCategoryId
+
+  /** El precio solo se oculta cuando la receta también produce un insumo. */
+  const priceVisible = !ingredientEnabled
 
   /** El nombre del artículo arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
     setName(value)
     setRows((current) =>
-      current.map((row) =>
-        row.linkedName ? { ...row, name: value } : row
-      )
+      current.map((row) => (row.linkedName ? { ...row, name: value } : row))
     )
   }
 
@@ -226,6 +415,24 @@ export function ArticleDialog({
     applyMultipleChange(next)
   }
 
+  function applyArticleChange(next: boolean) {
+    setArticleEnabled(next)
+  }
+
+  function handleArticleChange(next: boolean) {
+    if (next) {
+      applyArticleChange(true)
+      return
+    }
+
+    if (article) {
+      setConfirmDisableArticle(true)
+      return
+    }
+
+    applyArticleChange(false)
+  }
+
   /** Apagar las opciones no borra el borrador: solo lo excluye al guardar. */
   function handleOptionsChange(next: boolean) {
     if (!next && (article?.optionGroups?.length ?? 0) > 0) {
@@ -236,91 +443,234 @@ export function ArticleDialog({
     setOptionsEnabled(next)
   }
 
+  /** El switch del tab Receta solo oculta la captura; el borrador se conserva. */
+  function handleRecipeChange(next: boolean) {
+    setRecipeEnabled(next)
+
+    if (next) {
+      setRecipeRows((current) =>
+        current.length > 0 ? current : [emptyRecipeRow()]
+      )
+    }
+  }
+
+  /** Convertir en insumo requiere ver la receta para capturar sus insumos. */
+  function handleIngredientChange(next: boolean) {
+    setIngredientEnabled(next)
+
+    if (next) {
+      setRecipeEnabled(true)
+      setRecipeRows((current) =>
+        current.length > 0 ? current : [emptyRecipeRow()]
+      )
+    }
+  }
+
   function handleClear() {
     setName("")
     setDescription("")
-    setCategoryId("")
+    setArticleCategoryId("")
+    setRecipeCategoryId("")
     setPrice("")
     setImage(null)
     setMultiple(false)
     setRows([])
     setGroups([])
     setOptionsEnabled(false)
+    setRecipeRows([emptyRecipeRow()])
+    setRecipeEnabled(true)
+    setArticleEnabled(mode === "article")
+    setIngredientEnabled(false)
+    setYieldQuantity("")
+    setYieldUnit("KG")
     form.setError(null)
+  }
+
+  function buildRecipeIngredients(): {
+    rows: RecipeIngredientInput[]
+    error?: string
+  } {
+    const payload: RecipeIngredientInput[] = []
+    const used = new Set<string>()
+
+    for (const row of recipeRows) {
+      const touched = Boolean(row.ingredientId) || row.quantity.trim() !== ""
+      if (!touched) continue
+
+      if (!row.ingredientId) {
+        return { rows: [], error: "Elige el insumo de cada fila" }
+      }
+
+      const ingredient = ingredients.find((item) => item.id === row.ingredientId)
+
+      if (!ingredient) {
+        return { rows: [], error: "Hay un insumo que ya no está disponible" }
+      }
+
+      if (used.has(row.ingredientId)) {
+        return {
+          rows: [],
+          error: `El insumo «${ingredient.name}» está repetido`,
+        }
+      }
+      used.add(row.ingredientId)
+
+      const quantity = toNumber(row.quantity)
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return {
+          rows: [],
+          error: `Indica una cantidad válida para «${ingredient.name}»`,
+        }
+      }
+
+      payload.push({
+        ingredientId: row.ingredientId,
+        quantity,
+        ...(row.unit ? { unit: row.unit as UnitCode } : {}),
+        ...(row.label.trim() ? { label: row.label.trim() } : {}),
+        ...(row.isOptional ? { isOptional: true } : {}),
+        ...(row.alternatives.length > 0
+          ? {
+              alternatives: row.alternatives
+                .filter(
+                  (alternative) =>
+                    alternative.ingredientId &&
+                    Number(alternative.quantity) > 0
+                )
+                .map((alternative) => ({
+                  ingredientId: alternative.ingredientId,
+                  quantity: Number(alternative.quantity),
+                  ...(alternative.unit
+                    ? { unit: alternative.unit as UnitCode }
+                    : {}),
+                })),
+            }
+          : {}),
+      })
+    }
+
+    return { rows: payload }
   }
 
   function save() {
     const trimmedName = name.trim()
 
     if (!trimmedName) {
-      form.setError("El nombre del artículo es obligatorio")
+      form.setError("El nombre es obligatorio")
       return
     }
 
-    if (!categoryId) {
+    // Si el switch del tab Receta está apagado no se tocan los insumos.
+    const recipeResult = recipeEnabled
+      ? buildRecipeIngredients()
+      : { rows: [] as RecipeIngredientInput[] }
+
+    if (recipeResult.error) {
+      form.setError(recipeResult.error)
+      return
+    }
+
+    const recipeIngredients = recipeResult.rows
+    const basePrice = toNumber(price)
+    // Al ocultar el precio (receta que ya tiene artículo) se conserva el valor
+    // actual para no recalcular presentaciones con NaN.
+    const priceBase = Number.isFinite(basePrice) ? basePrice : 0
+    const variants: NonNullable<ArticleInput["variants"]> = []
+
+    if (mode === "article" && !articleCategoryId) {
       form.setError("La categoría es obligatoria")
       return
     }
 
-    const basePrice = toNumber(price)
+    if (mode === "recipe" && !recipeCategoryId) {
+      form.setError("La categoría es obligatoria")
+      return
+    }
 
-    if (!Number.isFinite(basePrice) || basePrice < 0) {
+    if (priceVisible && (!Number.isFinite(basePrice) || basePrice < 0)) {
       form.setError("Indica un precio válido")
       return
     }
 
-    const variants: NonNullable<ArticleInput["variants"]> = []
-
-    if (multiple) {
-      if (rows.length === 0) {
-        form.setError("Agrega al menos una presentación")
-        return
-      }
-
-      const used = new Set<string>()
-
-      for (const [index, row] of rows.entries()) {
-        // Los campos vacíos se guardan con el nombre y el precio sugeridos.
-        const rowName = row.name.trim() || `${trimmedName} #${index + 1}`
-        const normalized = rowName.toLowerCase()
-
-        if (used.has(normalized)) {
-          form.setError(`La presentación "${rowName}" está repetida`)
+    if (articleEnabled) {
+      if (multiple) {
+        if (rows.length === 0) {
+          form.setError("Agrega al menos una presentación")
           return
         }
-        used.add(normalized)
 
-        const rawPrice = row.isPrimary
-          ? basePrice
-          : row.price.trim()
-            ? toNumber(row.price)
-            : basePrice
-        const rowPrice =
-          Number.isFinite(rawPrice) && rawPrice >= 0 ? rawPrice : basePrice
+        const used = new Set<string>()
 
-        variants.push({
-          name: rowName,
-          // La API guarda el ajuste; el precio del artículo es la principal.
-          priceAdjust: round2(rowPrice - basePrice),
-          sortOrder: index,
-          isPrimary: row.isPrimary,
-        })
-      }
+        for (const [index, row] of rows.entries()) {
+          // Los campos vacíos se guardan con el nombre y el precio sugeridos.
+          const rowName = row.name.trim() || `${trimmedName} #${index + 1}`
+          const normalized = rowName.toLowerCase()
 
-      if (!variants.some((variant) => variant.isPrimary)) {
-        variants[0].isPrimary = true
+          if (used.has(normalized)) {
+            form.setError(`La presentación "${rowName}" está repetida`)
+            return
+          }
+          used.add(normalized)
+
+          const rawPrice = row.isPrimary
+            ? priceBase
+            : row.price.trim()
+              ? toNumber(row.price)
+              : priceBase
+          const rowPrice =
+            Number.isFinite(rawPrice) && rawPrice >= 0 ? rawPrice : priceBase
+
+          variants.push({
+            name: rowName,
+            // La API guarda el ajuste; el precio del artículo es la principal.
+            priceAdjust: round2(rowPrice - priceBase),
+            sortOrder: index,
+            isPrimary: row.isPrimary,
+          })
+        }
+
+        if (!variants.some((variant) => variant.isPrimary)) {
+          variants[0].isPrimary = true
+        }
       }
     }
 
-    const activeGroups = optionsEnabled ? groups : []
+    let yieldValue = 0
 
-    for (const group of activeGroups) {
-      if (group.values.length === 0) {
-        form.setError(`El grupo «${group.groupName}» no tiene opciones`)
+    if (ingredientEnabled) {
+      if (recipeIngredients.length === 0) {
+        form.setError("Añade al menos un insumo para convertir la receta en insumo")
         return
       }
 
-      if (group.isRequired && !group.values.some((item) => item.isActive)) {
+      yieldValue = toNumber(yieldQuantity)
+
+      if (!Number.isFinite(yieldValue) || yieldValue <= 0) {
+        form.setError("Indica un rendimiento válido")
+        return
+      }
+    }
+
+    if (
+      recipeEnabled &&
+      !article &&
+      !recipe &&
+      recipeIngredients.length === 0 &&
+      (mode === "recipe" || !articleEnabled)
+    ) {
+      form.setError("Añade al menos un insumo a la receta")
+      return
+    }
+
+    const savedGroups = optionsEnabled ? groups : []
+
+    for (const group of savedGroups) {
+      if (
+        group.isRequired &&
+        group.values.length > 0 &&
+        !group.values.some((item) => item.isActive)
+      ) {
         form.setError(
           `El grupo obligatorio «${group.groupName}» necesita al menos una opción disponible`
         )
@@ -338,105 +688,316 @@ export function ArticleDialog({
       }
     }
 
-    const groupsChanged = optionsEnabled
+    const groupsChanged = articleEnabled
       ? article
-        ? optionGroupsSignature(groups) !==
-          optionGroupsSignature(optionGroupDrafts(article.optionGroups))
-        : groups.length > 0
-      : (article?.optionGroups?.length ?? 0) > 0
+        ? optionsEnabled
+          ? optionGroupsSignature(savedGroups) !==
+            optionGroupsSignature(optionGroupDrafts(article.optionGroups))
+          : (article.optionGroups?.length ?? 0) > 0
+        : savedGroups.length > 0
+      : false
 
     const payload: ArticleInput = {
       name: trimmedName,
       description: description.trim() || null,
-      categoryId,
-      price: basePrice,
+      categoryId: articleCategoryId,
+      price: priceBase,
       variants,
-      ...(optionsEnabled && groups.length > 0
-        ? { optionGroups: optionGroupPayload(groups) }
+      ...(optionsEnabled && savedGroups.length > 0
+        ? { optionGroups: optionGroupPayload(savedGroups) }
         : {}),
     }
 
-    const imagePending = image?.kind === "pending"
-    // Si se quitó la imagen guardada, se borra también del bucket.
-    const imageRemoved = !image && Boolean(article?.imageKey)
+    const produceChanged =
+      ingredientEnabled &&
+      (!recipe?.producesIngredientId ||
+        !sameNumber(yieldQuantity, storedYield.quantity) ||
+        yieldUnit !== storedYield.unit)
 
-    // En edición solo se envían los campos que realmente cambiaron.
-    const changes: Partial<ArticleInput> = article
-      ? {
+    form.run(async () => {
+      let itemId = article?.id
+      let recipeId = recipe?.id ?? null
+      let changed = false
+
+      // 1. Artículo existente: solo se envían los campos que cambiaron.
+      if (articleEnabled && article) {
+        const changes: Partial<ArticleInput> = {
           ...(sameText(article.name, trimmedName) ? {} : { name: trimmedName }),
           ...(sameText(article.description, payload.description)
             ? {}
             : { description: payload.description }),
-          ...((article.category?.id ?? null) === categoryId
-            ? {}
-            : { categoryId }),
-          ...(sameNumber(article.price, basePrice) ? {} : { price: basePrice }),
+          ...(mode === "article" &&
+          (article.category?.id ?? null) !== articleCategoryId
+            ? { categoryId: articleCategoryId }
+            : {}),
+          ...(priceVisible && !sameNumber(article.price, basePrice)
+            ? { price: basePrice }
+            : {}),
           ...(variantsChanged(article, variants) ? { variants } : {}),
           ...(groupsChanged
-            ? { optionGroups: optionGroupPayload(activeGroups) }
+            ? { optionGroups: optionGroupPayload(savedGroups) }
             : {}),
-          ...(imageRemoved ? { imageKey: null } : {}),
         }
-      : payload
 
-    if (article && isEmptyPatch(changes) && !imagePending) {
-      toast.info("Sin cambios")
-      onOpenChange(false)
-      return
-    }
-
-    form.run(async () => {
-      let itemId = article?.id
-
-      if (article) {
         if (!isEmptyPatch(changes)) {
           const updated = await updateArticle(article.id, changes)
           if (!updated.ok) return updated
+          changed = true
         }
-      } else {
-        const created = await createArticle(payload)
-        if (!created.ok) return created
-        itemId = created.data?.id
       }
 
-      // La imagen se sube al guardar: el artículo ya tiene su carpeta en R2.
-      if (image?.kind === "pending" && itemId) {
-        const uploaded = await uploadItemImage(itemId, image.file)
+      // 2. Artículo existente sin receta: se crea y vincula en este momento.
+      if (
+        mode === "article" &&
+        recipeEnabled &&
+        articleEnabled &&
+        article &&
+        !recipe &&
+        (recipeIngredients.length > 0 || ingredientEnabled)
+      ) {
+        const created = await createRecipe({
+          name: trimmedName,
+          description: description.trim() || undefined,
+          categoryId: null,
+          ingredients: recipeIngredients,
+          itemId: article.id,
+          ...(ingredientEnabled
+            ? {
+                produce: {
+                  displayUnit: yieldUnit,
+                  yieldQuantity: yieldValue,
+                },
+              }
+            : {}),
+        })
 
-        if (!uploaded.ok) {
-          // El artículo ya quedó guardado: se avisa y se cierra el diálogo.
-          toast.warning(
-            uploaded.message ??
-              "El artículo se guardó, pero la imagen no se pudo subir."
-          )
-          router.refresh()
-          onOpenChange(false)
-          return { ok: true }
+        if (!created.ok) return created
+        recipeId = created.data?.id ?? null
+        changed = true
+      }
+
+      // 3. Receta existente: nombre, categoría, ingredientes y producción.
+      if (recipe) {
+        const nextRecipeCategory = recipeCategoryId || null
+
+        const changes: Partial<RecipeInput> = {
+          ...(sameText(recipe.name, trimmedName) ? {} : { name: trimmedName }),
+          ...(sameText(recipe.description, description.trim() || null)
+            ? {}
+            : { description: description.trim() || null }),
+          ...(mode === "recipe" &&
+          (recipe.categoryId ?? null) !== nextRecipeCategory
+            ? { categoryId: nextRecipeCategory }
+            : {}),
+          ...(recipeEnabled && !sameRecipeIngredients(recipe, recipeIngredients)
+            ? { ingredients: recipeIngredients }
+            : {}),
+          ...(produceChanged
+            ? {
+                produce: {
+                  displayUnit: yieldUnit,
+                  yieldQuantity: yieldValue,
+                },
+              }
+            : {}),
+          ...(!ingredientEnabled && recipe.producesIngredientId
+            ? { clearProduce: true }
+            : {}),
         }
 
-        const saved = await updateArticleImage(itemId, uploaded.key ?? null)
+        if (!isEmptyPatch(changes)) {
+          const updated = await updateRecipe(recipe.id, changes)
+          if (!updated.ok) return updated
+          changed = true
+        }
+      }
+
+      // 4. Artículo nuevo + su receta (tab Artículos).
+      if (mode === "article" && articleEnabled && !article && !recipe) {
+        const created = await createArticle(payload)
+        if (!created.ok) return created
+
+        itemId = created.data?.id
+        changed = true
+
+        if (
+          recipeEnabled &&
+          (recipeIngredients.length > 0 || ingredientEnabled)
+        ) {
+          const recipeCreated = await createRecipe({
+            name: trimmedName,
+            description: description.trim() || undefined,
+            categoryId: null,
+            ingredients: recipeIngredients,
+            ...(itemId ? { itemId } : {}),
+            ...(ingredientEnabled
+              ? {
+                  produce: {
+                    displayUnit: yieldUnit,
+                    yieldQuantity: yieldValue,
+                  },
+                }
+              : {}),
+          })
+
+          if (!recipeCreated.ok) return recipeCreated
+          recipeId = recipeCreated.data?.id ?? null
+        }
+      }
+
+      // 5. Receta nueva (tab Recetas o diálogo sin artículo).
+      if (!article && !recipe && (mode === "recipe" || !articleEnabled)) {
+        const created = await createRecipe({
+          name: trimmedName,
+          description: description.trim() || undefined,
+          categoryId: mode === "recipe" ? recipeCategoryId || null : null,
+          ...(recipeIngredients.length > 0
+            ? { ingredients: recipeIngredients }
+            : {}),
+          ...(ingredientEnabled
+            ? {
+                produce: {
+                  displayUnit: yieldUnit,
+                  yieldQuantity: yieldValue,
+                },
+              }
+            : {}),
+        })
+
+        if (!created.ok) return created
+        recipeId = created.data?.id ?? null
+        changed = true
+      }
+
+      // 6. Publicar la receta como artículo (tab Recetas). La categoría del
+      // artículo se hereda de la receta porque aquí solo se ven categorías de
+      // recetas.
+      if (mode === "recipe" && articleEnabled && !article && recipeId) {
+        const published = await publishRecipe(recipeId, {
+          price: priceBase,
+          ...(variants.length > 0
+            ? {
+                variants: variants.map((variant) => ({
+                  name: variant.name ?? "",
+                  priceAdjust: variant.priceAdjust,
+                  recipeFactor: 1,
+                  sortOrder: variant.sortOrder,
+                  isActive: variant.isActive,
+                })),
+              }
+            : {}),
+        })
+
+        if (!published.ok) return published
+
+        itemId = published.data?.item?.id
+        changed = true
+
+        // La publicación no admite opciones: se asignan al artículo recién creado.
+        if (optionsEnabled && savedGroups.length > 0 && itemId) {
+          const optionsSaved = await updateArticle(itemId, {
+            optionGroups: optionGroupPayload(savedGroups),
+          })
+          if (!optionsSaved.ok) return optionsSaved
+        }
+      }
+
+      // 7. Se apagó «Publicar como artículo»: se desvincula el artículo.
+      if (!articleEnabled && article && recipe) {
+        const unpublished = await unpublishRecipe(recipe.id)
+        if (!unpublished.ok) return unpublished
+        changed = true
+      }
+
+      // 8. Artículo sin receta que deja de publicarse: se desactiva para no
+      // venderlo, conservando su historial de pedidos.
+      if (mode === "article" && !articleEnabled && article && !recipe) {
+        const deactivated = await deactivateItem(article.id)
+        if (!deactivated.ok) return deactivated
+        changed = true
+      }
+
+      // 9. Imagen: la receta y el artículo comparten una sola entrada, así que
+      // se sube o se borra una sola vez. Se usa la receta si existe; si no, el
+      // artículo.
+      const imagePending = image?.kind === "pending"
+      let imageWarning: string | null = null
+
+      const imageRecipeId = recipeId
+      const imageItemId = recipeId ? null : itemId
+      const hasStoredImage = Boolean(recipe?.imageKey || article?.imageKey)
+
+      if (imagePending && image) {
+        const uploaded = imageRecipeId
+          ? await uploadRecipeImage(imageRecipeId, image.file)
+          : imageItemId
+            ? await uploadItemImage(imageItemId, image.file)
+            : null
+
+        if (!uploaded) {
+          imageWarning =
+            "Guarda el artículo o la receta antes de subir la imagen."
+        } else if (uploaded.ok) {
+          const saved = imageRecipeId
+            ? await updateRecipe(imageRecipeId, {
+                imageKey: uploaded.key ?? null,
+              })
+            : await updateArticleImage(imageItemId!, uploaded.key ?? null)
+
+          if (!saved.ok) return saved
+          changed = true
+        } else {
+          imageWarning =
+            uploaded.message ??
+            "Los datos se guardaron, pero la imagen no se pudo subir."
+        }
+      } else if (!image && hasStoredImage) {
+        const saved = imageRecipeId
+          ? await updateRecipe(imageRecipeId, { imageKey: null })
+          : await updateArticleImage(imageItemId!, null)
+
         if (!saved.ok) return saved
+        changed = true
+      }
+
+      if (imageWarning) {
+        toast.warning(imageWarning)
+        router.refresh()
+        onOpenChange(false)
+        return { ok: true }
+      }
+
+      if (!changed && !imagePending) {
+        toast.info("Sin cambios")
       }
 
       return { ok: true }
     })
   }
 
+  const descriptionText =
+    mode === "recipe"
+      ? "Los ingredientes son insumos del inventario. Al vender el artículo, el stock se descuenta con esta receta."
+      : "Los artículos se venden en el punto de venta y podrán usarse en menús. Crearlos aquí no modifica el inventario."
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {article ? "Editar artículo" : "Nuevo artículo"}
+            {mode === "recipe"
+              ? recipe
+                ? "Editar receta"
+                : "Nueva receta"
+              : article
+                ? "Editar artículo"
+                : "Nuevo artículo"}
           </DialogTitle>
-          <DialogDescription>
-            Los artículos se venden en el punto de venta y podrán usarse en
-            menús. Crearlos aquí no modifica el inventario.
-          </DialogDescription>
+          <DialogDescription>{descriptionText}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          {/* Grupo superior: imagen a la izquierda; nombre, precio y categoría. */}
+          {/* Grupo superior: imagen a la izquierda; switches, nombre, precio y categoría. */}
           <div className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
             <ImageDropzone
               url={image?.url ?? null}
@@ -446,6 +1007,28 @@ export function ArticleDialog({
             />
 
             <div className="flex flex-col gap-3">
+              {/* Interruptores: publicar como artículo y convertir en insumo. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Switch
+                  id="article-published"
+                  checked={articleEnabled}
+                  disabled={form.pending}
+                  onCheckedChange={handleArticleChange}
+                />
+                <Label htmlFor="article-published">Publicar como artículo</Label>
+
+                <Separator orientation="vertical" className="mx-1 h-5" />
+
+                <Switch
+                  id="article-ingredient"
+                  checked={ingredientEnabled}
+                  disabled={form.pending}
+                  onCheckedChange={handleIngredientChange}
+                />
+                <Label htmlFor="article-ingredient">Insumo</Label>
+                <InfoHint text="Convierte la receta en un insumo del inventario: al producir un lote se suma stock con la unidad y el rendimiento indicados." />
+              </div>
+
               <Field>
                 <FieldLabel htmlFor="article-name">
                   Nombre <span className="text-destructive">*</span>
@@ -455,45 +1038,101 @@ export function ArticleDialog({
                   value={name}
                   maxLength={120}
                   onChange={(event) => handleNameChange(event.target.value)}
-                  placeholder="Ej. Café americano"
+                  placeholder={
+                    mode === "recipe" ? "Ej. Salsa verde" : "Ej. Café americano"
+                  }
                 />
               </Field>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field>
-                  <div className="flex items-center gap-1.5">
-                    <FieldLabel htmlFor="article-price">
-                      Precio <span className="text-destructive">*</span>
-                    </FieldLabel>
-                    <InfoHint text="Precio final con IVA incluido. Con varias presentaciones, es el de la presentación principal." />
-                  </div>
-                  <InputGroup>
-                    <InputGroupAddon align="inline-start">
-                      <InputGroupText>$</InputGroupText>
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      id="article-price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={price}
-                      onChange={(event) => setPrice(event.target.value)}
-                      placeholder="0.00"
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupText>MXN</InputGroupText>
-                    </InputGroupAddon>
-                  </InputGroup>
-                </Field>
+                {priceVisible ? (
+                  <Field>
+                    <div className="flex items-center gap-1.5">
+                      <FieldLabel htmlFor="article-price">
+                        Precio <span className="text-destructive">*</span>
+                      </FieldLabel>
+                      <InfoHint text="Precio final con IVA incluido. Con varias presentaciones, es el de la presentación principal." />
+                    </div>
+                    <InputGroup>
+                      <InputGroupAddon align="inline-start">
+                        <InputGroupText>$</InputGroupText>
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="article-price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={price}
+                        onChange={(event) => setPrice(event.target.value)}
+                        placeholder="0.00"
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupText>MXN</InputGroupText>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+                ) : null}
+
+                {ingredientEnabled ? (
+                  <Field>
+                    <div className="flex items-center gap-1.5">
+                      <FieldLabel htmlFor="recipe-yield">Rendimiento</FieldLabel>
+                      <InfoHint text="Cantidad de insumo que produce un lote de la receta." />
+                    </div>
+                    <div className="flex items-stretch gap-2">
+                      <Input
+                        id="recipe-yield"
+                        type="number"
+                        min="0.0001"
+                        step="any"
+                        value={yieldQuantity}
+                        onChange={(event) =>
+                          setYieldQuantity(event.target.value)
+                        }
+                        placeholder="0.00"
+                        className="min-w-0 flex-1"
+                      />
+                      <Select
+                        value={yieldUnit}
+                        onValueChange={(value) =>
+                          setYieldUnit((value ?? "UNIT") as UnitCode)
+                        }
+                        items={UNIT_DEFINITIONS.map((unit) => ({
+                          value: unit.code,
+                          label: unit.symbol,
+                        }))}
+                      >
+                        <SelectTrigger className="w-24" aria-label="Unidad del rendimiento">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UNIT_DEFINITIONS.map((unit) => (
+                            <SelectItem key={unit.code} value={unit.code}>
+                              {unit.symbol}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </Field>
+                ) : null}
 
                 <Field>
                   <FieldLabel htmlFor="article-category">
                     Categoría <span className="text-destructive">*</span>
                   </FieldLabel>
                   <Select
-                    value={categoryId}
-                    onValueChange={(value) => setCategoryId(value ?? "")}
-                    items={categories.map((category) => ({
+                    value={categoryValue || null}
+                    onValueChange={(value) => {
+                      const next = value ?? ""
+
+                      if (mode === "article") {
+                        setArticleCategoryId(next)
+                      } else {
+                        setRecipeCategoryId(next)
+                      }
+                    }}
+                    items={categoryOptions.map((category) => ({
                       value: category.id,
                       label: category.name,
                     }))}
@@ -502,7 +1141,7 @@ export function ArticleDialog({
                       <SelectValue placeholder="Selecciona una categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((category) => (
+                      {categoryOptions.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}
                         </SelectItem>
@@ -521,59 +1160,65 @@ export function ArticleDialog({
               value={description}
               maxLength={500}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Descripción para el menú"
+              placeholder={
+                mode === "recipe"
+                  ? "Preparación, notas o rendimiento esperado"
+                  : "Descripción para el menú"
+              }
             />
-            <p className="text-xs text-muted-foreground">
-              El SKU se genera solo a partir de la categoría.
-            </p>
+            {articleEnabled ? (
+              <p className="text-xs text-muted-foreground">
+                El SKU se genera solo a partir de la categoría.
+              </p>
+            ) : null}
           </Field>
 
           <Separator />
 
-          <Tabs defaultValue="opciones" className="gap-4">
+          <Tabs defaultValue="receta" className="gap-4">
             <TabsList>
-              <TabsTrigger type="button" value="opciones">
-                Opciones
+              <TabsTrigger type="button" value="receta">
+                Receta
               </TabsTrigger>
               <TabsTrigger type="button" value="presentaciones">
                 Presentaciones
               </TabsTrigger>
+              <TabsTrigger type="button" value="opciones">
+                Opciones
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="opciones" keepMounted>
+            <TabsContent value="receta" keepMounted>
               <section className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-1">
                     <Label
-                      htmlFor="article-options"
+                      htmlFor="article-recipe"
                       className="text-sm font-medium"
                     >
-                      Opciones del artículo
+                      Insumos de la receta
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Grupos como salsa, proteína, leche o extras. Marca las
-                      opciones que podrá elegir el mesero en la comanda; activa
-                      «Múltiples opciones» si puede elegir más de una.
+                      Busca el insumo, indica la cantidad y la unidad. Se
+                      descuenta del inventario al vender el artículo.
                     </p>
                   </div>
                   <Switch
-                    id="article-options"
-                    checked={optionsEnabled}
+                    id="article-recipe"
+                    checked={recipeEnabled}
                     disabled={form.pending}
-                    onCheckedChange={handleOptionsChange}
+                    onCheckedChange={handleRecipeChange}
                   />
                 </div>
 
-                <OptionGroupsEditor
-                  library={optionGroups}
-                  presets={optionPresets}
-                  value={groups}
-                  onChange={setGroups}
-                  disabled={form.pending}
-                  hideHeader
-                  suggestionsOnly={!optionsEnabled}
-                  onGroupAdded={() => setOptionsEnabled(true)}
-                />
+                {recipeEnabled ? (
+                  <RecipeRows
+                    rows={recipeRows}
+                    ingredients={ingredients}
+                    onChange={setRecipeRows}
+                    disabled={form.pending}
+                  />
+                ) : null}
               </section>
             </TabsContent>
 
@@ -613,13 +1258,50 @@ export function ArticleDialog({
                 ) : null}
               </section>
             </TabsContent>
+
+            <TabsContent value="opciones" keepMounted>
+              <section className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="article-options"
+                      className="text-sm font-medium"
+                    >
+                      Opciones del artículo
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Grupos como salsa, proteína, leche o extras. Marca las
+                      opciones que podrá elegir el mesero en la comanda; activa
+                      «Múltiples opciones» si puede elegir más de una.
+                    </p>
+                  </div>
+                  <Switch
+                    id="article-options"
+                    checked={optionsEnabled}
+                    disabled={form.pending}
+                    onCheckedChange={handleOptionsChange}
+                  />
+                </div>
+
+                {optionsEnabled ? (
+                  <OptionGroupsEditor
+                    library={optionGroups}
+                    presets={optionPresets}
+                    value={groups}
+                    onChange={setGroups}
+                    disabled={form.pending}
+                    hideHeader
+                  />
+                ) : null}
+              </section>
+            </TabsContent>
           </Tabs>
 
           {form.error ? <FieldError>{form.error}</FieldError> : null}
         </div>
 
         <DialogFooter>
-          {!article ? (
+          {!article && !recipe ? (
             <ClearFieldsButton
               onClick={handleClear}
               disabled={form.pending}
@@ -636,7 +1318,13 @@ export function ArticleDialog({
           </Button>
           <Button type="button" onClick={save} disabled={form.pending}>
             {form.pending ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-            {article ? "Guardar artículo" : "Crear artículo"}
+            {mode === "recipe"
+              ? recipe
+                ? "Guardar receta"
+                : "Crear receta"
+              : article
+                ? "Guardar artículo"
+                : "Crear artículo"}
           </Button>
         </DialogFooter>
 
@@ -689,6 +1377,34 @@ export function ArticleDialog({
                 onClick={() => setOptionsEnabled(false)}
               >
                 Desactivar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={confirmDisableArticle}
+          onOpenChange={setConfirmDisableArticle}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+                <TriangleAlertIcon />
+              </AlertDialogMedia>
+              <AlertDialogTitle>Dejar de publicar como artículo</AlertDialogTitle>
+              <AlertDialogDescription>
+                {recipe
+                  ? "El artículo se eliminará o se desactivará si ya tiene pedidos. La receta y sus insumos seguirán existiendo. ¿Continuar?"
+                  : "El artículo se desactivará y dejará de venderse, conservando su historial de pedidos. ¿Continuar?"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => applyArticleChange(false)}
+              >
+                Despublicar
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1,6 +1,6 @@
 "use client"
 
-import { presignItemImage } from "@/app/(app)/catalog/actions"
+import { presignItemImage, presignRecipeImage } from "@/app/(app)/catalog/actions"
 
 /** Límite por archivo: 5 MB (la API y el bucket lo repiten). */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -27,17 +27,33 @@ export function validateImageFile(file: File): string | null {
   return null
 }
 
+/** Respuesta de la API al firmar una subida. */
+interface PresignResult {
+  ok: boolean
+  message?: string
+  data?: {
+    key: string
+    url: string
+    uploadUrl: string
+    method: "PUT"
+    headers: Record<string, string>
+  }
+}
+
+type Presign = (input: {
+  contentType: string
+  size: number
+}) => Promise<PresignResult>
+
 /**
- * Sube la imagen de un artículo ya guardado directo a R2.
+ * Sube una imagen directo a R2: pide la URL firmada a la API y hace el PUT.
  *
- * Pide a la API una URL firmada para la carpeta del artículo (con el
- * `Content-Type` ya fijado) y hace el PUT directamente al bucket: el archivo
- * nunca pasa por la API. Al guardar la clave, la API borra la imagen anterior
- * para que solo quede una por artículo.
+ * El archivo nunca pasa por la API. Al guardar la clave, la API valida el
+ * objeto y borra la imagen anterior para que solo quede una por entidad.
  */
-export async function uploadItemImage(
-  itemId: string,
-  file: File
+async function uploadImage(
+  file: File,
+  presign: Presign
 ): Promise<{ ok: boolean; message?: string; key?: string; url?: string }> {
   const problem = validateImageFile(file)
 
@@ -45,7 +61,7 @@ export async function uploadItemImage(
     return { ok: false, message: problem }
   }
 
-  const presigned = await presignItemImage(itemId, {
+  const presigned = await presign({
     contentType: file.type,
     size: file.size,
   })
@@ -76,4 +92,14 @@ export async function uploadItemImage(
   }
 
   return { ok: true, key, url }
+}
+
+/** Sube la imagen de un artículo ya guardado. */
+export function uploadItemImage(itemId: string, file: File) {
+  return uploadImage(file, (input) => presignItemImage(itemId, input))
+}
+
+/** Sube la imagen propia de una receta ya guardada. */
+export function uploadRecipeImage(recipeId: string, file: File) {
+  return uploadImage(file, (input) => presignRecipeImage(recipeId, input))
 }

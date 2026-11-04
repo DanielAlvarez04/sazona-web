@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import type { ComponentProps } from "react"
 import {
   ChevronDownIcon,
   ChevronsUpDownIcon,
@@ -26,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { formatMoney, formatQuantity, type Recipe } from "@/lib/catalog"
+import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
 
@@ -92,20 +94,36 @@ export interface RecipeRowActions {
   isPending: (recipe: Recipe) => boolean
 }
 
-function RecipeActionsMenu({
+export function RecipeActionsMenu({
   recipe,
   actions,
+  triggerSize = "icon-sm",
+  triggerClassName,
 }: {
   recipe: Recipe
   actions: RecipeRowActions
+  /** Tamaño del botón de tres puntos (más grande en las tarjetas). */
+  triggerSize?: ComponentProps<typeof Button>["size"]
+  /** Estilos extra del disparador (p. ej. puntos blancos sobre una imagen). */
+  triggerClassName?: string
 }) {
   const pending = actions.isPending(recipe)
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" />}
-        disabled={pending}
+        render={
+          <Button
+            variant="ghost"
+            size={triggerSize}
+            className={cn(
+              "text-muted-foreground aria-expanded:bg-muted",
+              triggerClassName
+            )}
+            disabled={pending}
+            aria-label={`Acciones de ${recipe.name}`}
+          />
+        }
       >
         <EllipsisVerticalIcon />
         <span className="sr-only">Acciones</span>
@@ -165,7 +183,7 @@ export function createRecipeColumns(
             id: "select",
             header: ({ table }) => (
               <Checkbox
-                aria-label="Seleccionar todas las recetas"
+                aria-label="Seleccionar todos los registros de la página"
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
                 onCheckedChange={(checked) =>

@@ -463,68 +463,81 @@ function ComboDialog({
       }
     }
 
-    const base: ArticleInput = {
-      name: trimmedName,
-      description: description.trim() || null,
-      categoryId,
-      price: numericPrice,
-      isCombo: true,
-      ...(groups.length > 0
-        ? { optionGroups: optionGroupPayload(groups) }
-        : {}),
-    }
+    form.run(async () => {
+      for (const group of groups) {
+        if (
+          group.isRequired &&
+          group.values.length > 0 &&
+          !group.values.some((value) => value.isActive)
+        ) {
+          return {
+            ok: false,
+            message: `El grupo obligatorio «${group.groupName}» necesita al menos una opción disponible`,
+          }
+        }
+      }
 
-    if (!combo) {
-      form.run(() =>
-        createArticle({
+      // Los grupos y sus opciones ya se guardaron en la biblioteca al crearlos.
+      const savedGroups = groups
+
+      const base: ArticleInput = {
+        name: trimmedName,
+        description: description.trim() || null,
+        categoryId,
+        price: numericPrice,
+        isCombo: true,
+        ...(savedGroups.length > 0
+          ? { optionGroups: optionGroupPayload(savedGroups) }
+          : {}),
+      }
+
+      if (!combo) {
+        return createArticle({
           ...base,
           comboComponents: nextComponents,
           promotions: nextPromotions,
         })
-      )
-      return
-    }
+      }
 
-    const changes: Partial<ArticleInput> = {
-      ...(combo.name === trimmedName ? {} : { name: trimmedName }),
-      ...((combo.description ?? "") === (base.description ?? "")
-        ? {}
-        : { description: base.description }),
-      ...((combo.category?.id ?? "") === categoryId ? {} : { categoryId }),
-      ...(Number(combo.price) === numericPrice ? {} : { price: numericPrice }),
-      ...(optionGroupsSignature(groups) ===
-      optionGroupsSignature(optionGroupDrafts(combo.optionGroups))
-        ? {}
-        : { optionGroups: optionGroupPayload(groups) }),
-      ...(promotionSignature(promotions) ===
-      promotionSignature(promotionRows(combo))
-        ? {}
-        : { promotions: nextPromotions }),
-    }
+      const changes: Partial<ArticleInput> = {
+        ...(combo.name === trimmedName ? {} : { name: trimmedName }),
+        ...((combo.description ?? "") === (base.description ?? "")
+          ? {}
+          : { description: base.description }),
+        ...((combo.category?.id ?? "") === categoryId ? {} : { categoryId }),
+        ...(Number(combo.price) === numericPrice ? {} : { price: numericPrice }),
+        ...(optionGroupsSignature(savedGroups) ===
+        optionGroupsSignature(optionGroupDrafts(combo.optionGroups))
+          ? {}
+          : { optionGroups: optionGroupPayload(savedGroups) }),
+        ...(promotionSignature(promotions) ===
+        promotionSignature(promotionRows(combo))
+          ? {}
+          : { promotions: nextPromotions }),
+      }
 
-    const currentComponents = (combo.comboComponents ?? []).map((component) => ({
-      itemId: component.componentItem.id,
-      variantId: component.variant?.id ?? "",
-      quantity: component.quantity,
-    }))
-    const key = (row: { itemId: string; variantId?: string }) =>
-      `${row.itemId}:${row.variantId ?? ""}`
-    const componentsChanged =
-      currentComponents.length !== nextComponents.length ||
-      currentComponents.some((row) => {
-        const next = nextComponents.find(
-          (candidate) => key(candidate) === key(row)
-        )
-        return next?.quantity !== row.quantity
-      })
+      const currentComponents = (combo.comboComponents ?? []).map((component) => ({
+        itemId: component.componentItem.id,
+        variantId: component.variant?.id ?? "",
+        quantity: component.quantity,
+      }))
+      const key = (row: { itemId: string; variantId?: string }) =>
+        `${row.itemId}:${row.variantId ?? ""}`
+      const componentsChanged =
+        currentComponents.length !== nextComponents.length ||
+        currentComponents.some((row) => {
+          const next = nextComponents.find(
+            (candidate) => key(candidate) === key(row)
+          )
+          return next?.quantity !== row.quantity
+        })
 
-    if (Object.keys(changes).length === 0 && !componentsChanged) {
-      toast.info("Sin cambios")
-      onClose()
-      return
-    }
+      if (Object.keys(changes).length === 0 && !componentsChanged) {
+        toast.info("Sin cambios")
+        onClose()
+        return { ok: true }
+      }
 
-    form.run(async () => {
       if (Object.keys(changes).length > 0) {
         const updated = await updateArticle(combo.id, changes)
         if (!updated.ok) return updated

@@ -41,6 +41,8 @@ import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
 import {
   formatMoney,
+  isItemOptionValueAvailable,
+  itemOptionValueName,
   type Category,
   type ItemListItem,
 } from "@/lib/catalog"
@@ -751,7 +753,7 @@ function AddItemDialog({
   const groups = (product.optionGroups ?? []).filter(
     (group) =>
       group.group &&
-      group.values.some((value) => value.isActive && value.value.isActive)
+      group.values.some((value) => isItemOptionValueAvailable(value))
   )
 
   const [variantId, setVariantId] = React.useState(
@@ -766,9 +768,7 @@ function AddItemDialog({
       groups.map((group) => [
         group.id,
         group.values
-          .filter(
-            (value) => value.isActive && value.value.isActive && value.isDefault
-          )
+          .filter((value) => isItemOptionValueAvailable(value) && value.isDefault)
           .map((value) => value.id),
       ])
     )
@@ -784,7 +784,7 @@ function AddItemDialog({
       .map((value) => ({
         itemOptionValueId: value.id,
         groupName: group.group.name,
-        name: value.value.name,
+        name: itemOptionValueName(value),
         price: Number(value.priceDelta),
       }))
   )
@@ -882,15 +882,14 @@ function AddItemDialog({
 
                 <div className="grid gap-2 sm:grid-cols-2">
                   {group.values
-                    .filter(
-                      (value) => value.isActive && value.value.isActive
-                    )
+                    .filter((value) => isItemOptionValueAvailable(value))
                     .map((value) => {
                       const checked = chosen.includes(value.id)
                       const disabled =
                         group.selection === "MULTIPLE" &&
                         !checked &&
                         chosen.length >= max
+                      const valueName = itemOptionValueName(value)
 
                       return (
                         <label
@@ -906,7 +905,7 @@ function AddItemDialog({
                               onChange={() =>
                                 chooseOption(group.id, value.id, false)
                               }
-                              aria-label={value.value.name}
+                              aria-label={valueName}
                             />
                           ) : (
                             <Checkbox
@@ -915,10 +914,10 @@ function AddItemDialog({
                               onCheckedChange={() =>
                                 chooseOption(group.id, value.id, true)
                               }
-                              aria-label={value.value.name}
+                              aria-label={valueName}
                             />
                           )}
-                          <span className="flex-1">{value.value.name}</span>
+                          <span className="flex-1">{valueName}</span>
                           {Number(value.priceDelta) !== 0 ? (
                             <span className="text-xs text-muted-foreground tabular-nums">
                               +{formatMoney(value.priceDelta)}

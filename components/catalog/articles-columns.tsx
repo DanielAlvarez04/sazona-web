@@ -33,7 +33,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { formatMoney, type ArticleListItem, type Variant } from "@/lib/catalog"
 import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
@@ -190,17 +190,20 @@ export function ArticleActionsMenu({
 
 /** Vista previa de las presentaciones con su precio absoluto. */
 export function PresentationPreview({
-  article,
+  price,
+  variants: allVariants,
   compact = false,
   className,
 }: {
-  article: ArticleListItem
+  /** Precio del artículo; las presentaciones se calculan con su ajuste. */
+  price: string
+  variants: Variant[]
   /** En tarjetas: solo icono y número, sin la etiqueta de texto. */
   compact?: boolean
   /** Estilos extra del badge (p. ej. sobre una imagen oscura). */
   className?: string
 }) {
-  const variants = article.variants.filter((variant) => variant.isActive)
+  const variants = allVariants.filter((variant) => variant.isActive)
 
   if (variants.length === 0) {
     // Sin presentaciones propias, el precio del artículo es la única.
@@ -221,7 +224,7 @@ export function PresentationPreview({
     )
   }
 
-  const base = Number(article.price)
+  const base = Number(price)
   const primary = variants.find((variant) => variant.isPrimary) ?? variants[0]
 
   return (
@@ -377,7 +380,7 @@ export function createArticleColumns(
                   onCheckedChange={(value) =>
                     table.toggleAllPageRowsSelected(!!value)
                   }
-                  aria-label="Seleccionar todos los artículos de la página"
+                  aria-label="Seleccionar todos los registros de la página"
                 />
               </div>
             ),
@@ -490,7 +493,10 @@ export function createArticleColumns(
       header: () => <span className="font-medium">Presentaciones</span>,
       cell: ({ row }) => (
         <div className="flex items-center">
-          <PresentationPreview article={row.original} />
+          <PresentationPreview
+            price={row.original.price}
+            variants={row.original.variants}
+          />
         </div>
       ),
       enableSorting: false,

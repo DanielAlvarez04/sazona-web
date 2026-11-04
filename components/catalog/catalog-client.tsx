@@ -28,7 +28,6 @@ import { CombosPanel } from "@/components/catalog/combos-panel"
 import { ImportDialog } from "@/components/catalog/import-dialog"
 import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
-import { RecipeDialog } from "@/components/catalog/recipe-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
 import {
   AlertDialog,
@@ -78,15 +77,14 @@ export function CatalogClient({
   const rowForm = useActionForm(() => router.refresh())
   const regularArticles = articles.filter((article) => !article.isCombo)
 
-  const [recipeDialogOpen, setRecipeDialogOpen] = useState(false)
-  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
-  const [publishIntent, setPublishIntent] = useState(false)
-  const [producing, setProducing] = useState<Recipe | null>(null)
-
-  const [articleDialogOpen, setArticleDialogOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<"article" | "recipe">("article")
   const [editingArticle, setEditingArticle] = useState<ArticleListItem | null>(
     null
   )
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
+  const [publishIntent, setPublishIntent] = useState(false)
+  const [producing, setProducing] = useState<Recipe | null>(null)
 
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -97,25 +95,43 @@ export function CatalogClient({
   } | null>(null)
 
   function openNewRecipe() {
+    setDialogMode("recipe")
+    setEditingArticle(null)
     setEditingRecipe(null)
     setPublishIntent(false)
-    setRecipeDialogOpen(true)
+    setDialogOpen(true)
   }
 
   function openRecipe(recipe: Recipe, publish = false) {
+    setDialogMode("recipe")
     setEditingRecipe(recipe)
-    setPublishIntent(publish)
-    setRecipeDialogOpen(true)
+    setEditingArticle(
+      recipe.itemId
+        ? (articles.find((article) => article.id === recipe.itemId) ?? null)
+        : null
+    )
+    setPublishIntent(publish || Boolean(recipe.itemId))
+    setDialogOpen(true)
   }
 
   function openNewArticle() {
+    setDialogMode("article")
     setEditingArticle(null)
-    setArticleDialogOpen(true)
+    setEditingRecipe(null)
+    setPublishIntent(true)
+    setDialogOpen(true)
   }
 
   function openArticle(article: ArticleListItem) {
+    setDialogMode("article")
     setEditingArticle(article)
-    setArticleDialogOpen(true)
+    setEditingRecipe(
+      recipes.find(
+        (recipe) => recipe.itemId === article.id && !recipe.variantId
+      ) ?? null
+    )
+    setPublishIntent(true)
+    setDialogOpen(true)
   }
 
   function toggleRecipeActive(recipe: Recipe) {
@@ -306,32 +322,24 @@ export function CatalogClient({
         </TabsContent>
       </Tabs>
 
-      {canManage && recipeDialogOpen ? (
-        <RecipeDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) {
-              setRecipeDialogOpen(false)
-              setPublishIntent(false)
-            }
-          }}
-          recipe={editingRecipe}
-          categories={recipeCategories}
-          ingredients={ingredients}
-          initialPublish={publishIntent}
-        />
-      ) : null}
-
-      {canManage && articleDialogOpen ? (
+      {canManage && dialogOpen ? (
         <ArticleDialog
           open
           onOpenChange={(open) => {
-            if (!open) setArticleDialogOpen(false)
+            if (!open) {
+              setDialogOpen(false)
+              setPublishIntent(false)
+            }
           }}
+          mode={dialogMode}
           article={editingArticle}
+          recipe={editingRecipe}
           categories={articleCategories}
+          recipeCategories={recipeCategories}
+          ingredients={ingredients}
           optionGroups={optionGroups}
           optionPresets={optionPresets}
+          initialArticle={publishIntent}
         />
       ) : null}
 

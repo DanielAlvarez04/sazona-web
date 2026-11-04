@@ -409,11 +409,6 @@ function OptionGroupDialog({
 
     const activeRows = prepared.filter((row) => row.isActive && row.name)
 
-    if (activeRows.length === 0) {
-      form.setError("El grupo necesita al menos una opción activa")
-      return
-    }
-
     const names = activeRows.map((row) => row.name.toLowerCase())
     if (new Set(names).size !== names.length) {
       form.setError("No puede haber dos opciones con el mismo nombre")

@@ -251,7 +251,10 @@ export interface OptionEffect {
 /** Valor del grupo aplicado a un artículo, con su precio y default. */
 export interface ItemOptionValue {
   id: string
-  valueId: string
+  /** Valor de la biblioteca; null si es una opción propia del artículo. */
+  valueId: string | null
+  /** Opción propia del artículo; no modifica la biblioteca. */
+  customName: string | null
   priceDelta: string
   isDefault: boolean
   sortOrder: number
@@ -261,8 +264,29 @@ export interface ItemOptionValue {
     name: string
     kitchenLabel: string | null
     isActive: boolean
-  }
+  } | null
   effects?: OptionEffect[]
+}
+
+/**
+ * Nombre visible de una opción del artículo.
+ *
+ * Las opciones propias (`customName`) no existen en la biblioteca, así que se
+ * muestran con ese nombre tanto en el editor como en la comanda.
+ */
+export function itemOptionValueName(value: {
+  customName: string | null
+  value: { name: string } | null
+}): string {
+  return value.customName ?? value.value?.name ?? "Opción"
+}
+
+/** Una opción está disponible si el artículo y la biblioteca la permiten. */
+export function isItemOptionValueAvailable(value: {
+  isActive: boolean
+  value: { isActive: boolean } | null
+}): boolean {
+  return value.isActive && (!value.value || value.value.isActive)
 }
 
 /** Asignación de un grupo a un artículo y sus reglas de selección. */
@@ -389,6 +413,10 @@ export interface Recipe {
   id: string
   name: string
   description: string | null
+  /** Imagen propia de la receta (también visible en el tab Recetas). */
+  imageKey: string | null
+  imageUrl: string | null
+  imageName: string | null
   isActive: boolean
   itemId: string | null
   variantId: string | null
@@ -401,6 +429,10 @@ export interface Recipe {
     sku: string | null
     price: string
     isActive: boolean
+    imageKey: string | null
+    imageUrl: string | null
+    isCombo: boolean
+    variants: Variant[]
   } | null
   producesIngredientId: string | null
   producesIngredient: RecipeIngredientRef | null

@@ -47,31 +47,36 @@ export function ProductOptions({
   )
 
   function save() {
-    for (const group of groups) {
-      if (group.isRequired && !group.values.some((value) => value.isActive)) {
-        form.setError(
-          `El grupo obligatorio «${group.groupName}» necesita al menos una opción disponible`
-        )
-        return
+    form.run(async () => {
+      for (const group of groups) {
+        if (
+          group.isRequired &&
+          group.values.length > 0 &&
+          !group.values.some((value) => value.isActive)
+        ) {
+          return {
+            ok: false,
+            message: `El grupo obligatorio «${group.groupName}» necesita al menos una opción disponible`,
+          }
+        }
       }
-    }
 
-    if (
-      optionGroupsSignature(groups) ===
-      optionGroupsSignature(optionGroupDrafts(product.optionGroups))
-    ) {
-      toast.info("Sin cambios")
-      return
-    }
+      if (
+        optionGroupsSignature(groups) ===
+        optionGroupsSignature(optionGroupDrafts(product.optionGroups))
+      ) {
+        toast.info("Sin cambios")
+        return { ok: true }
+      }
 
-    form.run(() =>
-      updateArticle(product.id, {
+      const result = await updateArticle(product.id, {
         optionGroups: optionGroupPayload(groups),
-      }).then((result) => {
-        if (result.ok) toast.success("Opciones guardadas")
-        return result
       })
-    )
+
+      if (result.ok) toast.success("Opciones guardadas")
+
+      return result
+    })
   }
 
   return (

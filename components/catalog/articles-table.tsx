@@ -276,7 +276,7 @@ export function ArticlesTable({
                 indeterminate={someSelected}
                 disabled={filtered.length === 0}
                 onCheckedChange={(value) => toggleAllSelected(!!value)}
-                aria-label="Seleccionar todos los artículos"
+                aria-label="Seleccionar todos"
               />
               <Label
                 htmlFor="articles-select-all"

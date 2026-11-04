@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  EllipsisVerticalIcon,
   FlaskConicalIcon,
   PencilIcon,
   PlayIcon,
@@ -18,8 +19,10 @@ import {
   DataTable,
   DATA_TABLE_ALL,
   type DataTableFilter,
+  type DataTableViewMode,
 } from "@/components/data-table/data-table"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuContent,
   ContextMenuGroup,
@@ -27,8 +30,16 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Label } from "@/components/ui/label"
 import type { Category, Recipe } from "@/lib/catalog"
 
+import { RecipeCards } from "./recipe-cards"
 import {
   RECIPE_COLUMN_LABELS,
   createRecipeColumns,
@@ -65,6 +76,7 @@ export function RecipesTable({
   const [publication, setPublication] = React.useState<string>(DATA_TABLE_ALL)
   const [produces, setProduces] = React.useState<string>(DATA_TABLE_ALL)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  const [viewMode, setViewMode] = React.useState<DataTableViewMode>("cards")
 
   const filtered = React.useMemo(() => {
     const term = globalFilter.trim().toLowerCase()
@@ -88,6 +100,39 @@ export function RecipesTable({
   const selected = React.useMemo(
     () => filtered.filter((recipe) => rowSelection[recipe.id]),
     [filtered, rowSelection]
+  )
+  const selectedCount = selected.length
+
+  // Selección masiva sobre lo filtrado (no solo la página visible).
+  const allSelected =
+    filtered.length > 0 && filtered.every((recipe) => rowSelection[recipe.id])
+  const someSelected =
+    !allSelected && filtered.some((recipe) => rowSelection[recipe.id])
+
+  const toggleAllSelected = React.useCallback(
+    (isSelected: boolean) => {
+      setRowSelection((prev) => {
+        const next = { ...prev }
+        for (const recipe of filtered) {
+          if (isSelected) next[recipe.id] = true
+          else delete next[recipe.id]
+        }
+        return next
+      })
+    },
+    [filtered]
+  )
+
+  const setCardSelected = React.useCallback(
+    (id: string, isSelected: boolean) => {
+      setRowSelection((prev) => {
+        const next = { ...prev }
+        if (isSelected) next[id] = true
+        else delete next[id]
+        return next
+      })
+    },
+    []
   )
 
   const filters: DataTableFilter[] = []
@@ -115,11 +160,11 @@ export function RecipesTable({
       id: "publication",
       ariaLabel: "Filtrar por publicación",
       placeholder: "Publicación",
-      allLabel: "Todas",
+      allLabel: "Todos",
       value: publication,
       onValueChange: setPublication,
       options: [
-        { value: DATA_TABLE_ALL, label: "Todas" },
+        { value: DATA_TABLE_ALL, label: "Todos" },
         { value: "published", label: "Publicadas como artículo" },
         { value: "standalone", label: "Solo receta" },
       ],
@@ -128,11 +173,11 @@ export function RecipesTable({
       id: "produces",
       ariaLabel: "Filtrar por insumo producido",
       placeholder: "Produce insumo",
-      allLabel: "Todas",
+      allLabel: "Todos",
       value: produces,
       onValueChange: setProduces,
       options: [
-        { value: DATA_TABLE_ALL, label: "Todas" },
+        { value: DATA_TABLE_ALL, label: "Todos" },
         { value: "yes", label: "Producen insumo" },
         { value: "no", label: "No producen insumo" },
       ],
@@ -188,22 +233,76 @@ export function RecipesTable({
         value: globalFilter,
         onValueChange: setGlobalFilter,
       }}
+      selectionToggle={
+        canManage ? (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="recipes-select-all"
+              checked={allSelected}
+              indeterminate={someSelected}
+              disabled={filtered.length === 0}
+              onCheckedChange={(value) => toggleAllSelected(!!value)}
+              aria-label="Seleccionar todos"
+            />
+            <Label
+              htmlFor="recipes-select-all"
+              className="text-sm font-medium text-muted-foreground"
+            >
+              Seleccionar todos
+            </Label>
+          </div>
+        ) : null
+      }
       filters={filters}
       activeFilterCount={activeFilterCount}
       onClearFilters={clearFilters}
       showColumnToggle={canManage}
       columnLabels={RECIPE_COLUMN_LABELS}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      cardsView={(rows) => (
+        <RecipeCards
+          recipes={rows}
+          actions={{
+            onEdit,
+            onPublish,
+            onUnpublish,
+            onProduce,
+            onToggleActive,
+            onDelete,
+            canManage,
+            isPending: () => false,
+          }}
+          canSelect={canManage}
+          selectedIds={rowSelection}
+          onSelectedChange={setCardSelected}
+        />
+      )}
       actions={
         canManage ? (
           <>
-            <Button variant="outline" onClick={onManageCategories}>
-              <TagsIcon className="size-4" />
-              Categorías
-            </Button>
             <Button onClick={onCreate}>
               <PlusIcon className="size-4" />
               Nueva receta
             </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="icon" />}
+              >
+                <EllipsisVerticalIcon className="size-4" />
+                <span className="sr-only">Más acciones</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={onManageCategories}
+                  className="flex items-center gap-2"
+                >
+                  <TagsIcon className="size-4" />
+                  Categorías
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         ) : null
       }
@@ -266,7 +365,7 @@ export function RecipesTable({
       summary={
         <>
           {filtered.length} receta{filtered.length === 1 ? "" : "s"}
-          {selected.length > 0 ? ` · ${selected.length} seleccionada(s)` : ""}
+          {selectedCount > 0 ? ` · ${selectedCount} seleccionada(s)` : ""}
           {activeFilterCount > 0 ? " (filtradas)" : ""}.
         </>
       }

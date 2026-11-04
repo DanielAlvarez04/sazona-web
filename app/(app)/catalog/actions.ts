@@ -5,7 +5,9 @@ import type {
   OptionEffectAction,
   OptionGroup,
   OptionSelection,
+  OptionValue,
   PromotionType,
+  Recipe,
   UnitCode,
 } from "@/lib/catalog"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
@@ -252,12 +254,19 @@ export interface RecipePublishInput {
 
 export interface RecipeInput {
   name: string
-  description?: string
+  description?: string | null
   categoryId?: string | null
   isActive?: boolean
+  /** Artículo existente al que se vincula la receta (sin volver a publicarlo). */
+  itemId?: string
+  variantId?: string
   ingredients?: RecipeIngredientInput[]
   publish?: RecipePublishInput
   produce?: { displayUnit: UnitCode; yieldQuantity: number }
+  /** Apaga el switch «Insumo»: desvincula el insumo producido. */
+  clearProduce?: boolean
+  /** Clave en R2 de la imagen propia de la receta; `null` la quita. */
+  imageKey?: string | null
 }
 
 export async function createRecipe(
@@ -298,8 +307,8 @@ export async function deleteRecipe(recipeId: string): Promise<ActionResult> {
 export async function publishRecipe(
   recipeId: string,
   input: RecipePublishInput
-): Promise<ActionResult> {
-  return mutateApi(
+): Promise<ActionResult<Recipe>> {
+  return mutateApi<Recipe>(
     `/catalog/recipes/${recipeId}/publish`,
     "POST",
     input,
@@ -363,7 +372,10 @@ export interface OptionGroupAssignmentInput {
   maxSelect?: number
   sortOrder?: number
   values: Array<{
-    valueId: string
+    /** Valor de la biblioteca; se omite en opciones propias del artículo. */
+    valueId?: string
+    /** Opción propia del artículo; no modifica la biblioteca. */
+    customName?: string
     priceDelta?: number
     isDefault?: boolean
     sortOrder?: number
@@ -380,7 +392,8 @@ export interface OptionGroupAssignmentInput {
 export interface OptionGroupInput {
   name: string
   description?: string
-  values: Array<{ name: string; kitchenLabel?: string }>
+  /** Un grupo recién creado puede quedar vacío y completarse después. */
+  values?: Array<{ name: string; kitchenLabel?: string }>
 }
 
 export interface ComboPromotionInput {
@@ -425,6 +438,17 @@ export async function presignItemImage(
 ): Promise<ActionResult<PresignedImage>> {
   return mutateApi<PresignedImage>(
     `/uploads/catalog/items/${itemId}`,
+    "POST",
+    input
+  )
+}
+
+export async function presignRecipeImage(
+  recipeId: string,
+  input: PresignImageInput
+): Promise<ActionResult<PresignedImage>> {
+  return mutateApi<PresignedImage>(
+    `/uploads/catalog/recipes/${recipeId}`,
     "POST",
     input
   )
@@ -569,8 +593,8 @@ export async function deactivateOptionGroup(
 export async function createOptionValue(
   groupId: string,
   input: OptionValueInput
-): Promise<ActionResult> {
-  return mutateApi(
+): Promise<ActionResult<OptionValue>> {
+  return mutateApi<OptionValue>(
     `/catalog/option-groups/${groupId}/values`,
     "POST",
     input,
