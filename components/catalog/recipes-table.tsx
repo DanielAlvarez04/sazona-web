@@ -227,6 +227,7 @@ export function RecipesTable({
       enableRowSelection={canManage}
       tableClassName="[&_td]:py-1.5"
       initialSorting={[{ id: "name", desc: false }]}
+      layout="sidebar"
       search={{
         label: "Buscar receta",
         placeholder: "Buscar por nombre...",

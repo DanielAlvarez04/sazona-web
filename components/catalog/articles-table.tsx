@@ -261,6 +261,7 @@ export function ArticlesTable({
         enableRowSelection={canManage}
         tableClassName="[&_td]:py-1.5"
         initialSorting={[{ id: "name", desc: false }]}
+        layout="sidebar"
         search={{
           label: "Buscar artículo",
           placeholder: "Buscar por nombre o SKU...",

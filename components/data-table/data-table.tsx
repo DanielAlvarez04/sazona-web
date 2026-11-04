@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
 import {
   Select,
   SelectContent,
@@ -120,6 +121,12 @@ export interface DataTableProps<TData extends RowData> {
    */
   selectionActions?: React.ReactNode
   /**
+   * Distribución de la barra de herramientas. `"sidebar"` coloca Acciones y
+   * Filtros en una columna a la izquierda y deja la vista y la paginación a la
+   * derecha. `"inline"` (por defecto) mantiene la barra horizontal.
+   */
+  layout?: "inline" | "sidebar"
+  /**
    * Vista activa. Si se indica junto con `onViewModeChange`, aparece un
    * selector tabla/tarjetas a la izquierda del botón de columnas.
    */
@@ -181,6 +188,7 @@ export function DataTable<TData extends RowData>({
   columnLabels,
   actions,
   selectionActions,
+  layout = "inline",
   viewMode = "table",
   onViewModeChange,
   cardsView,
@@ -264,309 +272,351 @@ export function DataTable<TData extends RowData>({
   const resolveRowClassName = (row: TData) =>
     typeof rowClassName === "function" ? rowClassName(row) : rowClassName
 
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        {/* Barra de herramientas: una sola fila con dos grupos. */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
+  const isSidebar = layout === "sidebar"
+
+  const filtersGroup = (
+    <div
+      role="group"
+      aria-label="Filtros"
+      className={cn(
+        "flex min-w-0",
+        isSidebar
+          ? "flex-col items-stretch gap-3"
+          : "flex-1 flex-wrap items-center gap-2"
+      )}
+    >
+      {search ? (
+        <div
+          className={cn(
+            "relative",
+            isSidebar
+              ? "w-full"
+              : "w-full sm:w-auto sm:min-w-40 sm:max-w-64"
+          )}
+        >
+          <Label htmlFor={`${idPrefix}-search`} className="sr-only">
+            {search.label}
+          </Label>
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id={`${idPrefix}-search`}
+            type="search"
+            placeholder={search.placeholder}
+            value={search.value}
+            onChange={(event) => search.onValueChange(event.target.value)}
+            className="pl-8"
+          />
+        </div>
+      ) : null}
+
+      {filters.map((filter) => {
+        const selectedLabel =
+          filter.options.find((option) => option.value === filter.value)
+            ?.label ?? filter.allLabel
+
+        return (
+          <Select
+            key={filter.id}
+            value={filter.value}
+            onValueChange={(value) =>
+              filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
+            }
+            items={filter.options}
+          >
+            <SelectTrigger
+              // En sidebar el filtro ocupa el ancho de la columna; en línea
+              // crece con el nombre elegido para no cortar opciones largas.
+              className={cn(
+                isSidebar ? "w-full" : "w-auto min-w-40 max-w-64"
+              )}
+              aria-label={filter.ariaLabel}
+              title={selectedLabel}
+            >
+              <SelectValue placeholder={filter.placeholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {filter.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      })}
+
+      {selectionToggle}
+
+      {hasFilters && onClearFilters ? (
+        <Button
+          variant="ghost"
+          className={cn("text-muted-foreground", isSidebar && "self-start")}
+          onClick={onClearFilters}
+        >
+          <XIcon className="size-4" />
+          Limpiar
+          <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+            {activeFilterCount}
+          </Badge>
+        </Button>
+      ) : null}
+    </div>
+  )
+
+  const actionsGroup =
+    showColumnToggle || actions || selectionActions || onViewModeChange ? (
+      <div
+        role="group"
+        aria-label="Acciones"
+        className={cn(
+          "flex",
+          isSidebar
+            ? "flex-col items-stretch gap-3"
+            : "shrink-0 flex-wrap items-center gap-2"
+        )}
+      >
+        {isSidebar ? actions : null}
+
+        {selectionActions}
+
+        {onViewModeChange ? (
           <div
             role="group"
-            aria-label="Filtros"
-            className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+            aria-label="Vista"
+            className={cn(
+              "flex items-center gap-0.5 rounded-md border p-0.5",
+              isSidebar && "self-start"
+            )}
           >
-            {search ? (
-              <div className="relative w-full sm:w-auto sm:min-w-40 sm:max-w-64">
-                <Label htmlFor={`${idPrefix}-search`} className="sr-only">
-                  {search.label}
-                </Label>
-                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id={`${idPrefix}-search`}
-                  type="search"
-                  placeholder={search.placeholder}
-                  value={search.value}
-                  onChange={(event) => search.onValueChange(event.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            ) : null}
-
-            {filters.map((filter) => {
-              const selectedLabel =
-                filter.options.find((option) => option.value === filter.value)
-                  ?.label ?? filter.allLabel
-
-              return (
-                <Select
-                  key={filter.id}
-                  value={filter.value}
-                  onValueChange={(value) =>
-                    filter.onValueChange((value as string) ?? DATA_TABLE_ALL)
-                  }
-                  items={filter.options}
-                >
-                  <SelectTrigger
-                    // `w-auto` deja que el disparador crezca con el nombre
-                    // elegido; así no se corta el texto de opciones largas.
-                    className="w-auto min-w-40 max-w-64"
-                    aria-label={filter.ariaLabel}
-                    title={selectedLabel}
-                  >
-                    <SelectValue placeholder={filter.placeholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filter.options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
-            })}
-
-            {selectionToggle}
-
-            {hasFilters && onClearFilters ? (
-              <Button
-                variant="ghost"
-                className="text-muted-foreground"
-                onClick={onClearFilters}
-              >
-                <XIcon className="size-4" />
-                Limpiar
-                <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
-                  {activeFilterCount}
-                </Badge>
-              </Button>
-            ) : null}
-          </div>
-
-          {showColumnToggle ||
-          actions ||
-          selectionActions ||
-          onViewModeChange ? (
-            <div
-              role="group"
-              aria-label="Acciones"
-              className="flex shrink-0 flex-wrap items-center gap-2"
+            <Button
+              variant={viewMode === "cards" ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-pressed={viewMode === "cards"}
+              aria-label="Vista de tarjetas"
+              title="Vista de tarjetas"
+              onClick={() => onViewModeChange("cards")}
             >
-              {selectionActions}
+              <LayoutGridIcon className="size-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-pressed={viewMode === "table"}
+              aria-label="Vista de tabla"
+              title="Vista de tabla"
+              onClick={() => onViewModeChange("table")}
+            >
+              <TableIcon className="size-4" />
+            </Button>
+          </div>
+        ) : null}
 
-              {onViewModeChange ? (
-                <div
-                  role="group"
-                  aria-label="Vista"
-                  className="flex items-center gap-0.5 rounded-md border p-0.5"
-                >
-                  <Button
-                    variant={viewMode === "cards" ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    aria-pressed={viewMode === "cards"}
-                    aria-label="Vista de tarjetas"
-                    title="Vista de tarjetas"
-                    onClick={() => onViewModeChange("cards")}
-                  >
-                    <LayoutGridIcon className="size-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "table" ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    aria-pressed={viewMode === "table"}
-                    aria-label="Vista de tabla"
-                    title="Vista de tabla"
-                    onClick={() => onViewModeChange("table")}
-                  >
-                    <TableIcon className="size-4" />
-                  </Button>
-                </div>
-              ) : null}
+        {showColumnToggle && viewMode === "table" ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  className={isSidebar ? "w-full justify-start" : undefined}
+                  aria-label="Mostrar u ocultar columnas"
+                />
+              }
+            >
+              <Columns3Icon className="size-4" />
+              <span>Columnas</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align={isSidebar ? "start" : "end"}>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Columnas</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {table
+                  .getAllColumns()
+                  .filter((column) => column.getCanHide())
+                  .map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
+                    >
+                      {columnLabels?.[column.id] ?? column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
 
-              {showColumnToggle && viewMode === "table" ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        aria-label="Mostrar u ocultar columnas"
-                      />
+        {isSidebar ? null : actions}
+      </div>
+    ) : null
+
+  const content =
+    viewMode === "cards" && cardsView ? (
+      rows.length > 0 ? (
+        cardsView(rows.map((row) => row.original))
+      ) : (
+        <div className="rounded-lg border p-8 text-center whitespace-normal">
+          {emptyContent}
+        </div>
+      )
+    ) : (
+      <div className="overflow-hidden rounded-lg border">
+        <Table className={tableClassName}>
+          <TableHeader className="sticky top-0 z-10 bg-muted">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} colSpan={header.colSpan}>
+                    {header.isPlaceholder ? null : (
+                      <FlexRender header={header} />
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {rows.length > 0 ? (
+              rows.map((row) => {
+                const tableRow = (
+                  <TableRow
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className={cn("h-max", resolveRowClassName(row.original))}
+                    onClick={
+                      onRowClick ? () => onRowClick(row.original) : undefined
                     }
                   >
-                    <Columns3Icon className="size-4" />
-                    <span>Columnas</span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>Columnas</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {table
-                        .getAllColumns()
-                        .filter((column) => column.getCanHide())
-                        .map((column) => (
-                          <DropdownMenuCheckboxItem
-                            key={column.id}
-                            checked={column.getIsVisible()}
-                            onCheckedChange={(value) =>
-                              column.toggleVisibility(!!value)
-                            }
-                          >
-                            {columnLabels?.[column.id] ?? column.id}
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        <FlexRender cell={cell} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
 
-              {actions}
-            </div>
-          ) : null}
+                if (!rowContextMenu) {
+                  return (
+                    <React.Fragment key={row.id}>{tableRow}</React.Fragment>
+                  )
+                }
+
+                return (
+                  <ContextMenu key={row.id}>
+                    <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
+                    {rowContextMenu(row.original)}
+                  </ContextMenu>
+                )
+              })
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columnCount}
+                  className="h-32 text-center whitespace-normal"
+                >
+                  {emptyContent}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    )
+
+  const paginationFooter = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="text-sm text-muted-foreground">{summary}</div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="hidden items-center gap-2 sm:flex">
+          <Label
+            htmlFor={`${idPrefix}-rows-per-page`}
+            className="text-sm font-medium"
+          >
+            Filas por página
+          </Label>
+          <Select
+            value={`${pagination.pageSize}`}
+            onValueChange={(value) => {
+              if (!value) return
+              table.setPageSize(Number(value))
+            }}
+            items={pageSizeOptions.map((pageSize) => ({
+              label: `${pageSize}`,
+              value: `${pageSize}`,
+            }))}
+          >
+            <SelectTrigger
+              size="sm"
+              className="w-20"
+              id={`${idPrefix}-rows-per-page`}
+            >
+              <SelectValue placeholder={`${pagination.pageSize}`} />
+            </SelectTrigger>
+            <SelectContent side="top">
+              {pageSizeOptions.map((pageSize) => (
+                <SelectItem key={pageSize} value={`${pageSize}`}>
+                  {pageSize}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {viewMode === "cards" && cardsView ? (
-          rows.length > 0 ? (
-            cardsView(rows.map((row) => row.original))
-          ) : (
-            <div className="rounded-lg border p-8 text-center whitespace-normal">
-              {emptyContent}
-            </div>
-          )
-        ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <Table className={tableClassName}>
-              <TableHeader className="sticky top-0 z-10 bg-muted">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} colSpan={header.colSpan}>
-                        {header.isPlaceholder ? null : (
-                          <FlexRender header={header} />
-                        )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {rows.length > 0 ? (
-                  rows.map((row) => {
-                    const tableRow = (
-                      <TableRow
-                        data-state={
-                          row.getIsSelected() ? "selected" : undefined
-                        }
-                        className={cn(
-                          "h-max",
-                          resolveRowClassName(row.original)
-                        )}
-                        onClick={
-                          onRowClick
-                            ? () => onRowClick(row.original)
-                            : undefined
-                        }
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            <FlexRender cell={cell} />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    )
+        <div className="flex w-fit items-center justify-center text-sm font-medium">
+          Página {pagination.pageIndex + 1} de {table.getPageCount()}
+        </div>
 
-                    if (!rowContextMenu) {
-                      return (
-                        <React.Fragment key={row.id}>{tableRow}</React.Fragment>
-                      )
-                    }
-
-                    return (
-                      <ContextMenu key={row.id}>
-                        <ContextMenuTrigger asChild>
-                          {tableRow}
-                        </ContextMenuTrigger>
-                        {rowContextMenu(row.original)}
-                      </ContextMenu>
-                    )
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columnCount}
-                      className="h-32 text-center whitespace-normal"
-                    >
-                      {emptyContent}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-muted-foreground">{summary}</div>
-
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="hidden items-center gap-2 sm:flex">
-              <Label
-                htmlFor={`${idPrefix}-rows-per-page`}
-                className="text-sm font-medium"
-              >
-                Filas por página
-              </Label>
-              <Select
-                value={`${pagination.pageSize}`}
-                onValueChange={(value) => {
-                  if (!value) return
-                  table.setPageSize(Number(value))
-                }}
-                items={pageSizeOptions.map((pageSize) => ({
-                  label: `${pageSize}`,
-                  value: `${pageSize}`,
-                }))}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-20"
-                  id={`${idPrefix}-rows-per-page`}
-                >
-                  <SelectValue placeholder={`${pagination.pageSize}`} />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {pageSizeOptions.map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Página {pagination.pageIndex + 1} de {table.getPageCount()}
-            </div>
-
-            <div className="ml-auto flex items-center gap-2 sm:ml-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+        <div className="ml-auto flex items-center gap-2 sm:ml-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Siguiente
+          </Button>
         </div>
       </div>
+    </div>
+  )
+
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {isSidebar ? (
+        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+          <aside className="flex min-w-0 flex-col gap-4">
+            {actionsGroup}
+            {actionsGroup ? <Separator /> : null}
+            {filtersGroup}
+          </aside>
+
+          <div className="flex min-w-0 flex-col gap-4">
+            {content}
+            {paginationFooter}
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          {/* Barra de herramientas: una sola fila con dos grupos. */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {filtersGroup}
+            {actionsGroup}
+          </div>
+
+          {content}
+          {paginationFooter}
+        </div>
+      )}
     </div>
   )
 }
