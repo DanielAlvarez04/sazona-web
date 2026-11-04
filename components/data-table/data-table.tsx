@@ -363,6 +363,83 @@ export function DataTable<TData extends RowData>({
     </div>
   )
 
+  const viewToggle = onViewModeChange ? (
+    <div
+      role="group"
+      aria-label="Vista"
+      className="flex items-center gap-0.5 rounded-md border p-0.5"
+    >
+      <Button
+        variant={viewMode === "cards" ? "secondary" : "ghost"}
+        size="icon-sm"
+        aria-pressed={viewMode === "cards"}
+        aria-label="Vista de tarjetas"
+        title="Vista de tarjetas"
+        onClick={() => onViewModeChange("cards")}
+      >
+        <LayoutGridIcon className="size-4" />
+      </Button>
+      <Button
+        variant={viewMode === "table" ? "secondary" : "ghost"}
+        size="icon-sm"
+        aria-pressed={viewMode === "table"}
+        aria-label="Vista de tabla"
+        title="Vista de tabla"
+        onClick={() => onViewModeChange("table")}
+      >
+        <TableIcon className="size-4" />
+      </Button>
+    </div>
+  ) : null
+
+  const columnToggle =
+    showColumnToggle && viewMode === "table" ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="outline"
+              className={isSidebar ? "w-full justify-start" : undefined}
+              aria-label="Mostrar u ocultar columnas"
+            />
+          }
+        >
+          <Columns3Icon className="size-4" />
+          <span>Columnas</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={isSidebar ? "start" : "end"}>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Columnas</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {table
+              .getAllColumns()
+              .filter((column) => column.getCanHide())
+              .map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) =>
+                    column.toggleVisibility(!!value)
+                  }
+                >
+                  {columnLabels?.[column.id] ?? column.id}
+                </DropdownMenuCheckboxItem>
+              ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : null
+
+  // En sidebar, la acción principal, el menú de tres puntos y el selector de
+  // vista comparten una sola fila.
+  const sidebarActionRow =
+    actions || viewToggle ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {actions}
+        {viewToggle}
+      </div>
+    ) : null
+
   const actionsGroup =
     showColumnToggle || actions || selectionActions || onViewModeChange ? (
       <div
@@ -375,80 +452,20 @@ export function DataTable<TData extends RowData>({
             : "shrink-0 flex-wrap items-center gap-2"
         )}
       >
-        {isSidebar ? actions : null}
-
-        {selectionActions}
-
-        {onViewModeChange ? (
-          <div
-            role="group"
-            aria-label="Vista"
-            className={cn(
-              "flex items-center gap-0.5 rounded-md border p-0.5",
-              isSidebar && "self-start"
-            )}
-          >
-            <Button
-              variant={viewMode === "cards" ? "secondary" : "ghost"}
-              size="icon-sm"
-              aria-pressed={viewMode === "cards"}
-              aria-label="Vista de tarjetas"
-              title="Vista de tarjetas"
-              onClick={() => onViewModeChange("cards")}
-            >
-              <LayoutGridIcon className="size-4" />
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "secondary" : "ghost"}
-              size="icon-sm"
-              aria-pressed={viewMode === "table"}
-              aria-label="Vista de tabla"
-              title="Vista de tabla"
-              onClick={() => onViewModeChange("table")}
-            >
-              <TableIcon className="size-4" />
-            </Button>
-          </div>
-        ) : null}
-
-        {showColumnToggle && viewMode === "table" ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  className={isSidebar ? "w-full justify-start" : undefined}
-                  aria-label="Mostrar u ocultar columnas"
-                />
-              }
-            >
-              <Columns3Icon className="size-4" />
-              <span>Columnas</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align={isSidebar ? "start" : "end"}>
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Columnas</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {table
-                  .getAllColumns()
-                  .filter((column) => column.getCanHide())
-                  .map((column) => (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {columnLabels?.[column.id] ?? column.id}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-
-        {isSidebar ? null : actions}
+        {isSidebar ? (
+          <>
+            {sidebarActionRow}
+            {selectionActions}
+            {columnToggle}
+          </>
+        ) : (
+          <>
+            {selectionActions}
+            {viewToggle}
+            {columnToggle}
+            {actions}
+          </>
+        )}
       </div>
     ) : null
 
@@ -593,7 +610,7 @@ export function DataTable<TData extends RowData>({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {isSidebar ? (
-        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start lg:gap-6">
           <aside className="flex min-w-0 flex-col gap-4">
             {actionsGroup}
             {actionsGroup ? <Separator /> : null}
