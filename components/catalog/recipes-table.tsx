@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import {
-  EllipsisVerticalIcon,
+  ChevronDownIcon,
   FlaskConicalIcon,
   PencilIcon,
   PlayIcon,
@@ -290,9 +290,9 @@ export function RecipesTable({
 
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="outline" size="icon" />}
+                render={<Button variant="default" size="icon" />}
               >
-                <EllipsisVerticalIcon className="size-4" />
+                <ChevronDownIcon className="size-4" />
                 <span className="sr-only">Más acciones</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
