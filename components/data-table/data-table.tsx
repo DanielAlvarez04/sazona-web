@@ -278,10 +278,11 @@ export function DataTable<TData extends RowData>({
     <div
       role="group"
       aria-label="Filtros"
+      style={isSidebar ? { contain: "inline-size" } : undefined}
       className={cn(
         "flex min-w-0",
         isSidebar
-          ? "flex-col items-stretch gap-3"
+          ? "w-full flex-col items-stretch gap-3"
           : "flex-1 flex-wrap items-center gap-2"
       )}
     >
@@ -438,7 +439,10 @@ export function DataTable<TData extends RowData>({
 
   const sidebarViewRow =
     viewToggle || columnToggle ? (
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        className="flex w-full flex-wrap items-center gap-2"
+        style={{ contain: "inline-size" }}
+      >
         {viewToggle}
         {columnToggle}
       </div>
@@ -614,7 +618,7 @@ export function DataTable<TData extends RowData>({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {isSidebar ? (
-        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="flex min-w-0 flex-col gap-4 lg:grid lg:grid-cols-[max-content_minmax(0,1fr)] lg:items-start lg:gap-6">
           <aside className="flex min-w-0 flex-col gap-4">
             {actionsGroup}
             {actionsGroup ? <Separator /> : null}
