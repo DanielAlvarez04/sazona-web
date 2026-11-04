@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   CheckIcon,
   ChevronDownIcon,
+  FlaskConicalIcon,
   GripVerticalIcon,
   Loader2Icon,
   PlusIcon,
@@ -40,6 +41,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { OptionValueEffects } from "@/components/catalog/option-value-effects"
 import { Switch } from "@/components/ui/switch"
 import type {
   ArticleInput,
@@ -52,7 +54,11 @@ import type {
   OptionGroupPreset,
   OptionSelection,
 } from "@/lib/catalog"
-import { isNoPriceOptionGroup } from "@/lib/catalog"
+import {
+  isNoPriceOptionGroup,
+  type Ingredient,
+} from "@/lib/catalog"
+import type { RecipeRow } from "@/components/catalog/recipe-rows"
 import {
   Collapsible,
   CollapsibleContent,
@@ -70,6 +76,8 @@ export interface OptionGroupDraftValue {
   name: string
   kitchenLabel: string | null
   priceDelta: string
+  /** Multiplicador de consumo (tamaños); "1" por defecto. */
+  scaleFactor: string
   /** Disponible para el mesero al tomar la comanda. */
   isActive: boolean
   isDefault: boolean
@@ -111,6 +119,7 @@ export function optionGroupDrafts(
           Number(value.priceDelta) === 0
             ? ""
             : String(Number(value.priceDelta)),
+        scaleFactor: String(Number(value.scaleFactor) || 1),
         isActive: value.isActive,
         isDefault: value.isDefault,
         effects: value.effects ?? [],
@@ -130,6 +139,7 @@ export function optionGroupPayload(
       priceDelta: isNoPriceOptionGroup(group.groupName)
         ? 0
         : Number(value.priceDelta) || 0,
+      scaleFactor: Number(value.scaleFactor) || 1,
       isActive: value.isActive,
       isDefault: value.isDefault,
       effects: value.effects.map((effect) => ({
@@ -137,8 +147,12 @@ export function optionGroupPayload(
         ...(effect.recipeIngredientId
           ? { recipeIngredientId: effect.recipeIngredientId }
           : {}),
+        ...(effect.replacesIngredientId
+          ? { replacesIngredientId: effect.replacesIngredientId }
+          : {}),
         ...(effect.ingredientId ? { ingredientId: effect.ingredientId } : {}),
         ...(effect.quantity ? { quantity: Number(effect.quantity) } : {}),
+        ...(effect.unit ? { unit: effect.unit } : {}),
       })),
     }))
 
@@ -185,6 +199,7 @@ function libraryToDraft(
       name: value.name,
       kitchenLabel: value.kitchenLabel,
       priceDelta: "",
+      scaleFactor: "1",
       isActive: true,
       isDefault: nextSelection === "SINGLE" && index === 0,
       effects: [] as OptionEffect[],
@@ -213,6 +228,8 @@ export function OptionGroupsEditor({
   onChange,
   disabled,
   hideHeader = false,
+  ingredients,
+  recipeRows,
 }: {
   /** Biblioteca de grupos de la organización. */
   library: OptionGroup[]
@@ -222,6 +239,10 @@ export function OptionGroupsEditor({
   disabled?: boolean
   /** El contenedor ya muestra el título (diálogo de artículo). */
   hideHeader?: boolean
+  /** Inventario para buscar el insumo de un efecto. */
+  ingredients?: Ingredient[]
+  /** Filas de la receta para elegir el slot a reemplazar/quitar. */
+  recipeRows?: RecipeRow[]
 }) {
   // Operación en curso contra la API (crear grupo u opción).
   const [pending, setPending] = React.useState<string | null>(null)
@@ -532,6 +553,7 @@ export function OptionGroupsEditor({
               name: created.name,
               kitchenLabel: created.kitchenLabel,
               priceDelta: "",
+              scaleFactor: "1",
               isActive: true,
               isDefault: firstDefault,
               effects: [],
@@ -585,6 +607,23 @@ export function OptionGroupsEditor({
     next.splice(to, 0, moved)
     onChange(next)
   }
+
+  const slotOptions = React.useMemo(() => {
+    const unique = new Map<string, string>()
+
+    for (const row of recipeRows ?? []) {
+      if (!row.ingredientId || unique.has(row.ingredientId)) continue
+      const name = ingredients?.find(
+        (ingredient) => ingredient.id === row.ingredientId
+      )?.name
+      unique.set(row.ingredientId, name ?? "Insumo")
+    }
+
+    return [...unique].map(([ingredientId, name]) => ({
+      ingredientId,
+      name,
+    }))
+  }, [recipeRows, ingredients])
 
   return (
     <div className="flex flex-col gap-3">
@@ -649,6 +688,8 @@ export function OptionGroupsEditor({
                 group={group}
                 index={index}
                 disabled={disabled}
+                ingredients={ingredients}
+                slotOptions={slotOptions}
                 onUpdate={(changes) => updateGroup(group.groupId, changes)}
                 onUpdateValue={(valueKey, changes) =>
                   updateValue(group.groupId, valueKey, changes)
@@ -836,6 +877,8 @@ function SortableGroupCard({
   group,
   index,
   disabled,
+  ingredients,
+  slotOptions,
   onUpdate,
   onUpdateValue,
   onAddValue,
@@ -845,6 +888,8 @@ function SortableGroupCard({
   group: OptionGroupDraft
   index: number
   disabled?: boolean
+  ingredients?: Ingredient[]
+  slotOptions: Array<{ ingredientId: string; name: string }>
   onUpdate: (changes: Partial<OptionGroupDraft>) => void
   onUpdateValue: (
     valueKey: string,
@@ -1088,6 +1133,8 @@ function SortableGroupCard({
                     item={item}
                     index={index}
                     disabled={disabled}
+                    ingredients={ingredients}
+                    slotOptions={slotOptions}
                     onUpdateValue={(changes) =>
                       onUpdateValue(item.key, changes)
                     }
@@ -1116,6 +1163,8 @@ function SortableOptionValue({
   disabled,
   onUpdateValue,
   onRemove,
+  ingredients,
+  slotOptions,
 }: {
   group: OptionGroupDraft
   item: OptionGroupDraftValue
@@ -1123,7 +1172,10 @@ function SortableOptionValue({
   disabled?: boolean
   onUpdateValue: (changes: Partial<OptionGroupDraftValue>) => void
   onRemove: () => void
+  ingredients?: Ingredient[]
+  slotOptions: Array<{ ingredientId: string; name: string }>
 }) {
+  const [effectsOpen, setEffectsOpen] = React.useState(false)
   const {
     attributes,
     listeners,
@@ -1146,10 +1198,11 @@ function SortableOptionValue({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-0.5",
+        "flex flex-col gap-1",
         isDragging && "relative z-10 opacity-70"
       )}
     >
+      <div className="flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
       <div className="flex shrink-0 items-center">
         <span className="w-3 text-right text-[10px] text-muted-foreground tabular-nums">
           {index + 1}
@@ -1204,6 +1257,27 @@ function SortableOptionValue({
         </div>
       )}
 
+      {ingredients ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Efectos de receta"
+          aria-expanded={effectsOpen}
+          disabled={disabled}
+          className={cn(
+            "shrink-0",
+            item.effects.length > 0 ? "text-chart-2" : "text-muted-foreground"
+          )}
+          onClick={() => setEffectsOpen((current) => !current)}
+        >
+          <FlaskConicalIcon />
+          {item.effects.length > 0 ? (
+            <span className="text-[10px]">{item.effects.length}</span>
+          ) : null}
+        </Button>
+      ) : null}
+
       {item.valueId ? null : (
         <Button
           type="button"
@@ -1217,6 +1291,21 @@ function SortableOptionValue({
           <Trash2Icon />
         </Button>
       )}
+      </div>
+
+      {effectsOpen && ingredients ? (
+        <OptionValueEffects
+          effects={item.effects}
+          scaleFactor={item.scaleFactor}
+          priceDelta={item.priceDelta}
+          ingredients={ingredients}
+          slotOptions={slotOptions}
+          disabled={disabled}
+          onChange={(effects, scaleFactor) =>
+            onUpdateValue({ effects, scaleFactor })
+          }
+        />
+      ) : null}
     </div>
   )
 }

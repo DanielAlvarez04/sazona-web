@@ -244,8 +244,10 @@ export interface OptionEffect {
   id?: string
   action: OptionEffectAction
   recipeIngredientId: string | null
+  replacesIngredientId: string | null
   ingredientId: string | null
   quantity: string | null
+  unit?: UnitCode
 }
 
 /** Valor del grupo aplicado a un artículo, con su precio y default. */
@@ -256,6 +258,8 @@ export interface ItemOptionValue {
   /** Opción propia del artículo; no modifica la biblioteca. */
   customName: string | null
   priceDelta: string
+  /** Multiplicador de consumo de la receta (tamaños). */
+  scaleFactor: string
   isDefault: boolean
   sortOrder: number
   isActive: boolean
@@ -394,6 +398,9 @@ export interface RecipeIngredientRef {
 
 export interface RecipeIngredient {
   id: string
+  /** `null` = común a todas las presentaciones. */
+  variantId: string | null
+  variantName: string | null
   quantity: string
   label: string | null
   isOptional: boolean
@@ -439,10 +446,17 @@ export interface Recipe {
   yieldQuantity: string | null
   yieldUnit: UnitCode | null
   ingredients: RecipeIngredient[]
-  /** Costo estimado del lote con los insumos default (en MXN). */
+  /** Costo estimado de la presentación principal (en MXN). */
   estimatedCost: string | null
   hasCompleteCost: boolean
   canComputeConsumption?: boolean
+  /** Costo base de cada presentación, sin opciones elegidas. */
+  variantCosts: Array<{
+    variantId: string
+    variantName: string
+    estimatedCost: string | null
+    hasCompleteCost: boolean
+  }>
 }
 
 export interface ItemDetail extends ItemListItem {
@@ -635,6 +649,17 @@ export function formatQuantity(value: string | number): string {
 export function formatPercent(value: string | null): string {
   if (value === null) return "Sin IVA"
   return `${quantityFormatter.format(Number(value) * 100)} %`
+}
+
+const marginPercentFormatter = new Intl.NumberFormat("es-MX", {
+  style: "percent",
+  maximumFractionDigits: 1,
+})
+
+/** Porcentaje de margen: recibe una fracción (`0.42` = 42 %). */
+export function formatMarginPercent(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "—"
+  return marginPercentFormatter.format(value)
 }
 
 export function formatDateTime(value: string): string {

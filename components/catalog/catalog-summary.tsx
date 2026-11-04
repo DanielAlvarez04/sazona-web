@@ -18,10 +18,12 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
+  formatMarginPercent,
   formatMoney,
   type ArticleListItem,
   type Recipe,
 } from "@/lib/catalog"
+import { Separator } from "@/components/ui/separator"
 
 export function CatalogSummary({
   mode,
@@ -58,24 +60,62 @@ export function CatalogSummary({
         .filter(
           (recipe) =>
             recipe.itemId &&
-            recipe.variantId === null &&
-            recipe.estimatedCost !== null
+            recipe.variantId === null
         )
-        .map((recipe) => [recipe.itemId as string, Number(recipe.estimatedCost)])
+        .map((recipe) => [recipe.itemId as string, recipe])
     )
 
     const margins = articles
-      .map((article) => {
-        const cost = costByProduct.get(article.id)
-        if (cost === undefined) return null
-        return Number(article.price) - cost
+      .filter((article) => article.isActive)
+      .flatMap((article) => {
+        const recipe = costByProduct.get(article.id)
+        if (!recipe) return []
+
+        const variants = article.variants.filter((variant) => variant.isActive)
+        const costByVariant = new Map(
+          (recipe.variantCosts ?? []).map((cost) => [
+            cost.variantId,
+            cost.estimatedCost,
+          ])
+        )
+
+        if (variants.length === 0) {
+          if (recipe.estimatedCost === null) return []
+          const price = Number(article.price)
+          if (price <= 0) return []
+          return [
+            {
+              price,
+              amount: price - Number(recipe.estimatedCost),
+            },
+          ]
+        }
+
+        return variants.flatMap((variant) => {
+          const cost =
+            costByVariant.get(variant.id) ?? recipe.estimatedCost
+          if (cost === null || cost === undefined) return []
+          const price = Number(article.price) + Number(variant.priceAdjust)
+          if (price <= 0) return []
+          return [{ price, amount: price - Number(cost) }]
+        })
       })
-      .filter((margin): margin is number => margin !== null)
 
     const averageMargin =
       margins.length > 0
-        ? margins.reduce((total, margin) => total + margin, 0) / margins.length
+        ? margins.reduce((total, margin) => total + margin.amount, 0) /
+          margins.length
         : null
+    const totalMargin = margins.reduce(
+      (total, margin) => total + margin.amount,
+      0
+    )
+    const totalPrice = margins.reduce(
+      (total, margin) => total + margin.price,
+      0
+    )
+    const averageMarginPercent =
+      margins.length > 0 && totalPrice > 0 ? totalMargin / totalPrice : null
 
     return {
       activeRecipes: activeRecipes.length,
@@ -89,6 +129,7 @@ export function CatalogSummary({
       withRecipe: withRecipe.length,
       withoutRecipe,
       averageMargin,
+      averageMarginPercent,
     }
   }, [recipes, articles])
 
@@ -223,14 +264,18 @@ export function CatalogSummary({
             <PercentIcon className="size-4" />
             Margen promedio
           </CardDescription>
-          <CardTitle className="text-2xl tabular-nums">
+          <CardTitle className="flex items-center gap-2 text-xl tabular-nums">
             {metrics.averageMargin === null
               ? "—"
               : formatMoney(metrics.averageMargin)}
+            <Separator orientation="vertical" className="h-5 self-center" />
+            {metrics.averageMarginPercent === null
+              ? "—"
+              : formatMarginPercent(metrics.averageMarginPercent)}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
-          Precio del artículo menos costo estimado de su receta.
+          Precio menos costo de cada presentación, promedio ponderado.
         </CardContent>
       </Card>
     </div>

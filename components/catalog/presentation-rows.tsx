@@ -21,7 +21,9 @@ import { CSS } from "@dnd-kit/utilities"
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { scrollAncestorToBottom } from "@/lib/scroll"
+import { PRESENTATION_PRESETS } from "@/lib/catalog"
 import {
   InputGroup,
   InputGroupAddon,
@@ -32,14 +34,20 @@ import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "cn"
 
+export type PresentationMode = "size" | "variant"
+
 export interface PresentationRow {
   key: string
   name: string
   /** Precio propio; vacío = usa el de la presentación principal. */
   price: string
+  /** Multiplicador de consumo de la receta (tamaño). */
+  recipeFactor: string
   isPrimary: boolean
   /** El nombre sigue al del artículo hasta que se edita a mano. */
   linkedName: boolean
+  /** Id de la presentación ya guardada; ausente en borradores nuevos. */
+  variantId?: string
 }
 
 let presentationCounter = 0
@@ -56,10 +64,22 @@ export function createPresentationRow(
     key: nextPresentationKey(),
     name: "",
     price: "",
+    recipeFactor: "1",
     isPrimary: false,
     linkedName: false,
     ...overrides,
   }
+}
+
+/** Filas del modo Tamaño: Chico / Regular / Grande. */
+export function sizePresentationRows(): PresentationRow[] {
+  return PRESENTATION_PRESETS.map((preset) =>
+    createPresentationRow({
+      name: preset.name,
+      recipeFactor: preset.recipeFactor,
+      isPrimary: preset.name === "Regular",
+    })
+  )
 }
 
 /**
@@ -83,6 +103,8 @@ export function PresentationRows({
   articleName,
   articlePrice,
   onArticlePriceChange,
+  mode,
+  onModeChange,
   disabled = false,
 }: {
   rows: PresentationRow[]
@@ -91,6 +113,8 @@ export function PresentationRows({
   /** Precio del artículo, que es el de la presentación principal. */
   articlePrice: string
   onArticlePriceChange: (value: string) => void
+  mode: PresentationMode
+  onModeChange: (mode: PresentationMode) => void
   disabled?: boolean
 }) {
   const sensors = useSensors(
@@ -159,6 +183,46 @@ export function PresentationRows({
 
   return (
     <div className="flex flex-col gap-2">
+      <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
+        <legend className="px-1 text-[10px] font-medium text-muted-foreground">
+          Tipo de presentación
+        </legend>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-pressed={mode === "size"}
+            disabled={disabled}
+            className={cn(
+              "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+              mode === "size"
+                ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+                : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            onClick={() => onModeChange("size")}
+          >
+            Tamaño
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-pressed={mode === "variant"}
+            disabled={disabled}
+            className={cn(
+              "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+              mode === "variant"
+                ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+                : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            onClick={() => onModeChange("variant")}
+          >
+            Variante
+          </Button>
+        </div>
+      </fieldset>
+
       <div className="hidden grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto] gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid">
         <span className="w-5" aria-hidden />
         <span className="w-4" aria-hidden />
@@ -299,16 +363,28 @@ function SortablePresentationRow({
         disabled={disabled}
       />
 
-      <Input
-        aria-label="Nombre de la presentación"
-        value={row.name}
-        maxLength={80}
-        placeholder={suggestedName}
-        disabled={disabled}
-        onChange={(event) =>
-          update({ name: event.target.value, linkedName: false })
-        }
-      />
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Input
+          aria-label="Nombre de la presentación"
+          value={row.name}
+          maxLength={80}
+          placeholder={suggestedName}
+          disabled={disabled}
+          className="min-w-0"
+          onChange={(event) =>
+            update({ name: event.target.value, linkedName: false })
+          }
+        />
+        {row.recipeFactor !== "1" ? (
+          <Badge
+            variant="outline"
+            className="shrink-0 tabular-nums"
+            title="Multiplicador de consumo de la receta"
+          >
+            ×{row.recipeFactor}
+          </Badge>
+        ) : null}
+      </div>
 
       <InputGroup>
         <InputGroupAddon align="inline-start">

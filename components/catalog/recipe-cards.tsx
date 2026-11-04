@@ -127,6 +127,7 @@ function FullRecipeCard({
                     <PresentationPreview
                       price={item.price}
                       variants={item.variants}
+                      costs={recipe.variantCosts}
                       compact
                       className="border-white/40 bg-black/30 text-white/90 hover:bg-black/45 hover:text-white"
                     />
@@ -139,6 +140,14 @@ function FullRecipeCard({
                   </span>
                 )}
               </div>
+
+              {item ? (
+                <span className="text-[11px] leading-none text-white/80 drop-shadow-sm">
+                  {recipe.estimatedCost
+                    ? `Costo ${formatMoney(recipe.estimatedCost)}`
+                    : "Sin costo"}
+                </span>
+              ) : null}
 
               <p
                 className="line-clamp-2 text-pretty text-base font-semibold leading-snug drop-shadow-sm"

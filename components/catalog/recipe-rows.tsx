@@ -61,6 +61,12 @@ export interface RecipeRow {
   ingredientId: string
   quantity: string
   unit: string
+  /** `null` = común; id de presentación o `draft:<key>` en borradores. */
+  variantId: string | null
+  /** Nombre visible de la presentación (solo para mostrar). */
+  variantName: string | null
+  /** Id de la línea guardada, para los efectos de opciones. */
+  recipeIngredientId?: string
   /**
    * Campos heredados del editor anterior. La fila compacta no los edita, pero
    * se conservan al guardar para no perder etiquetas, opcionales ni
@@ -84,6 +90,8 @@ export function emptyRecipeRow(): RecipeRow {
     ingredientId: "",
     quantity: "",
     unit: "",
+    variantId: null,
+    variantName: null,
     label: "",
     isOptional: false,
     alternatives: [],
@@ -97,6 +105,9 @@ export function recipeRowsFrom(recipe: Recipe): RecipeRow[] {
     ingredientId: line.ingredient.id,
     quantity: line.quantity,
     unit: line.ingredient.displayUnit,
+    variantId: line.variantId,
+    variantName: line.variantName,
+    recipeIngredientId: line.id,
     label: line.label ?? "",
     isOptional: line.isOptional,
     alternatives: line.options.map((option) => ({
@@ -113,11 +124,14 @@ export function RecipeRows({
   ingredients,
   onChange,
   disabled = false,
+  allowEmpty = false,
 }: {
   rows: RecipeRow[]
   ingredients: Ingredient[]
   onChange: (rows: RecipeRow[]) => void
   disabled?: boolean
+  /** Permite dejar la lista vacía (una presentación puede no tener filas). */
+  allowEmpty?: boolean
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -182,7 +196,7 @@ export function RecipeRows({
                 ingredients={ingredients}
                 onChange={onChange}
                 disabled={disabled}
-                canRemove={rows.length > 1}
+                canRemove={allowEmpty || rows.length > 1}
               />
             ))}
           </div>
@@ -387,7 +401,7 @@ function groupIngredients(ingredients: Ingredient[]): IngredientGroup[] {
     }))
 }
 
-function IngredientCombobox({
+export function IngredientCombobox({
   value,
   ingredients,
   onChange,

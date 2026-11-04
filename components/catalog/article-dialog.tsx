@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Loader2Icon, SaveIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,8 +28,11 @@ import {
 } from "@/components/catalog/option-groups-editor"
 import {
   PresentationRows,
+  createPresentationRow,
   defaultPresentationRows,
   nextPresentationKey,
+  sizePresentationRows,
+  type PresentationMode,
   type PresentationRow,
 } from "@/components/catalog/presentation-rows"
 import {
@@ -51,6 +54,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import {
   Dialog,
@@ -127,9 +131,28 @@ function variantsChanged(
     return (
       !sameText(existing.name, variant.name) ||
       !sameNumber(existing.priceAdjust, variant.priceAdjust ?? 0) ||
+      !sameNumber(existing.recipeFactor, variant.recipeFactor ?? 1) ||
       existing.isPrimary !== Boolean(variant.isPrimary)
     )
   })
+}
+
+/** Modo de presentaciones: tamaño (Chico/Regular/Grande) o variantes. */
+function initialPresentationMode(
+  article: ArticleListItem | null
+): PresentationMode {
+  const active = article?.variants.filter((variant) => variant.isActive) ?? []
+  if (active.length === 0) return "variant"
+
+  const names = active.map((variant) => variant.name.trim().toLowerCase())
+  const sizes = ["chico", "regular", "grande"].every((name) =>
+    names.includes(name)
+  )
+  const hasFactors = active.some(
+    (variant) => Number(variant.recipeFactor) !== 1
+  )
+
+  return sizes || (active.length === 3 && hasFactors) ? "size" : "variant"
 }
 
 /** Presentaciones activas del artículo, con el precio ya en valor absoluto. */
@@ -151,8 +174,10 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
       index === primaryIndex
         ? ""
         : String(round2(base + toNumber(variant.priceAdjust))),
+    recipeFactor: variant.recipeFactor,
     isPrimary: index === primaryIndex,
     linkedName: false,
+    variantId: variant.id,
   }))
 }
 
@@ -228,6 +253,7 @@ function sameRecipeIngredients(
 
     if (
       line.ingredient.id !== row.ingredientId ||
+      (line.variantId ?? null) !== (row.variantId ?? null) ||
       !sameLineQuantity(
         row.quantity,
         row.unit as UnitCode | undefined,
@@ -331,6 +357,13 @@ export function ArticleDialog({
   const [rows, setRows] = useState<PresentationRow[]>(() =>
     initialRows(article)
   )
+  const [presentationMode, setPresentationMode] = useState<PresentationMode>(
+    () => initialPresentationMode(article)
+  )
+  // Borradores por modo para no perder lo capturado al alternar las chips.
+  const presentationDrafts = useRef<
+    Record<PresentationMode, PresentationRow[] | null>
+  >({ size: null, variant: null })
   const [groups, setGroups] = useState<OptionGroupDraft[]>(() =>
     optionGroupDrafts(article?.optionGroups)
   )
@@ -340,6 +373,8 @@ export function ArticleDialog({
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>(() =>
     initialRecipeRows(recipe)
   )
+  /** null = receta común; si no, id de presentación o `draft:<key>`. */
+  const [recipeScope, setRecipeScope] = useState<string | null>(null)
   // El tab Receta se muestra por defecto; el switch solo oculta la captura.
   const [recipeEnabled, setRecipeEnabled] = useState(true)
 
@@ -401,9 +436,107 @@ export function ArticleDialog({
   function applyMultipleChange(next: boolean) {
     setMultiple(next)
 
+    if (!next) {
+      clearDraftRecipeScopes(rows)
+    }
+
     if (next && rows.length === 0) {
       setRows(defaultPresentationRows(name))
+      setPresentationMode("variant")
+      presentationDrafts.current = { size: null, variant: null }
     }
+  }
+
+  /** Quita las filas de receta ligadas a presentaciones que aún no se guardan. */
+  function clearDraftRecipeScopes(sourceRows: PresentationRow[]) {
+    const drafts = new Set(
+      sourceRows
+        .filter((presentation) => !presentation.variantId)
+        .map((presentation) => `draft:${presentation.key}`)
+    )
+
+    if (drafts.size === 0) return
+
+    setRecipeRows((current) =>
+      current.filter((row) => !drafts.has(row.variantId ?? ""))
+    )
+  }
+
+  function handlePresentationModeChange(next: PresentationMode) {
+    if (next === presentationMode) return
+
+    clearDraftRecipeScopes(rows)
+    presentationDrafts.current[presentationMode] = rows
+
+    const saved = presentationDrafts.current[next]
+    setRows(
+      saved && saved.length > 0
+        ? saved
+        : next === "size"
+          ? sizePresentationRows()
+          : [createPresentationRow()]
+    )
+    setPresentationMode(next)
+  }
+
+  /** Al quitar una presentación, se limpian sus filas de receta. */
+  function handlePresentationRowsChange(next: PresentationRow[]) {
+    const nextKeys = new Set(next.map((presentation) => presentation.key))
+    const removed = rows.filter(
+      (presentation) => !nextKeys.has(presentation.key)
+    )
+
+    if (removed.length > 0) {
+      const scopes = new Set(
+        removed.map(
+          (presentation) =>
+            presentation.variantId ?? `draft:${presentation.key}`
+        )
+      )
+
+      setRecipeRows((current) =>
+        current.filter((row) => !scopes.has(row.variantId ?? ""))
+      )
+    }
+
+    setRows(next)
+  }
+
+  // Presentaciones activas para el alcance de la receta.
+  const presentationScopes = rows
+    .map((row, index) => ({
+      scope: row.variantId ?? `draft:${row.key}`,
+      name: row.name.trim() || `Presentación ${index + 1}`,
+    }))
+    .filter((_, index) => {
+      const row = rows[index]
+      return Boolean(row?.name.trim() || row?.variantId)
+    })
+
+  const showRecipeScopes =
+    articleEnabled && multiple && presentationScopes.length > 1
+
+  const activeRecipeScope =
+    showRecipeScopes &&
+    presentationScopes.some((presentation) => presentation.scope === recipeScope)
+      ? recipeScope
+      : null
+
+  const commonRecipeRows = recipeRows.filter(
+    (row) => row.variantId === null
+  )
+  const scopedRecipeRows = activeRecipeScope
+    ? recipeRows.filter((row) => row.variantId === activeRecipeScope)
+    : []
+
+  function setRecipeRowsForScope(
+    scope: string | null,
+    next: RecipeRow[]
+  ) {
+    setRecipeRows((current) => [
+      ...current.filter((row) => (row.variantId ?? null) !== scope),
+      ...next.map((row) => ({ ...row, variantId: scope })),
+    ])
   }
 
   function handleMultipleChange(next: boolean) {
@@ -475,6 +608,8 @@ export function ArticleDialog({
     setImage(null)
     setMultiple(false)
     setRows([])
+    setPresentationMode("variant")
+    presentationDrafts.current = { size: null, variant: null }
     setGroups([])
     setOptionsEnabled(false)
     setRecipeRows([emptyRecipeRow()])
@@ -507,13 +642,13 @@ export function ArticleDialog({
         return { rows: [], error: "Hay un insumo que ya no está disponible" }
       }
 
-      if (used.has(row.ingredientId)) {
+      if (used.has(`${row.variantId ?? "common"}:${row.ingredientId}`)) {
         return {
           rows: [],
-          error: `El insumo «${ingredient.name}» está repetido`,
+          error: `El insumo «${ingredient.name}» está repetido en el mismo alcance`,
         }
       }
-      used.add(row.ingredientId)
+      used.add(`${row.variantId ?? "common"}:${row.ingredientId}`)
 
       const quantity = toNumber(row.quantity)
 
@@ -527,6 +662,7 @@ export function ArticleDialog({
       payload.push({
         ingredientId: row.ingredientId,
         quantity,
+        ...(row.variantId ? { variantId: row.variantId } : {}),
         ...(row.unit ? { unit: row.unit as UnitCode } : {}),
         ...(row.label.trim() ? { label: row.label.trim() } : {}),
         ...(row.isOptional ? { isOptional: true } : {}),
@@ -625,6 +761,7 @@ export function ArticleDialog({
             name: rowName,
             // La API guarda el ajuste; el precio del artículo es la principal.
             priceAdjust: round2(rowPrice - priceBase),
+            recipeFactor: Number(row.recipeFactor) || 1,
             sortOrder: index,
             isPrimary: row.isPrimary,
           })
@@ -718,6 +855,42 @@ export function ArticleDialog({
       let itemId = article?.id
       let recipeId = recipe?.id ?? null
       let changed = false
+      let articleVariants: ArticleListItem["variants"] =
+        article?.variants ?? []
+
+      // Resuelve los alcances de borrador (`draft:<key>`) contra las variantes
+      // que acaban de crearse/actualizarse en el artículo.
+      function resolveRecipeRows(): {
+        rows: RecipeIngredientInput[]
+        error?: string
+      } {
+        const active = articleVariants.filter((variant) => variant.isActive)
+
+        const rowsResolved: RecipeIngredientInput[] = []
+
+        for (const row of recipeIngredients) {
+          if (!row.variantId || !row.variantId.startsWith("draft:")) {
+            rowsResolved.push(row)
+            continue
+          }
+
+          const key = row.variantId.slice("draft:".length)
+          const index = rows.findIndex((presentation) => presentation.key === key)
+          const variant = index >= 0 ? active[index] : undefined
+
+          if (!variant) {
+            return {
+              rows: [],
+              error:
+                "No se pudieron vincular las presentaciones con la receta. Guarda de nuevo.",
+            }
+          }
+
+          rowsResolved.push({ ...row, variantId: variant.id })
+        }
+
+        return { rows: rowsResolved }
+      }
 
       // 1. Artículo existente: solo se envían los campos que cambiaron.
       if (articleEnabled && article) {
@@ -742,6 +915,7 @@ export function ArticleDialog({
         if (!isEmptyPatch(changes)) {
           const updated = await updateArticle(article.id, changes)
           if (!updated.ok) return updated
+          articleVariants = updated.data?.variants ?? articleVariants
           changed = true
         }
       }
@@ -755,11 +929,14 @@ export function ArticleDialog({
         !recipe &&
         (recipeIngredients.length > 0 || ingredientEnabled)
       ) {
+        const scoped = resolveRecipeRows()
+        if (scoped.error) return { ok: false, message: scoped.error }
+
         const created = await createRecipe({
           name: trimmedName,
           description: description.trim() || undefined,
           categoryId: null,
-          ingredients: recipeIngredients,
+          ingredients: scoped.rows,
           itemId: article.id,
           ...(ingredientEnabled
             ? {
@@ -779,6 +956,21 @@ export function ArticleDialog({
       // 3. Receta existente: nombre, categoría, ingredientes y producción.
       if (recipe) {
         const nextRecipeCategory = recipeCategoryId || null
+        const unpublishing = !articleEnabled && Boolean(article)
+        const scopedIngredients =
+          recipeEnabled &&
+          (unpublishing ||
+            !sameRecipeIngredients(recipe, recipeIngredients))
+            ? unpublishing
+              ? {
+                  rows: recipeIngredients.filter((row) => !row.variantId),
+                }
+              : resolveRecipeRows()
+            : null
+
+        if (scopedIngredients?.error) {
+          return { ok: false, message: scopedIngredients.error }
+        }
 
         const changes: Partial<RecipeInput> = {
           ...(sameText(recipe.name, trimmedName) ? {} : { name: trimmedName }),
@@ -789,8 +981,8 @@ export function ArticleDialog({
           (recipe.categoryId ?? null) !== nextRecipeCategory
             ? { categoryId: nextRecipeCategory }
             : {}),
-          ...(recipeEnabled && !sameRecipeIngredients(recipe, recipeIngredients)
-            ? { ingredients: recipeIngredients }
+          ...(scopedIngredients
+            ? { ingredients: scopedIngredients.rows }
             : {}),
           ...(produceChanged
             ? {
@@ -818,17 +1010,21 @@ export function ArticleDialog({
         if (!created.ok) return created
 
         itemId = created.data?.id
+        articleVariants = created.data?.variants ?? articleVariants
         changed = true
 
         if (
           recipeEnabled &&
           (recipeIngredients.length > 0 || ingredientEnabled)
         ) {
+          const scoped = resolveRecipeRows()
+          if (scoped.error) return { ok: false, message: scoped.error }
+
           const recipeCreated = await createRecipe({
             name: trimmedName,
             description: description.trim() || undefined,
             categoryId: null,
-            ingredients: recipeIngredients,
+            ingredients: scoped.rows,
             ...(itemId ? { itemId } : {}),
             ...(ingredientEnabled
               ? {
@@ -847,13 +1043,14 @@ export function ArticleDialog({
 
       // 5. Receta nueva (tab Recetas o diálogo sin artículo).
       if (!article && !recipe && (mode === "recipe" || !articleEnabled)) {
+        // Si se va a publicar, las filas por presentación se envían después de
+        // crear las variantes; aquí solo se guarda la receta común.
+        const commonRows = recipeIngredients.filter((row) => !row.variantId)
         const created = await createRecipe({
           name: trimmedName,
           description: description.trim() || undefined,
           categoryId: mode === "recipe" ? recipeCategoryId || null : null,
-          ...(recipeIngredients.length > 0
-            ? { ingredients: recipeIngredients }
-            : {}),
+          ...(commonRows.length > 0 ? { ingredients: commonRows } : {}),
           ...(ingredientEnabled
             ? {
                 produce: {
@@ -880,7 +1077,7 @@ export function ArticleDialog({
                 variants: variants.map((variant) => ({
                   name: variant.name ?? "",
                   priceAdjust: variant.priceAdjust,
-                  recipeFactor: 1,
+                  recipeFactor: variant.recipeFactor ?? 1,
                   sortOrder: variant.sortOrder,
                   isActive: variant.isActive,
                 })),
@@ -891,7 +1088,20 @@ export function ArticleDialog({
         if (!published.ok) return published
 
         itemId = published.data?.item?.id
+        articleVariants = published.data?.item?.variants ?? []
         changed = true
+
+        // La receta se creó solo con las filas comunes; ahora que existen las
+        // variantes se guardan también las filas propias de cada presentación.
+        if (recipeId && recipeIngredients.some((row) => row.variantId)) {
+          const scoped = resolveRecipeRows()
+          if (scoped.error) return { ok: false, message: scoped.error }
+
+          const recipeSaved = await updateRecipe(recipeId, {
+            ingredients: scoped.rows,
+          })
+          if (!recipeSaved.ok) return recipeSaved
+        }
 
         // La publicación no admite opciones: se asignan al artículo recién creado.
         if (optionsEnabled && savedGroups.length > 0 && itemId) {
@@ -1199,8 +1409,8 @@ export function ArticleDialog({
                       Insumos de la receta
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Busca el insumo, indica la cantidad y la unidad. Se
-                      descuenta del inventario al vender el artículo.
+                      Los insumos comunes se descuentan en todas las
+                      presentaciones; los de una presentación solo en esa.
                     </p>
                   </div>
                   <Switch
@@ -1212,12 +1422,123 @@ export function ArticleDialog({
                 </div>
 
                 {recipeEnabled ? (
-                  <RecipeRows
-                    rows={recipeRows}
-                    ingredients={ingredients}
-                    onChange={setRecipeRows}
-                    disabled={form.pending}
-                  />
+                  <div className="flex flex-col gap-3">
+                    {showRecipeScopes ? (
+                      <div
+                        role="group"
+                        aria-label="Alcance de la receta"
+                        className="flex flex-wrap items-center gap-1"
+                      >
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={
+                            activeRecipeScope === null ? "secondary" : "ghost"
+                          }
+                          aria-pressed={activeRecipeScope === null}
+                          onClick={() => setRecipeScope(null)}
+                        >
+                          Común
+                        </Button>
+                        {presentationScopes.map((presentation) => {
+                          const count = recipeRows.filter(
+                            (row) => row.variantId === presentation.scope
+                          ).length
+
+                          return (
+                            <Button
+                              key={presentation.scope}
+                              type="button"
+                              size="sm"
+                              variant={
+                                activeRecipeScope === presentation.scope
+                                  ? "secondary"
+                                  : "ghost"
+                              }
+                              aria-pressed={
+                                activeRecipeScope === presentation.scope
+                              }
+                              onClick={() =>
+                                setRecipeScope(presentation.scope)
+                              }
+                            >
+                              {presentation.name}
+                              {count > 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="ml-1 px-1.5 text-[10px]"
+                                >
+                                  {count}
+                                </Badge>
+                              ) : null}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+
+                    {activeRecipeScope !== null ? (
+                      <div className="rounded-md border bg-muted/30 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium">
+                            Receta común
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRecipeScope(null)}
+                          >
+                            Editar
+                          </Button>
+                        </div>
+
+                        {commonRecipeRows.length > 0 ? (
+                          <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                            {commonRecipeRows.map((row) => {
+                              const ingredient = ingredients.find(
+                                (item) => item.id === row.ingredientId
+                              )
+
+                              return (
+                                <li key={row.key}>
+                                  {ingredient?.name ?? "Insumo"} ·{" "}
+                                  {row.quantity || "—"} {row.unit}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Sin insumos comunes.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+
+                    <RecipeRows
+                      key={activeRecipeScope ?? "common"}
+                      rows={
+                        activeRecipeScope === null
+                          ? commonRecipeRows
+                          : scopedRecipeRows
+                      }
+                      ingredients={ingredients}
+                      onChange={(next) =>
+                        setRecipeRowsForScope(activeRecipeScope, next)
+                      }
+                      disabled={form.pending}
+                      allowEmpty={activeRecipeScope !== null}
+                    />
+
+                    {activeRecipeScope !== null &&
+                    scopedRecipeRows.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Esta presentación usa solo la receta común. Añade un
+                        insumo para reemplazarlo o sumar consumo.
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
               </section>
             </TabsContent>
@@ -1249,10 +1570,12 @@ export function ArticleDialog({
                 {multiple ? (
                   <PresentationRows
                     rows={rows}
-                    onChange={setRows}
+                    onChange={handlePresentationRowsChange}
                     articleName={name}
                     articlePrice={price}
                     onArticlePriceChange={setPrice}
+                    mode={presentationMode}
+                    onModeChange={handlePresentationModeChange}
                     disabled={form.pending}
                   />
                 ) : null}
@@ -1290,6 +1613,8 @@ export function ArticleDialog({
                     value={groups}
                     onChange={setGroups}
                     disabled={form.pending}
+                    ingredients={ingredients}
+                    recipeRows={recipeRows}
                     hideHeader
                   />
                 ) : null}

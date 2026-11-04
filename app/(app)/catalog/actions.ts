@@ -1,6 +1,7 @@
 ﻿"use server"
 
 import type {
+  ArticleListItem,
   ImportResult,
   OptionEffectAction,
   OptionGroup,
@@ -229,6 +230,8 @@ export interface RecipeIngredientInput {
   ingredientId: string
   quantity: number
   unit?: UnitCode
+  /** Presentación a la que aplica; omitido/null = común. */
+  variantId?: string | null
   label?: string
   isOptional?: boolean
   alternatives?: Array<{
@@ -377,14 +380,17 @@ export interface OptionGroupAssignmentInput {
     /** Opción propia del artículo; no modifica la biblioteca. */
     customName?: string
     priceDelta?: number
+    scaleFactor?: number
     isDefault?: boolean
     sortOrder?: number
     isActive?: boolean
     effects?: Array<{
       action: OptionEffectAction
       recipeIngredientId?: string
+      replacesIngredientId?: string
       ingredientId?: string
       quantity?: number
+      unit?: UnitCode
     }>
   }>
 }
@@ -456,8 +462,8 @@ export async function presignRecipeImage(
 
 export async function createArticle(
   input: ArticleInput
-): Promise<ActionResult<{ id: string }>> {
-  return mutateApi<{ id: string }>("/catalog/items", "POST", input, [
+): Promise<ActionResult<ArticleListItem>> {
+  return mutateApi<ArticleListItem>("/catalog/items", "POST", input, [
     "/catalog",
   ])
 }
@@ -465,8 +471,8 @@ export async function createArticle(
 export async function updateArticle(
   articleId: string,
   input: Partial<ArticleInput>
-): Promise<ActionResult> {
-  return mutateApi(`/catalog/items/${articleId}`, "PATCH", input, [
+): Promise<ActionResult<ArticleListItem>> {
+  return mutateApi<ArticleListItem>(`/catalog/items/${articleId}`, "PATCH", input, [
     "/catalog",
   ])
 }

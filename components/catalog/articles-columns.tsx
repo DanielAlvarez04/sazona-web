@@ -192,12 +192,15 @@ export function ArticleActionsMenu({
 export function PresentationPreview({
   price,
   variants: allVariants,
+  costs,
   compact = false,
   className,
 }: {
   /** Precio del artículo; las presentaciones se calculan con su ajuste. */
   price: string
   variants: Variant[]
+  /** Costo base de cada presentación; opcional. */
+  costs?: Array<{ variantId: string; estimatedCost: string | null }>
   /** En tarjetas: solo icono y número, sin la etiqueta de texto. */
   compact?: boolean
   /** Estilos extra del badge (p. ej. sobre una imagen oscura). */
@@ -247,26 +250,36 @@ export function PresentationPreview({
           </span>
         )}
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-60 p-2">
+      <HoverCardContent align="end" className="w-64 p-2">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           {variants.length === 1 ? "Presentación" : "Presentaciones"}
         </p>
         <div className="flex flex-col gap-0.5">
           {variants.map((variant) => {
             const isPrimary = variant.id === primary.id
+            const cost = costs?.find(
+              (candidate) => candidate.variantId === variant.id
+            )?.estimatedCost
 
             return (
               <div
                 key={variant.id}
                 data-primary={isPrimary}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-sm data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
+                className="rounded-md px-2 py-1 text-sm data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
               >
-                <span className="min-w-0 truncate" title={variant.name}>
-                  {variant.name}
-                </span>
-                <span className="shrink-0 font-medium tabular-nums">
-                  {formatMoney(base + Number(variant.priceAdjust))}
-                </span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate" title={variant.name}>
+                    {variant.name}
+                  </span>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {formatMoney(base + Number(variant.priceAdjust))}
+                  </span>
+                </div>
+                {costs ? (
+                  <div className="text-right text-xs text-muted-foreground">
+                    {cost ? `Costo ${formatMoney(cost)}` : "Sin costo"}
+                  </div>
+                ) : null}
               </div>
             )
           })}
