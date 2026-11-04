@@ -12,11 +12,12 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table"
-import { Columns3Icon, LayoutGridIcon, SearchIcon, TableIcon, XIcon } from "lucide-react"
+import { Columns3Icon, LayoutGridIcon, MinusIcon, PlusIcon, SearchIcon, TableIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
@@ -216,6 +217,8 @@ export function DataTable<TData extends RowData>({
     pageIndex: 0,
     pageSize: defaultPageSize,
   })
+  // Columnas visibles en la vista de tarjetas (4–7).
+  const [cardColumns, setCardColumns] = React.useState(6)
   // La selección puede ser controlada por el consumidor o interna.
   const [internalRowSelection, setInternalRowSelection] =
     React.useState<RowSelectionState>({})
@@ -292,7 +295,7 @@ export function DataTable<TData extends RowData>({
           className={cn(
             "relative",
             isSidebar
-              ? "w-48"
+              ? "w-58"
               : "w-full sm:w-auto sm:min-w-40 sm:max-w-64"
           )}
         >
@@ -400,7 +403,9 @@ export function DataTable<TData extends RowData>({
           render={
             <Button
               variant="outline"
-              className={isSidebar ? "justify-start" : undefined}
+              className={
+                isSidebar ? "min-w-0 flex-1 justify-start" : undefined
+              }
               aria-label="Mostrar u ocultar columnas"
             />
           }
@@ -431,6 +436,44 @@ export function DataTable<TData extends RowData>({
       </DropdownMenu>
     ) : null
 
+  const cardColumnsControl =
+    viewMode === "cards" && onViewModeChange ? (
+      <ButtonGroup
+        aria-label="Columnas de las tarjetas"
+        className="min-w-0 flex-1"
+      >
+        <ButtonGroupText className="h-9 flex-1 px-2 text-xs">
+          Columnas
+        </ButtonGroupText>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Menos columnas"
+          title="Menos columnas"
+          disabled={cardColumns <= 4}
+          onClick={() =>
+            setCardColumns((current) => Math.max(4, current - 1))
+          }
+        >
+          <MinusIcon className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Más columnas"
+          title="Más columnas"
+          disabled={cardColumns >= 7}
+          onClick={() =>
+            setCardColumns((current) => Math.min(7, current + 1))
+          }
+        >
+          <PlusIcon className="size-4" />
+        </Button>
+      </ButtonGroup>
+    ) : null
+
   // En sidebar, la acción principal y el menú de tres puntos comparten una
   // fila; el selector de vista y el botón de columnas van en la siguiente.
   const sidebarPrimaryActions = actions ? (
@@ -438,10 +481,10 @@ export function DataTable<TData extends RowData>({
   ) : null
 
   const sidebarViewRow =
-    viewToggle || columnToggle ? (
-      <div className="flex w-full flex-wrap items-center gap-2">
+    viewToggle || columnToggle || cardColumnsControl ? (
+      <div className="flex w-full flex-wrap items-center gap-2 lg:flex-nowrap">
         {viewToggle}
-        {columnToggle}
+        {viewMode === "cards" ? cardColumnsControl : columnToggle}
       </div>
     ) : null
 
@@ -467,7 +510,7 @@ export function DataTable<TData extends RowData>({
           <>
             {selectionActions}
             {viewToggle}
-            {columnToggle}
+            {viewMode === "cards" ? cardColumnsControl : columnToggle}
             {actions}
           </>
         )}
@@ -477,7 +520,13 @@ export function DataTable<TData extends RowData>({
   const content =
     viewMode === "cards" && cardsView ? (
       rows.length > 0 ? (
-        cardsView(rows.map((row) => row.original))
+        <div
+          style={
+            { "--np-card-columns": cardColumns } as React.CSSProperties
+          }
+        >
+          {cardsView(rows.map((row) => row.original))}
+        </div>
       ) : (
         <div className="rounded-lg border p-8 text-center whitespace-normal">
           {emptyContent}

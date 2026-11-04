@@ -278,6 +278,7 @@ export function OptionGroupsEditor({
         key: string
         name: string
         usage: number
+        active: boolean
         group: OptionGroup
       }
     | {
@@ -285,23 +286,21 @@ export function OptionGroupsEditor({
         key: string
         name: string
         usage: number
+        active: boolean
         preset: OptionGroupPreset
       }
 
   // La fila muestra todos los grupos disponibles sin excepción: los de la
   // biblioteca (activos o no, con o sin opciones) y todas las plantillas core.
-  // Los que ya están en el artículo se ocultan. Si una plantilla ya existe en
-  // la biblioteca se lista una sola vez, como grupo de la biblioteca y con su
-  // conteo real de artículos.
-  const librarySuggestions: Suggestion[] = knownGroups
-    .filter((group) => !usedIds.has(group.id))
-    .map((group) => ({
-      kind: "library" as const,
-      key: `library:${group.id}`,
-      name: group.name,
-      usage: group._count?.itemGroups ?? 0,
-      group,
-    }))
+  // Los que ya están en el artículo se marcan como activos, no se ocultan.
+  const librarySuggestions: Suggestion[] = knownGroups.map((group) => ({
+    kind: "library" as const,
+    key: `library:${group.id}`,
+    name: group.name,
+    usage: group._count?.itemGroups ?? 0,
+    active: usedIds.has(group.id),
+    group,
+  }))
 
   const libraryNames = new Set(
     knownGroups.map((group) => group.name.trim().toLowerCase())
@@ -316,6 +315,7 @@ export function OptionGroupsEditor({
       key: `preset:${preset.name}`,
       name: preset.name,
       usage: 0,
+      active: false,
       preset,
     }))
 
@@ -361,8 +361,16 @@ export function OptionGroupsEditor({
     onChange((current) => [...current, libraryToDraft(group, selection)])
   }
 
-  /** Añade el grupo del chip; las plantillas se crean si aún no existen. */
+  /** Añade o quita el grupo del chip; las plantillas se crean si faltan. */
   function handleSuggestionClick(suggestion: Suggestion) {
+    if (suggestion.active && suggestion.kind === "library") {
+      onChange((current) =>
+        current.filter((group) => group.groupId !== suggestion.group.id)
+      )
+      toast.success(`Grupo «${suggestion.name}» eliminado`)
+      return
+    }
+
     if (suggestion.kind === "preset") {
       void handleCreatePreset(suggestion.preset)
       return
@@ -656,9 +664,17 @@ export function OptionGroupsEditor({
                   variant="outline"
                   size="sm"
                   disabled={disabled || pending !== null}
-                  aria-label={`Añadir grupo ${suggestion.name}`}
+                  aria-pressed={suggestion.active}
+                  aria-label={
+                    suggestion.active
+                      ? `Quitar grupo ${suggestion.name}`
+                      : `Añadir grupo ${suggestion.name}`
+                  }
                   className={cn(
-                    "h-6 gap-1 rounded-full border-chart-2/60 bg-chart-2/10 px-2 text-[11px] text-chart-2 shadow-none hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25",
+                    "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+                    suggestion.active
+                      ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+                      : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground",
                     inactive && "opacity-60"
                   )}
                   onClick={() => handleSuggestionClick(suggestion)}

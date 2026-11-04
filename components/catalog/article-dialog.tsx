@@ -85,7 +85,9 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
+import { cn } from "cn"
 import {
+  PRESENTATION_PRESETS,
   UNIT_DEFINITIONS,
   convertUnitValue,
   isNoPriceOptionGroup,
@@ -166,19 +168,33 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
   const explicitPrimary = variants.findIndex((variant) => variant.isPrimary)
   const primaryIndex = explicitPrimary >= 0 ? explicitPrimary : 0
 
-  return variants.map((variant, index) => ({
-    key: nextPresentationKey(),
-    name: variant.name,
-    // La principal toma siempre el precio del artículo; las demás lo guardan.
-    price:
-      index === primaryIndex
-        ? ""
-        : String(round2(base + toNumber(variant.priceAdjust))),
-    recipeFactor: variant.recipeFactor,
-    isPrimary: index === primaryIndex,
-    linkedName: false,
-    variantId: variant.id,
-  }))
+  return variants.map((variant, index) => {
+    const preset = PRESENTATION_PRESETS.find(
+      (candidate) =>
+        candidate.name.trim().toLowerCase() ===
+        variant.name.trim().toLowerCase()
+    )
+    const placeholder = preset?.recipeFactor ?? "1"
+
+    return {
+      key: nextPresentationKey(),
+      name: variant.name,
+      // La principal toma siempre el precio del artículo; las demás lo guardan.
+      price:
+        index === primaryIndex
+          ? ""
+          : String(round2(base + toNumber(variant.priceAdjust))),
+      // Si el factor es el sugerido, el campo queda vacío y usa el placeholder.
+      recipeFactor:
+        Number(variant.recipeFactor) === Number(placeholder)
+          ? ""
+          : variant.recipeFactor,
+      recipeFactorPlaceholder: placeholder,
+      isPrimary: index === primaryIndex,
+      linkedName: false,
+      variantId: variant.id,
+    }
+  })
 }
 
 /** Unidad visible por defecto para el rendimiento de un insumo producido. */
@@ -329,8 +345,13 @@ export function ArticleDialog({
   const [articleEnabled, setArticleEnabled] = useState(
     () => Boolean(article) || Boolean(initialArticle)
   )
+  // Un insumo no puede publicarse como artículo: si ambos venían activos,
+  // gana el artículo y el switch de insumo arranca apagado.
   const [ingredientEnabled, setIngredientEnabled] = useState(
-    () => Boolean(recipe?.producesIngredientId)
+    () =>
+      !Boolean(article) &&
+      !Boolean(initialArticle) &&
+      Boolean(recipe?.producesIngredientId)
   )
   const [name, setName] = useState(article?.name ?? recipe?.name ?? "")
   const [description, setDescription] = useState(
@@ -375,8 +396,8 @@ export function ArticleDialog({
   )
   /** null = receta común; si no, id de presentación o `draft:<key>`. */
   const [recipeScope, setRecipeScope] = useState<string | null>(null)
-  // El tab Receta se muestra por defecto; el switch solo oculta la captura.
-  const [recipeEnabled, setRecipeEnabled] = useState(true)
+  // El tab Receta arranca apagado; el switch solo muestra la captura.
+  const [recipeEnabled, setRecipeEnabled] = useState(false)
 
   const storedYield = initialYield(recipe)
   const [yieldQuantity, setYieldQuantity] = useState(storedYield.quantity)
@@ -513,8 +534,7 @@ export function ArticleDialog({
       return Boolean(row?.name.trim() || row?.variantId)
     })
 
-  const showRecipeScopes =
-    articleEnabled && multiple && presentationScopes.length > 1
+  const showRecipeScopes = multiple && presentationScopes.length > 0
 
   const activeRecipeScope =
     showRecipeScopes &&
@@ -554,6 +574,9 @@ export function ArticleDialog({
 
   function handleArticleChange(next: boolean) {
     if (next) {
+      // Artículo e insumo son excluyentes.
+      setIngredientEnabled(false)
+      setConfirmDisableArticle(false)
       applyArticleChange(true)
       return
     }
@@ -592,6 +615,9 @@ export function ArticleDialog({
     setIngredientEnabled(next)
 
     if (next) {
+      // Un insumo no puede ser artículo: al encenderlo se apaga la publicación.
+      setArticleEnabled(false)
+      setConfirmDisableArticle(false)
       setRecipeEnabled(true)
       setRecipeRows((current) =>
         current.length > 0 ? current : [emptyRecipeRow()]
@@ -613,7 +639,7 @@ export function ArticleDialog({
     setGroups([])
     setOptionsEnabled(false)
     setRecipeRows([emptyRecipeRow()])
-    setRecipeEnabled(true)
+    setRecipeEnabled(false)
     setArticleEnabled(mode === "article")
     setIngredientEnabled(false)
     setYieldQuantity("")
@@ -756,12 +782,21 @@ export function ArticleDialog({
               : priceBase
           const rowPrice =
             Number.isFinite(rawPrice) && rawPrice >= 0 ? rawPrice : priceBase
+          const rawFactor =
+            row.recipeFactor.trim() ||
+            row.recipeFactorPlaceholder ||
+            "1"
+          const parsedFactor = Number(rawFactor)
+          const recipeFactor =
+            Number.isFinite(parsedFactor) && parsedFactor > 0
+              ? parsedFactor
+              : 1
 
           variants.push({
             name: rowName,
             // La API guarda el ajuste; el precio del artículo es la principal.
             priceAdjust: round2(rowPrice - priceBase),
-            recipeFactor: Number(row.recipeFactor) || 1,
+            recipeFactor,
             sortOrder: index,
             isPrimary: row.isPrimary,
           })
@@ -1190,6 +1225,66 @@ export function ArticleDialog({
       ? "Los ingredientes son insumos del inventario. Al vender el artículo, el stock se descuenta con esta receta."
       : "Los artículos se venden en el punto de venta y podrán usarse en menús. Crearlos aquí no modifica el inventario."
 
+  // Los chips de alcance viven fuera del switch: se ven siempre que haya
+  // presentaciones, incluso antes de encender la captura o publicar.
+  const recipeScopesFieldset = showRecipeScopes ? (
+    <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
+      <legend className="px-1 text-[10px] font-medium text-muted-foreground">
+        Insumos por presentación
+      </legend>
+      <div className="flex flex-wrap items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-pressed={activeRecipeScope === null}
+          className={cn(
+            "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+            activeRecipeScope === null
+              ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+              : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+          onClick={() => setRecipeScope(null)}
+        >
+          Común
+        </Button>
+        {presentationScopes.map((presentation) => {
+          const count = recipeRows.filter(
+            (row) => row.variantId === presentation.scope
+          ).length
+          const active = activeRecipeScope === presentation.scope
+
+          return (
+            <Button
+              key={presentation.scope}
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-pressed={active}
+              className={cn(
+                "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+                active
+                  ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+                  : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              onClick={() => setRecipeScope(presentation.scope)}
+            >
+              {presentation.name}
+              {count > 0 ? (
+                <Badge
+                  variant="outline"
+                  className="ml-1 px-1.5 text-[10px]"
+                >
+                  {count}
+                </Badge>
+              ) : null}
+            </Button>
+          )
+        })}
+      </div>
+    </fieldset>
+  ) : null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -1385,16 +1480,16 @@ export function ArticleDialog({
 
           <Separator />
 
-          <Tabs defaultValue="receta" className="gap-4">
+          <Tabs defaultValue="presentaciones" className="gap-4">
             <TabsList>
-              <TabsTrigger type="button" value="receta">
-                Receta
-              </TabsTrigger>
               <TabsTrigger type="button" value="presentaciones">
                 Presentaciones
               </TabsTrigger>
               <TabsTrigger type="button" value="opciones">
                 Opciones
+              </TabsTrigger>
+              <TabsTrigger type="button" value="receta">
+                Receta
               </TabsTrigger>
             </TabsList>
 
@@ -1421,62 +1516,10 @@ export function ArticleDialog({
                   />
                 </div>
 
+                {recipeScopesFieldset}
+
                 {recipeEnabled ? (
                   <div className="flex flex-col gap-3">
-                    {showRecipeScopes ? (
-                      <div
-                        role="group"
-                        aria-label="Alcance de la receta"
-                        className="flex flex-wrap items-center gap-1"
-                      >
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            activeRecipeScope === null ? "secondary" : "ghost"
-                          }
-                          aria-pressed={activeRecipeScope === null}
-                          onClick={() => setRecipeScope(null)}
-                        >
-                          Común
-                        </Button>
-                        {presentationScopes.map((presentation) => {
-                          const count = recipeRows.filter(
-                            (row) => row.variantId === presentation.scope
-                          ).length
-
-                          return (
-                            <Button
-                              key={presentation.scope}
-                              type="button"
-                              size="sm"
-                              variant={
-                                activeRecipeScope === presentation.scope
-                                  ? "secondary"
-                                  : "ghost"
-                              }
-                              aria-pressed={
-                                activeRecipeScope === presentation.scope
-                              }
-                              onClick={() =>
-                                setRecipeScope(presentation.scope)
-                              }
-                            >
-                              {presentation.name}
-                              {count > 0 ? (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-1 px-1.5 text-[10px]"
-                                >
-                                  {count}
-                                </Badge>
-                              ) : null}
-                            </Button>
-                          )
-                        })}
-                      </div>
-                    ) : null}
-
                     {activeRecipeScope !== null ? (
                       <div className="rounded-md border bg-muted/30 p-2">
                         <div className="flex items-center justify-between gap-2">
@@ -1576,6 +1619,7 @@ export function ArticleDialog({
                     onArticlePriceChange={setPrice}
                     mode={presentationMode}
                     onModeChange={handlePresentationModeChange}
+                    showRecipeFactor={recipeEnabled}
                     disabled={form.pending}
                   />
                 ) : null}

@@ -215,7 +215,7 @@ export function RecipeCards({
   onSelectedChange: (id: string, selected: boolean) => void
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-[repeat(var(--np-card-columns,6),minmax(0,1fr))]">
       {recipes.map((recipe) => (
         <FullRecipeCard
           key={recipe.id}

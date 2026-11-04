@@ -21,7 +21,6 @@ import { CSS } from "@dnd-kit/utilities"
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { scrollAncestorToBottom } from "@/lib/scroll"
 import { PRESENTATION_PRESETS } from "@/lib/catalog"
 import {
@@ -43,6 +42,8 @@ export interface PresentationRow {
   price: string
   /** Multiplicador de consumo de la receta (tamaño). */
   recipeFactor: string
+  /** Factor sugerido cuando el campo se deja vacío. */
+  recipeFactorPlaceholder?: string
   isPrimary: boolean
   /** El nombre sigue al del artículo hasta que se edita a mano. */
   linkedName: boolean
@@ -76,7 +77,8 @@ export function sizePresentationRows(): PresentationRow[] {
   return PRESENTATION_PRESETS.map((preset) =>
     createPresentationRow({
       name: preset.name,
-      recipeFactor: preset.recipeFactor,
+      recipeFactor: "",
+      recipeFactorPlaceholder: preset.recipeFactor,
       isPrimary: preset.name === "Regular",
     })
   )
@@ -105,6 +107,7 @@ export function PresentationRows({
   onArticlePriceChange,
   mode,
   onModeChange,
+  showRecipeFactor,
   disabled = false,
 }: {
   rows: PresentationRow[]
@@ -115,6 +118,8 @@ export function PresentationRows({
   onArticlePriceChange: (value: string) => void
   mode: PresentationMode
   onModeChange: (mode: PresentationMode) => void
+  /** El switch de receta está activo: muestra el factor editable. */
+  showRecipeFactor: boolean
   disabled?: boolean
 }) {
   const sensors = useSensors(
@@ -181,6 +186,8 @@ export function PresentationRows({
     onChange(next)
   }
 
+  const showFactor = mode === "size" && showRecipeFactor
+
   return (
     <div className="flex flex-col gap-2">
       <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
@@ -188,22 +195,6 @@ export function PresentationRows({
           Tipo de presentación
         </legend>
         <div className="flex flex-wrap items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-pressed={mode === "size"}
-            disabled={disabled}
-            className={cn(
-              "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
-              mode === "size"
-                ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
-                : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            onClick={() => onModeChange("size")}
-          >
-            Tamaño
-          </Button>
           <Button
             type="button"
             variant="outline"
@@ -220,13 +211,37 @@ export function PresentationRows({
           >
             Variante
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-pressed={mode === "size"}
+            disabled={disabled}
+            className={cn(
+              "h-6 gap-1 rounded-full px-2 text-[11px] shadow-none",
+              mode === "size"
+                ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
+                : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+            onClick={() => onModeChange("size")}
+          >
+            Tamaño
+          </Button>
         </div>
       </fieldset>
 
-      <div className="hidden grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto] gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid">
+      <div
+        className={cn(
+          "hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid",
+          showFactor
+            ? "grid-cols-[auto_auto_minmax(0,1fr)_5.5rem_9rem_auto]"
+            : "grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto]"
+        )}
+      >
         <span className="w-5" aria-hidden />
         <span className="w-4" aria-hidden />
         <span>Presentación</span>
+        {showFactor ? <span>Factor</span> : null}
         <span>Precio</span>
         <span className="sr-only">Acciones</span>
       </div>
@@ -261,6 +276,7 @@ export function PresentationRows({
                 onArticlePriceChange={onArticlePriceChange}
                 onChange={onChange}
                 onRemove={remove}
+                showFactor={showFactor}
                 disabled={disabled}
               />
             ))}
@@ -298,6 +314,7 @@ function SortablePresentationRow({
   onArticlePriceChange,
   onChange,
   onRemove,
+  showFactor,
   disabled,
 }: {
   row: PresentationRow
@@ -308,6 +325,7 @@ function SortablePresentationRow({
   onArticlePriceChange: (value: string) => void
   onChange: (rows: PresentationRow[]) => void
   onRemove: (key: string) => void
+  showFactor: boolean
   disabled: boolean
 }) {
   const {
@@ -340,7 +358,10 @@ function SortablePresentationRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "grid grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto] items-center gap-2 rounded-md",
+        "grid items-center gap-2 rounded-md",
+        showFactor
+          ? "grid-cols-[auto_auto_minmax(0,1fr)_5.5rem_9rem_auto]"
+          : "grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto]",
         isDragging && "relative z-10 opacity-70"
       )}
     >
@@ -375,16 +396,21 @@ function SortablePresentationRow({
             update({ name: event.target.value, linkedName: false })
           }
         />
-        {row.recipeFactor !== "1" ? (
-          <Badge
-            variant="outline"
-            className="shrink-0 tabular-nums"
-            title="Multiplicador de consumo de la receta"
-          >
-            ×{row.recipeFactor}
-          </Badge>
-        ) : null}
       </div>
+
+      {showFactor ? (
+        <Input
+          aria-label={`Factor de ${row.name.trim() || suggestedName}`}
+          type="number"
+          min="0.1"
+          step="0.01"
+          value={row.recipeFactor}
+          placeholder={row.recipeFactorPlaceholder ?? "1"}
+          disabled={disabled}
+          title="Multiplicador de consumo de la receta"
+          onChange={(event) => update({ recipeFactor: event.target.value })}
+        />
+      ) : null}
 
       <InputGroup>
         <InputGroupAddon align="inline-start">

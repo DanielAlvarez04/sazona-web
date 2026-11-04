@@ -168,13 +168,15 @@ export function RecipeRows({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="hidden grid-cols-[auto_minmax(0,1fr)_6rem_6rem_auto] gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid">
-        <span className="w-5" aria-hidden />
-        <span>Insumo</span>
-        <span>Cantidad</span>
-        <span>Unidad</span>
-        <span className="sr-only">Acciones</span>
-      </div>
+      {rows.length > 0 ? (
+        <div className="hidden grid-cols-[auto_minmax(0,1fr)_6rem_6rem_auto] gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid">
+          <span className="w-5" aria-hidden />
+          <span>Insumo</span>
+          <span>Cantidad</span>
+          <span>Unidad</span>
+          <span className="sr-only">Acciones</span>
+        </div>
+      ) : null}
 
       <DndContext
         sensors={sensors}
