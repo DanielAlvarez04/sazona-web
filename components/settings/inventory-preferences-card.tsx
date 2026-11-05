@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, type ReactNode } from "react"
-import { BoxesIcon, PackageSearchIcon, TriangleAlertIcon } from "lucide-react"
+import { PackageIcon, PackageSearchIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -144,7 +144,7 @@ export function InventoryPreferencesCard({
 
       <CardContent className="flex flex-col gap-3">
         <PreferenceRow
-          icon={<BoxesIcon className="size-4" />}
+          icon={<PackageIcon className="size-4" />}
           title="Categorías de inventario"
           description={
             coreCategories.length > 0

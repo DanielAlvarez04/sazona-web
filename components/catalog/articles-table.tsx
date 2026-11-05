@@ -3,10 +3,10 @@
 import * as React from "react"
 import {
   ChevronDownIcon,
-  PackageOpenIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
+  SoupIcon,
   TagsIcon,
   Trash2Icon,
   UploadIcon,
@@ -48,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
-import type { ArticleListItem, Category } from "@/lib/catalog"
+import type { ArticleListItem, Category, Recipe } from "@/lib/catalog"
 import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { ArticleCards } from "./article-cards"
@@ -65,8 +65,11 @@ type PendingAction =
 
 export function ArticlesTable({
   articles,
+  recipes,
   categories,
   canManage,
+  viewMode,
+  onViewModeChange,
   onCreate,
   onEdit,
   onActivate,
@@ -76,8 +79,13 @@ export function ArticlesTable({
   onImportCsv,
 }: {
   articles: ArticleListItem[]
+  /** Recetas completas, para calcular costo, margen e ingredientes. */
+  recipes: Recipe[]
   categories: Category[]
   canManage: boolean
+  /** Vista compartida con la tab de Recetas. */
+  viewMode: DataTableViewMode
+  onViewModeChange: (mode: DataTableViewMode) => void
   onCreate: () => void
   onEdit: (article: ArticleListItem) => void
   onActivate: (article: ArticleListItem) => Promise<boolean>
@@ -91,7 +99,6 @@ export function ArticlesTable({
     React.useState<string>(DATA_TABLE_ALL)
   const [recipeFilter, setRecipeFilter] = React.useState<string>(DATA_TABLE_ALL)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
-  const [viewMode, setViewMode] = React.useState<DataTableViewMode>("cards")
   const [pendingAction, setPendingAction] = React.useState<PendingAction | null>(
     null
   )
@@ -224,8 +231,12 @@ export function ArticlesTable({
   )
 
   const columns = React.useMemo(
-    () => createArticleColumns(actions, { selectable: canManage }),
-    [actions, canManage]
+    () =>
+      createArticleColumns(actions, {
+        selectable: canManage,
+        recipes,
+      }),
+    [actions, canManage, recipes]
   )
 
   async function confirmPendingAction() {
@@ -306,7 +317,7 @@ export function ArticlesTable({
         showColumnToggle={canManage}
         columnLabels={ARTICLE_COLUMN_LABELS}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={onViewModeChange}
         cardsView={(rows) => (
           <ArticleCards
             articles={rows}
@@ -414,7 +425,7 @@ export function ArticlesTable({
         )}
         emptyState={
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
-            <PackageOpenIcon className="size-6" />
+            <SoupIcon className="size-6" />
             <p>
               Todavía no hay artículos. Crea uno o publica una receta como
               artículo.
@@ -423,7 +434,7 @@ export function ArticlesTable({
         }
         filteredEmptyState={
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <PackageOpenIcon className="size-6" />
+            <SoupIcon className="size-6" />
             <p>No hay artículos que coincidan con los filtros.</p>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               <XIcon className="size-4" />

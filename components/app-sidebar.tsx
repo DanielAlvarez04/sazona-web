@@ -24,14 +24,14 @@ import type { Branch } from "@/lib/branches"
 import {
   ChartBarIcon,
   ChefHatIcon,
-  CoffeeIcon,
+  CookingPotIcon,
   GalleryVerticalEndIcon,
   LayoutDashboardIcon,
+  NotebookTextIcon,
   PackageIcon,
   Settings2Icon,
-  ShoppingCartIcon,
+  ShoppingBasketIcon,
   UsersIcon,
-  UtensilsCrossedIcon,
 } from "lucide-react"
 
 const data = {
@@ -44,7 +44,7 @@ const data = {
     {
       title: "Punto de venta",
       url: "/pos",
-      icon: <ShoppingCartIcon />,
+      icon: <ShoppingBasketIcon />,
     },
     {
       title: "Cocina",
@@ -54,12 +54,12 @@ const data = {
     {
       title: "Catálogo",
       url: "/catalog",
-      icon: <CoffeeIcon />,
+      icon: <CookingPotIcon />,
     },
     {
       title: "Menús",
       url: "/menus",
-      icon: <UtensilsCrossedIcon />,
+      icon: <NotebookTextIcon />,
     },
     {
       title: "Inventario",

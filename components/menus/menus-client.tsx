@@ -4,10 +4,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarClockIcon,
+  NotebookTextIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
-  UtensilsCrossedIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -100,7 +100,10 @@ export function MenusClient({
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Menús</h2>
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <NotebookTextIcon className="size-5" />
+            Menús
+          </h2>
           <p className="text-sm text-muted-foreground">
             Colecciones de artículos para filtrar el punto de venta por
             ocasión u horario.
@@ -130,7 +133,7 @@ export function MenusClient({
       {menus.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <UtensilsCrossedIcon className="size-8 text-muted-foreground" />
+            <NotebookTextIcon className="size-8 text-muted-foreground" />
             <div>
               <p className="font-medium">Todavía no hay menús</p>
               <p className="text-sm text-muted-foreground">

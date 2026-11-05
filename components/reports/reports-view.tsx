@@ -4,6 +4,7 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import {
   Card,
@@ -410,6 +411,9 @@ export function ReportsView({
                           <TableRow key={row.status}>
                             <TableCell>
                               <Badge variant="outline">
+                                <OrderStatusIcon
+                                  status={row.status as RoundStatus}
+                                />
                                 {ROUND_STATUS_LABELS[row.status as RoundStatus] ??
                                   row.status}
                               </Badge>

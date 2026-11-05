@@ -2,9 +2,11 @@
 
 import * as React from "react"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
+import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
+import { ScrollBar } from "@/components/ui/scroll-area"
 import {
   InputGroup,
   InputGroupAddon,
@@ -118,16 +120,27 @@ function ComboboxContent({
   )
 }
 
-function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
+function ComboboxList({
+  className,
+  children,
+  ...props
+}: ComboboxPrimitive.List.Props) {
   return (
-    <ComboboxPrimitive.List
-      data-slot="combobox-list"
-      className={cn(
-        "no-scrollbar max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))] scroll-py-1 overflow-y-auto overscroll-contain p-1 data-empty:p-0",
-        className
-      )}
-      {...props}
-    />
+    <ScrollAreaPrimitive.Root className="relative max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))]">
+      <ComboboxPrimitive.List
+        data-slot="combobox-list"
+        render={<ScrollAreaPrimitive.Viewport />}
+        className={cn(
+          "no-scrollbar size-full max-h-[inherit] scroll-py-1 overscroll-contain p-1 data-empty:p-0",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </ComboboxPrimitive.List>
+      <ScrollBar />
+      <ScrollAreaPrimitive.Corner />
+    </ScrollAreaPrimitive.Root>
   )
 }
 

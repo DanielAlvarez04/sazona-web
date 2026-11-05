@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import {
-  BoxesIcon,
-  FlaskConicalIcon,
-  LayersIcon,
+  BlenderIcon,
+  GroupIcon,
   ListChecksIcon,
+  SoupIcon,
   Trash2Icon,
   UnlinkIcon,
 } from "lucide-react"
@@ -17,6 +17,7 @@ import {
   deactivateItem,
   deleteItems,
   deleteRecipe,
+  deleteRecipes,
   unpublishRecipe,
   updateRecipe,
 } from "@/app/(app)/catalog/actions"
@@ -32,6 +33,7 @@ import { ImportDialog } from "@/components/catalog/import-dialog"
 import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
+import type { DataTableViewMode } from "@/components/data-table/data-table"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,6 +89,9 @@ export function CatalogClient({
   const regularArticles = visibleArticles.filter((article) => !article.isCombo)
 
   const [tab, setTab] = useState("articulos")
+  // El modo de vista se comparte entre las tablas de Artículos y Recetas para
+  // que cambiar de tab no reinicie la preferencia.
+  const [viewMode, setViewMode] = useState<DataTableViewMode>("cards")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [initialSaveAs, setInitialSaveAs] =
     useState<ProductSaveAs>("article")
@@ -176,6 +181,25 @@ export function CatalogClient({
     setConfirmRecipe({ kind: "delete", recipe })
   }
 
+  function handleDeleteRecipes(targets: Recipe[]): Promise<boolean> {
+    const ids = targets.map((recipe) => recipe.id)
+
+    return rowForm.run(() =>
+      deleteRecipes(ids).then((result) => {
+        if (result.ok) {
+          toast.success(
+            ids.length === 1
+              ? "Receta eliminada"
+              : `${result.data?.deletedCount ?? ids.length} recetas eliminadas`
+          )
+        } else {
+          toast.error(result.message ?? "No se pudieron eliminar las recetas")
+        }
+        return result
+      })
+    )
+  }
+
   /** Ejecuta la acción confirmada en el `AlertDialog`. */
   function confirmRecipeAction() {
     const pending = confirmRecipe
@@ -251,15 +275,15 @@ export function CatalogClient({
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
         <TabsList>
           <TabsTrigger type="button" value="articulos">
-            <BoxesIcon className="size-4" />
+            <SoupIcon className="size-4" />
             Artículos
           </TabsTrigger>
           <TabsTrigger type="button" value="recetas">
-            <FlaskConicalIcon className="size-4" />
+            <BlenderIcon className="size-4" />
             Recetas
           </TabsTrigger>
           <TabsTrigger type="button" value="combos">
-            <LayersIcon className="size-4" />
+            <GroupIcon className="size-4" />
             Combos
           </TabsTrigger>
           <TabsTrigger type="button" value="grupos-opciones">
@@ -278,8 +302,11 @@ export function CatalogClient({
             ) : null}
             <ArticlesTable
               articles={regularArticles}
+              recipes={recipes}
               categories={articleCategories}
               canManage={canManage}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               onCreate={() => openNewProduct("article")}
               onEdit={openArticle}
               onActivate={handleActivateArticle}
@@ -305,8 +332,11 @@ export function CatalogClient({
             ) : null}
             <RecipesTable
               recipes={recipes}
+              articles={articles}
               categories={recipeCategories}
               canManage={canManage}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               onCreate={() => openNewProduct("recipe")}
               onEdit={(recipe) => openRecipe(recipe)}
               onPublish={(recipe) => openRecipe(recipe, true)}
@@ -314,6 +344,7 @@ export function CatalogClient({
               onProduce={(recipe) => setProducing(recipe)}
               onToggleActive={toggleRecipeActive}
               onDelete={handleDeleteRecipe}
+              onDeleteMany={handleDeleteRecipes}
               onManageCategories={() => setCategoriesOpen(true)}
             />
           </div>

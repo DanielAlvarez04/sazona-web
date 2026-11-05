@@ -370,6 +370,8 @@ export interface ItemListItem {
     name: string
     variantId: string | null
     isActive: boolean
+    /** Categoría de la receta (independiente de la del artículo). */
+    category: { id: string; name: string } | null
   }>
   /**
    * Menús donde se usa el artículo. La API los devuelve con su estado para
@@ -453,6 +455,8 @@ export interface Recipe {
     imageKey: string | null
     imageUrl: string | null
     isCombo: boolean
+    /** Categoría del artículo (independiente de la de la receta). */
+    category: { id: string; name: string } | null
     variants: Variant[]
   } | null
   producesIngredientId: string | null
@@ -654,6 +658,18 @@ export function formatTime(value: string): string {
 
 export function formatMoney(value: string | number): string {
   return moneyFormatter.format(Number(value))
+}
+
+/**
+ * Porcentaje del precio que debe representar el costo para dejar un margen
+ * bruto del 65 %.
+ */
+export const SUGGESTED_COST_SHARE = 0.35
+
+/** Precio sugerido a partir del costo, con un margen bruto del 65 %. */
+export function suggestedPriceFromCost(cost: number | null): number | null {
+  if (cost === null || !Number.isFinite(cost)) return null
+  return cost / SUGGESTED_COST_SHARE
 }
 
 export function formatQuantity(value: string | number): string {

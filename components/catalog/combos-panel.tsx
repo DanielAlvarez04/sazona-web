@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
+  GroupIcon,
   Loader2Icon,
   PencilIcon,
   PlusIcon,
@@ -177,7 +178,10 @@ export function CombosPanel({
         <CardHeader className="gap-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <CardTitle>Combos</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <GroupIcon className="size-4" />
+                Combos
+              </CardTitle>
               <CardDescription>
                 Paquetes de artículos con precio propio, opciones y promociones
                 (descuentos, 2x1 u horarios). No consumen inventario por sí
@@ -557,7 +561,9 @@ function ComboDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-3xl">
+        <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
+          <div className="grid gap-6">
         <DialogHeader>
           <DialogTitle>{combo ? "Editar combo" : "Nuevo combo"}</DialogTitle>
           <DialogDescription>
@@ -995,6 +1001,8 @@ function ComboDialog({
             {combo ? "Guardar combo" : "Crear combo"}
           </Button>
         </DialogFooter>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

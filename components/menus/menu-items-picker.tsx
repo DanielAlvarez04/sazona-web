@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -154,7 +155,8 @@ export function MenuItemsPicker({
           </span>
         </div>
 
-        <div className="no-scrollbar flex max-h-72 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
+        <ScrollArea className="max-h-72 rounded-lg border">
+          <div className="flex flex-col gap-1 p-2">
           {filtered.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               No hay artículos que coincidan.
@@ -195,7 +197,8 @@ export function MenuItemsPicker({
               )
             })
           )}
-        </div>
+          </div>
+        </ScrollArea>
       </div>
 
       <div className="flex min-w-0 flex-col gap-2">
@@ -216,7 +219,8 @@ export function MenuItemsPicker({
           ) : null}
         </div>
 
-        <div className="no-scrollbar flex max-h-72 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
+        <ScrollArea className="max-h-72 rounded-lg border">
+          <div className="flex flex-col gap-1 p-2">
           {value.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               Selecciona artículos de la lista.
@@ -275,7 +279,8 @@ export function MenuItemsPicker({
               )
             })
           )}
-        </div>
+          </div>
+        </ScrollArea>
       </div>
     </div>
   )

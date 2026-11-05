@@ -528,7 +528,9 @@ function OptionGroupDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-2xl">
+        <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
+          <div className="grid gap-6">
         <DialogHeader>
           <DialogTitle>
             {group ? "Editar grupo de opciones" : "Nuevo grupo de opciones"}
@@ -669,6 +671,8 @@ function OptionGroupDialog({
             {group ? "Guardar grupo" : "Crear grupo"}
           </Button>
         </DialogFooter>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

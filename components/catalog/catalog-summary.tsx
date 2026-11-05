@@ -2,10 +2,11 @@
 
 import * as React from "react"
 import {
+  BlenderIcon,
   CircleDollarSignIcon,
-  FlaskConicalIcon,
   PackageIcon,
   PercentIcon,
+  SoupIcon,
   TagsIcon,
 } from "lucide-react"
 
@@ -139,7 +140,7 @@ export function CatalogSummary({
         <Card size="sm">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1.5">
-              <FlaskConicalIcon className="size-4" />
+              <BlenderIcon className="size-4" />
               Recetas
             </CardDescription>
             <CardTitle className="text-2xl tabular-nums">
@@ -159,7 +160,7 @@ export function CatalogSummary({
         <Card size="sm">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1.5">
-              <PackageIcon className="size-4" />
+              <SoupIcon className="size-4" />
               Publicadas como artículo
             </CardDescription>
             <CardTitle className="text-2xl tabular-nums">
@@ -174,7 +175,7 @@ export function CatalogSummary({
         <Card size="sm">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1.5">
-              <TagsIcon className="size-4" />
+              <PackageIcon className="size-4" />
               Producen insumo
             </CardDescription>
             <CardTitle className="text-2xl tabular-nums">
@@ -211,7 +212,7 @@ export function CatalogSummary({
       <Card size="sm">
         <CardHeader className="pb-2">
           <CardDescription className="flex items-center gap-1.5">
-            <PackageIcon className="size-4" />
+            <SoupIcon className="size-4" />
             Artículos
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">
@@ -231,7 +232,7 @@ export function CatalogSummary({
       <Card size="sm">
         <CardHeader className="pb-2">
           <CardDescription className="flex items-center gap-1.5">
-            <FlaskConicalIcon className="size-4" />
+            <BlenderIcon className="size-4" />
             Con receta
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">

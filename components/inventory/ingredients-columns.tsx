@@ -2,7 +2,7 @@
 
 import { createColumnHelper } from "@tanstack/react-table"
 import {
-  BookOpenIcon,
+  BlenderIcon,
   ChevronDownIcon,
   ChevronsUpDownIcon,
   ChevronUpIcon,
@@ -457,7 +457,7 @@ export function createIngredientColumns(
         const recipes = row.original._count?.recipeIngredients ?? 0
         return (
           <div className="flex items-center justify-center gap-1">
-            <BookOpenIcon className="size-4 text-muted-foreground" />
+            <BlenderIcon className="size-4 text-muted-foreground" />
             <span className="font-medium tabular-nums">{recipes}</span>
           </div>
         )

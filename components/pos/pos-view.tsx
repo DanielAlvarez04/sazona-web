@@ -6,11 +6,11 @@ import {
   CreditCardIcon,
   Loader2Icon,
   MinusIcon,
+  PencilLineIcon,
   PlusIcon,
   SearchIcon,
-  ShoppingCartIcon,
+  SoupIcon,
   Trash2Icon,
-  UtensilsIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -480,7 +480,7 @@ export function PosView({
 
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
-              <UtensilsIcon className="size-8" />
+              <SoupIcon className="size-8" />
               No hay artículos que coincidan con el filtro.
             </div>
           ) : (
@@ -513,7 +513,7 @@ export function PosView({
         <aside className="flex h-fit flex-col gap-3 rounded-xl border bg-card p-4 lg:sticky lg:top-4">
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 font-medium">
-              <ShoppingCartIcon className="size-4" />
+              <PencilLineIcon className="size-4" />
               Comanda
             </h3>
             {activeOrder ? (

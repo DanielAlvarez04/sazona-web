@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import {
-  BoxesIcon,
   CircleDollarSignIcon,
   ClockIcon,
+  PackageIcon,
   TrendingDownIcon,
 } from "lucide-react"
 
@@ -142,7 +142,7 @@ export function InventorySummary({
       <Card size="sm">
         <CardHeader className="pb-2">
           <CardDescription className="flex items-center gap-1.5">
-            <BoxesIcon className="size-4" />
+            <PackageIcon className="size-4" />
             Estado del inventario
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">

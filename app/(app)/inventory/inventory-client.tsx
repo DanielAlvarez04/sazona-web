@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BoxesIcon, HistoryIcon } from "lucide-react"
+import { HistoryIcon, PackageIcon } from "lucide-react"
 
 import { BulkIngredientsDialog } from "@/components/inventory/bulk-ingredients-dialog"
 import { ImportIngredientsDialog } from "@/components/inventory/import-ingredients-dialog"
@@ -71,7 +71,7 @@ export function InventoryClient({
       <Tabs defaultValue="inventario" className="gap-4">
         <TabsList>
           <TabsTrigger type="button" value="inventario">
-            <BoxesIcon className="size-4" />
+            <PackageIcon className="size-4" />
             Inventario
           </TabsTrigger>
           <TabsTrigger type="button" value="kardex">

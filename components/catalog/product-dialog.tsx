@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import {
-  BoxesIcon,
-  FlaskConicalIcon,
+  BlenderIcon,
   Loader2Icon,
   PackageIcon,
   SaveIcon,
+  SoupIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -97,10 +97,8 @@ import {
   PRESENTATION_PRESETS,
   UNIT_DEFINITIONS,
   convertUnitValue,
-  formatMoney,
   isNoPriceOptionGroup,
   roundQuantity,
-  unitLabel,
 } from "@/lib/catalog"
 import type {
   ArticleListItem,
@@ -269,10 +267,10 @@ export type ProductSaveAs = "article" | "recipe" | "ingredient"
 const SAVE_AS_OPTIONS: Array<{
   value: ProductSaveAs
   label: string
-  icon: typeof BoxesIcon
+  icon: typeof SoupIcon
 }> = [
-  { value: "article", label: "Artículo", icon: BoxesIcon },
-  { value: "recipe", label: "Receta", icon: FlaskConicalIcon },
+  { value: "article", label: "Artículo", icon: SoupIcon },
+  { value: "recipe", label: "Receta", icon: BlenderIcon },
   { value: "ingredient", label: "Insumo", icon: PackageIcon },
 ]
 
@@ -299,69 +297,6 @@ function initialProductSaveAs(
 
 function initialIngredientCategoryId(recipe: Recipe | null): string {
   return recipe?.producesIngredient?.category?.id ?? ""
-}
-
-function initialMinStock(recipe: Recipe | null): string {
-  const value = recipe?.producesIngredient?.minStock
-
-  if (value === null || value === undefined) return ""
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? String(roundQuantity(parsed)) : ""
-}
-
-/** Costo unitario estimado del insumo: costo del lote / rendimiento. */
-function estimateRecipeUnitCost(
-  rows: RecipeRow[],
-  ingredients: Ingredient[],
-  yieldQuantity: string
-): { value: number | null; complete: boolean } {
-  const yieldValue = toNumber(yieldQuantity)
-
-  if (!Number.isFinite(yieldValue) || yieldValue <= 0) {
-    return { value: null, complete: false }
-  }
-
-  let total = 0
-  let complete = true
-  let used = 0
-
-  for (const row of rows) {
-    if (!row.ingredientId) continue
-
-    const quantity = toNumber(row.quantity)
-    if (!Number.isFinite(quantity) || quantity <= 0) continue
-
-    const ingredient = ingredients.find((item) => item.id === row.ingredientId)
-    if (!ingredient) {
-      complete = false
-      continue
-    }
-
-    const cost = ingredient.unitCost === null ? null : Number(ingredient.unitCost)
-    if (cost === null || !Number.isFinite(cost)) {
-      complete = false
-      continue
-    }
-
-    const from = (row.unit || ingredient.displayUnit) as UnitCode
-    const converted =
-      from === ingredient.displayUnit
-        ? quantity
-        : convertUnitValue(quantity, from, ingredient.displayUnit)
-
-    if (converted === null) {
-      complete = false
-      continue
-    }
-
-    total += converted * cost
-    used += 1
-  }
-
-  if (used === 0) return { value: null, complete: false }
-
-  return { value: total / yieldValue, complete }
 }
 
 export function ProductDialog({
@@ -420,13 +355,41 @@ export function ProductDialog({
     onOpenChange(false)
   })
 
+  // Campos marcados con `aria-invalid`/`data-invalid` en lugar de mostrar un
+  // texto rojo cuando falta un valor obligatorio.
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(
+    () => new Set()
+  )
+
+  function markInvalid(...fields: string[]) {
+    setInvalidFields(new Set(fields))
+    form.setError(null)
+
+    const first = fields[0]
+    if (!first) return
+
+    window.requestAnimationFrame(() => {
+      document.getElementById(`product-${first}`)?.focus()
+    })
+  }
+
+  function clearInvalid(...fields: string[]) {
+    setInvalidFields((current) => {
+      if (!fields.some((field) => current.has(field))) return current
+
+      const next = new Set(current)
+      for (const field of fields) next.delete(field)
+      return next
+    })
+  }
+
   const [name, setName] = useState(article?.name ?? recipe?.name ?? "")
   const [description, setDescription] = useState(
     article?.description ?? recipe?.description ?? ""
   )
   const [notes, setNotes] = useState(recipe?.notes ?? "")
   const [articleCategoryId, setArticleCategoryId] = useState(
-    article?.category?.id ?? ""
+    article?.category?.id ?? recipe?.item?.category?.id ?? ""
   )
   const [recipeCategoryId, setRecipeCategoryId] = useState(
     recipe?.categoryId ?? ""
@@ -493,12 +456,6 @@ export function ProductDialog({
   const storedYield = initialYield(recipe)
   const [yieldQuantity, setYieldQuantity] = useState(storedYield.quantity)
   const [yieldUnit, setYieldUnit] = useState<UnitCode>(storedYield.unit)
-  const [minStock, setMinStock] = useState(() => initialMinStock(recipe))
-  // En un insumo nuevo el stock mínimo sigue al rendimiento hasta que el
-  // usuario lo edita. En uno existente se respeta el valor guardado.
-  const [minStockTouched, setMinStockTouched] = useState(
-    () => Boolean(recipe?.producesIngredientId)
-  )
 
   // Confirmación al apagar «Múltiples presentaciones» de un producto guardado.
   const [confirmDisableVariants, setConfirmDisableVariants] = useState(false)
@@ -550,6 +507,8 @@ export function ProductDialog({
         : "Categoría de inventario"
 
   function setCategoryValue(next: string) {
+    clearInvalid("category")
+
     if (saveAs === "article") {
       setArticleCategoryId(next)
     } else if (saveAs === "recipe") {
@@ -563,12 +522,12 @@ export function ProductDialog({
   const priceVisible = saveAs !== "ingredient"
   const priceRequired = saveAs === "article"
   const yieldVisible = saveAs === "ingredient"
-  const minStockVisible = saveAs === "ingredient"
   const notesVisible =
     saveAs !== "article" || effectiveRecipeEnabled
 
   /** El nombre arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
+    clearInvalid("name")
     setName(value)
     setRows((current) =>
       current.map((row) => (row.linkedName ? { ...row, name: value } : row))
@@ -687,12 +646,6 @@ export function ProductDialog({
     ? recipeRows.filter((row) => row.variantId === activeRecipeScope)
     : []
 
-  const estimatedUnitCost = estimateRecipeUnitCost(
-    commonRecipeRows,
-    ingredients,
-    yieldQuantity
-  )
-
   function setRecipeRowsForScope(
     scope: string | null,
     next: RecipeRow[]
@@ -738,6 +691,7 @@ export function ProductDialog({
   function applySaveAs(next: ProductSaveAs) {
     setSaveAs(next)
     setPendingSaveAs(null)
+    setInvalidFields(new Set())
     form.setError(null)
 
     if (next === "ingredient") {
@@ -765,6 +719,7 @@ export function ProductDialog({
   }
 
   function handleClear() {
+    clearInvalid()
     setName("")
     setDescription("")
     setNotes("")
@@ -783,8 +738,6 @@ export function ProductDialog({
     setRecipeEnabled(saveAs !== "article")
     setYieldQuantity("")
     setYieldUnit("KG")
-    setMinStock("")
-    setMinStockTouched(false)
     setDialogTab(saveAs === "ingredient" ? "receta" : "presentaciones")
     form.setError(null)
   }
@@ -864,8 +817,11 @@ export function ProductDialog({
   function save() {
     const trimmedName = name.trim()
 
+    setInvalidFields(new Set())
+    form.setError(null)
+
     if (!trimmedName) {
-      form.setError("El nombre es obligatorio")
+      markInvalid("name")
       return
     }
 
@@ -886,17 +842,17 @@ export function ProductDialog({
     const variants: NonNullable<ArticleInput["variants"]> = []
 
     if (saveAs === "article" && !articleCategoryId) {
-      form.setError("La categoría es obligatoria")
+      markInvalid("category")
       return
     }
 
     if (saveAs === "recipe" && !recipeCategoryId) {
-      form.setError("La categoría es obligatoria")
+      markInvalid("category")
       return
     }
 
     if (saveAs === "ingredient" && !ingredientCategoryId) {
-      form.setError("Selecciona la categoría de inventario")
+      markInvalid("category")
       return
     }
 
@@ -904,7 +860,7 @@ export function ProductDialog({
       saveAs === "article" &&
       (!price.trim() || !Number.isFinite(basePrice) || basePrice < 0)
     ) {
-      form.setError("Indica un precio válido")
+      markInvalid("price")
       return
     }
 
@@ -913,7 +869,7 @@ export function ProductDialog({
       price.trim() !== "" &&
       (!Number.isFinite(basePrice) || basePrice < 0)
     ) {
-      form.setError("Indica un precio válido o déjalo vacío")
+      markInvalid("price")
       return
     }
 
@@ -932,28 +888,13 @@ export function ProductDialog({
     }
 
     let yieldValue = 0
-    let minStockValue: number | undefined
 
     if (saveAs === "ingredient") {
       yieldValue = toNumber(yieldQuantity)
 
       if (!Number.isFinite(yieldValue) || yieldValue <= 0) {
-        form.setError("Indica un rendimiento válido")
+        markInvalid("yield")
         return
-      }
-
-      if (minStock.trim()) {
-        const parsedMinStock = toNumber(minStock)
-
-        if (!Number.isFinite(parsedMinStock) || parsedMinStock < 0) {
-          form.setError("Indica un stock mínimo válido")
-          return
-        }
-
-        minStockValue = Number(parsedMinStock.toFixed(4))
-      } else {
-        // Precargado con el rendimiento: un lote cubre el stock mínimo.
-        minStockValue = Number(yieldValue.toFixed(4))
       }
     }
 
@@ -1101,8 +1042,8 @@ export function ProductDialog({
             : effectiveRecipeEnabled
               ? { notes: notes.trim() || null }
               : {}),
-          ...(saveAs === "recipe" &&
-          (recipe?.categoryId ?? null) !== (recipeCategoryId || null)
+          ...(recipe &&
+          (recipe.categoryId ?? null) !== (recipeCategoryId || null)
             ? { categoryId: recipeCategoryId || null }
             : {}),
           ...(ingredientsToSave ? { ingredients: ingredientsToSave } : {}),
@@ -1176,7 +1117,9 @@ export function ProductDialog({
             }
           } else if (
             effectiveRecipeEnabled &&
-            (recipeIngredients.length > 0 || notes.trim() !== "") &&
+            (recipeIngredients.length > 0 ||
+              notes.trim() !== "" ||
+              recipeCategoryId.trim() !== "") &&
             itemId
           ) {
             const scoped = resolveRecipeRows(recipeIngredients)
@@ -1186,7 +1129,7 @@ export function ProductDialog({
               name: trimmedName,
               description: description.trim() || undefined,
               ...(notes.trim() ? { notes: notes.trim() } : {}),
-              categoryId: null,
+              categoryId: recipeCategoryId || null,
               ...(scoped.rows.length > 0 ? { ingredients: scoped.rows } : {}),
               itemId,
             })
@@ -1198,7 +1141,7 @@ export function ProductDialog({
         } else if (recipeId) {
           // Receta sin artículo activo: puede tener un borrador archivado.
           if (article?.isArchived && itemId) {
-            const itemUpdate = await updateItemData(itemId, false)
+            const itemUpdate = await updateItemData(itemId, true)
             if (!itemUpdate.ok) return itemUpdate
           }
 
@@ -1276,7 +1219,9 @@ export function ProductDialog({
 
           if (
             effectiveRecipeEnabled &&
-            (recipeIngredients.length > 0 || notes.trim() !== "") &&
+            (recipeIngredients.length > 0 ||
+              notes.trim() !== "" ||
+              recipeCategoryId.trim() !== "") &&
             itemId
           ) {
             const scoped = resolveRecipeRows(recipeIngredients)
@@ -1286,7 +1231,7 @@ export function ProductDialog({
               name: trimmedName,
               description: description.trim() || undefined,
               ...(notes.trim() ? { notes: notes.trim() } : {}),
-              categoryId: null,
+              categoryId: recipeCategoryId || null,
               ...(scoped.rows.length > 0 ? { ingredients: scoped.rows } : {}),
               itemId,
             })
@@ -1303,7 +1248,7 @@ export function ProductDialog({
       if (saveAs === "recipe") {
         if (recipeId) {
           if (itemId) {
-            const itemUpdate = await updateItemData(itemId, false)
+            const itemUpdate = await updateItemData(itemId, true)
             if (!itemUpdate.ok) return itemUpdate
 
             const scoped = resolveRecipeRows(recipeIngredients)
@@ -1323,7 +1268,10 @@ export function ProductDialog({
             }
           } else {
             const needsDraft =
-              multiple || optionsEnabled || price.trim() !== ""
+              multiple ||
+              optionsEnabled ||
+              price.trim() !== "" ||
+              articleCategoryId.trim() !== ""
 
             if (needsDraft) {
               const commonRows = recipeIngredients.filter(
@@ -1338,6 +1286,9 @@ export function ProductDialog({
 
               const draft = await saveRecipeDraftItem(recipeId, {
                 ...(price.trim() ? { price: priceBase } : {}),
+                ...(articleCategoryId
+                  ? { categoryId: articleCategoryId }
+                  : {}),
                 variants: multiple ? variants : [],
                 optionGroups: optionsEnabled
                   ? optionGroupPayload(savedGroups)
@@ -1375,7 +1326,7 @@ export function ProductDialog({
         } else if (itemId) {
           // Artículo existente sin receta: se crea la receta vinculada y se
           // archiva el artículo al guardar como receta.
-          const itemUpdate = await updateItemData(itemId, false)
+          const itemUpdate = await updateItemData(itemId, true)
           if (!itemUpdate.ok) return itemUpdate
 
           const scoped = resolveRecipeRows(recipeIngredients)
@@ -1425,9 +1376,17 @@ export function ProductDialog({
           recipeId = createdRecipeId
           changed = true
 
-          if (multiple || optionsEnabled || price.trim() !== "") {
+          if (
+            multiple ||
+            optionsEnabled ||
+            price.trim() !== "" ||
+            articleCategoryId.trim() !== ""
+          ) {
             const draft = await saveRecipeDraftItem(createdRecipeId, {
               ...(price.trim() ? { price: priceBase } : {}),
+              ...(articleCategoryId
+                ? { categoryId: articleCategoryId }
+                : {}),
               variants: multiple ? variants : [],
               optionGroups: optionsEnabled
                 ? optionGroupPayload(savedGroups)
@@ -1462,7 +1421,6 @@ export function ProductDialog({
           displayUnit: yieldUnit,
           yieldQuantity: yieldValue,
           categoryId: ingredientCategoryId,
-          minStock: minStockValue,
         }
 
         if (recipeId) {
@@ -1660,7 +1618,9 @@ export function ProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="no-scrollbar max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-3xl">
+        <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
+          <div className="grid gap-6">
         <DialogHeader>
           <DialogTitle>
             {isNew ? "Nuevo producto" : "Editar producto"}
@@ -1679,46 +1639,50 @@ export function ProductDialog({
             />
 
             <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
+              <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
+                <legend className="px-1 text-[10px] font-medium text-muted-foreground">
                   Guardar como
-                </span>
-                <div className="flex flex-wrap items-center gap-1">
-                  {SAVE_AS_OPTIONS.map((option) => {
-                    const Icon = option.icon
-                    return (
-                      <Button
-                        key={option.value}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-pressed={saveAs === option.value}
-                        disabled={
-                          form.pending ||
-                          (locked && option.value !== "ingredient")
-                        }
-                        className={saveAsChipClass(saveAs === option.value)}
-                        onClick={() => handleSaveAsChange(option.value)}
-                      >
-                        <Icon className="size-3.5" />
-                        {option.label}
-                      </Button>
-                    )
-                  })}
+                </legend>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {SAVE_AS_OPTIONS.map((option) => {
+                      const Icon = option.icon
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-pressed={saveAs === option.value}
+                          disabled={
+                            form.pending ||
+                            (locked && option.value !== "ingredient")
+                          }
+                          className={saveAsChipClass(saveAs === option.value)}
+                          onClick={() => handleSaveAsChange(option.value)}
+                        >
+                          <Icon className="size-3.5" />
+                          {option.label}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  {locked ? (
+                    <p className="text-xs text-muted-foreground">
+                      Un insumo no puede convertirse en artículo ni receta.
+                    </p>
+                  ) : saveAs === "ingredient" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Una vez creado, un insumo no puede convertirse en artículo
+                      ni receta.
+                    </p>
+                  ) : null}
                 </div>
-                {locked ? (
-                  <p className="text-xs text-muted-foreground">
-                    Un insumo no puede convertirse en artículo ni receta.
-                  </p>
-                ) : saveAs === "ingredient" ? (
-                  <p className="text-xs text-muted-foreground">
-                    Una vez creado, un insumo no puede convertirse en artículo
-                    ni receta.
-                  </p>
-                ) : null}
-              </div>
+              </fieldset>
 
-              <Field>
+              <Field
+                data-invalid={invalidFields.has("name") ? "true" : undefined}
+              >
                 <FieldLabel htmlFor="product-name">
                   Nombre <span className="text-destructive">*</span>
                 </FieldLabel>
@@ -1726,6 +1690,7 @@ export function ProductDialog({
                   id="product-name"
                   value={name}
                   maxLength={120}
+                  aria-invalid={invalidFields.has("name") || undefined}
                   onChange={(event) => handleNameChange(event.target.value)}
                   placeholder={
                     saveAs === "article"
@@ -1739,7 +1704,11 @@ export function ProductDialog({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {priceVisible ? (
-                  <Field>
+                  <Field
+                    data-invalid={
+                      invalidFields.has("price") ? "true" : undefined
+                    }
+                  >
                     <div className="flex items-center gap-1.5">
                       <FieldLabel htmlFor="product-price">
                         Precio{" "}
@@ -1765,7 +1734,11 @@ export function ProductDialog({
                         min="0"
                         step="0.01"
                         value={price}
-                        onChange={(event) => setPrice(event.target.value)}
+                        aria-invalid={invalidFields.has("price") || undefined}
+                        onChange={(event) => {
+                          clearInvalid("price")
+                          setPrice(event.target.value)
+                        }}
                         placeholder="0.00"
                       />
                       <InputGroupAddon align="inline-end">
@@ -1776,7 +1749,11 @@ export function ProductDialog({
                 ) : null}
 
                 {yieldVisible ? (
-                  <Field>
+                  <Field
+                    data-invalid={
+                      invalidFields.has("yield") ? "true" : undefined
+                    }
+                  >
                     <div className="flex items-center gap-1.5">
                       <FieldLabel htmlFor="product-yield">Rendimiento</FieldLabel>
                       <InfoHint text="Cantidad de insumo que produce un lote de la receta." />
@@ -1788,10 +1765,10 @@ export function ProductDialog({
                         min="0.0001"
                         step="any"
                         value={yieldQuantity}
+                        aria-invalid={invalidFields.has("yield") || undefined}
                         onChange={(event) => {
-                          const next = event.target.value
-                          setYieldQuantity(next)
-                          if (!minStockTouched) setMinStock(next)
+                          clearInvalid("yield")
+                          setYieldQuantity(event.target.value)
                         }}
                         placeholder="0.00"
                         className="min-w-0 flex-1"
@@ -1821,7 +1798,11 @@ export function ProductDialog({
                   </Field>
                 ) : null}
 
-                <Field>
+                <Field
+                  data-invalid={
+                    invalidFields.has("category") ? "true" : undefined
+                  }
+                >
                   <FieldLabel htmlFor="product-category">
                     {categoryLabel} <span className="text-destructive">*</span>
                   </FieldLabel>
@@ -1833,7 +1814,13 @@ export function ProductDialog({
                       label: category.name,
                     }))}
                   >
-                    <SelectTrigger id="product-category" className="w-full">
+                    <SelectTrigger
+                      id="product-category"
+                      className="w-full"
+                      aria-invalid={
+                        invalidFields.has("category") || undefined
+                      }
+                    >
                       <SelectValue placeholder="Selecciona una categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1846,55 +1833,7 @@ export function ProductDialog({
                   </Select>
                 </Field>
 
-                {minStockVisible ? (
-                  <Field>
-                    <div className="flex items-center gap-1.5">
-                      <FieldLabel htmlFor="product-min-stock">
-                        Stock mínimo
-                      </FieldLabel>
-                      <InfoHint text="Se precarga con el rendimiento de un lote. Puedes ajustarlo o añadir stock después." />
-                    </div>
-                    <InputGroup>
-                      <InputGroupInput
-                        id="product-min-stock"
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={minStock}
-                        onChange={(event) => {
-                          const next = event.target.value
-                          setMinStockTouched(next.trim() !== "")
-                          setMinStock(next)
-                        }}
-                        placeholder={yieldQuantity || "0"}
-                      />
-                      <InputGroupAddon align="inline-end">
-                        <InputGroupText>{unitLabel(yieldUnit)}</InputGroupText>
-                      </InputGroupAddon>
-                    </InputGroup>
-                  </Field>
-                ) : null}
               </div>
-
-              {saveAs === "ingredient" ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
-                  <span className="text-muted-foreground">
-                    Costo unitario estimado
-                  </span>
-                  <span className="font-medium tabular-nums">
-                    {estimatedUnitCost.value === null
-                      ? "—"
-                      : `${formatMoney(estimatedUnitCost.value)} / ${unitLabel(
-                          yieldUnit
-                        )}`}
-                  </span>
-                  {!estimatedUnitCost.complete ? (
-                    <span className="w-full text-muted-foreground">
-                      Falta el costo de algunos insumos para calcularlo.
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
           </div>
 
@@ -1905,7 +1844,13 @@ export function ProductDialog({
               value={description}
               maxLength={500}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Descripción del producto (incluye un ejemplo breve)"
+              placeholder={
+                saveAs === "article"
+                  ? "Ej. Café espresso con leche vaporizada y un toque de canela."
+                  : saveAs === "recipe"
+                    ? "Ej. Salsa de tomate cocida a fuego lento con albahaca fresca."
+                    : "Ej. Tomate rojo fresco para salsas y guisos."
+              }
             />
             {saveAs === "article" ? (
               <p className="text-xs text-muted-foreground">
@@ -2256,6 +2201,8 @@ export function ProductDialog({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

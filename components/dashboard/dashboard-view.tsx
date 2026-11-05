@@ -2,14 +2,15 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import {
   AlertTriangleIcon,
-  ChefHatIcon,
   CircleDollarSignIcon,
   ClockIcon,
+  PencilLineIcon,
   ReceiptIcon,
   TrendingUpIcon,
 } from "lucide-react"
 
 import { SalesChart } from "@/components/dashboard/sales-chart"
+import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -137,7 +138,7 @@ export function DashboardView({
               ? `${data.kitchen.delayed} demorada(s) hace +15 min`
               : "Sin demoras"
           }
-          icon={<ChefHatIcon className="size-4" />}
+          icon={<PencilLineIcon className="size-4" />}
           alert={data.kitchen.delayed > 0}
         />
       </div>
@@ -265,9 +266,21 @@ export function DashboardView({
             <CardDescription>Comandas activas ahora mismo.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
-            <KitchenRow label="Pendientes" value={data.kitchen.pending} />
-            <KitchenRow label="En preparación" value={data.kitchen.preparing} />
-            <KitchenRow label="Listas" value={data.kitchen.ready} />
+            <KitchenRow
+              label="Pendientes"
+              value={data.kitchen.pending}
+              icon={<OrderStatusIcon status="PENDING" />}
+            />
+            <KitchenRow
+              label="En preparación"
+              value={data.kitchen.preparing}
+              icon={<OrderStatusIcon status="PREPARING" />}
+            />
+            <KitchenRow
+              label="Listas"
+              value={data.kitchen.ready}
+              icon={<OrderStatusIcon status="READY" />}
+            />
             <div className="flex items-center justify-between border-t pt-3">
               <span className="flex items-center gap-2 text-muted-foreground">
                 <ClockIcon className="size-4" />
@@ -454,10 +467,21 @@ function StatCard({
   )
 }
 
-function KitchenRow({ label, value }: { label: string; value: number }) {
+function KitchenRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string
+  value: number
+  icon: ReactNode
+}) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        {label}
+      </span>
       <Badge variant={value > 0 ? "secondary" : "outline"}>{value}</Badge>
     </div>
   )

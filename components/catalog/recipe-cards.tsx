@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { FlaskConicalIcon, PencilIcon, PowerIcon } from "lucide-react"
+import {
+  BlenderIcon,
+  PackageIcon,
+  PencilIcon,
+  PowerIcon,
+} from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,7 +63,7 @@ function FullRecipeCard({
           <div className="absolute inset-0 bg-muted">
             {showFallback ? (
               <div className="flex size-full items-center justify-center text-muted-foreground">
-                <FlaskConicalIcon className="size-12" aria-hidden />
+                <BlenderIcon className="size-12" aria-hidden />
                 <span className="sr-only">Sin imagen</span>
               </div>
             ) : (
@@ -107,7 +112,7 @@ function FullRecipeCard({
                 </Badge>
                 {recipe.producesIngredient ? (
                   <Badge className="border border-white/30 bg-black/30 text-white backdrop-blur-sm">
-                    <FlaskConicalIcon data-icon="inline-start" />
+                    <PackageIcon data-icon="inline-start" />
                     Insumo
                   </Badge>
                 ) : null}

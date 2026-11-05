@@ -1,18 +1,20 @@
 "use client"
 
-import type { ComponentProps } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { createColumnHelper, type SortFn } from "@tanstack/react-table"
 import {
-  BookOpenIcon,
+  BeefIcon,
+  BlenderIcon,
   ChevronDownIcon,
   ChevronsUpDownIcon,
   ChevronUpIcon,
   EllipsisVerticalIcon,
+  GroupIcon,
   LayersIcon,
+  NotebookTextIcon,
   PencilIcon,
   PowerIcon,
   Trash2Icon,
-  UtensilsCrossedIcon,
 } from "lucide-react"
 
 import { InfoHint } from "@/components/info-hint"
@@ -33,10 +35,19 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { formatMoney, type ArticleListItem, type Variant } from "@/lib/catalog"
+import {
+  formatMarginPercent,
+  formatMoney,
+  suggestedPriceFromCost,
+  type ArticleListItem,
+  type Recipe,
+  type Variant,
+} from "@/lib/catalog"
 import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
+import { IngredientsPreview } from "./ingredients-preview"
+import { MenusCountBadge } from "./menus-count"
 
 const columnHelper = createColumnHelper<DataTableFeatures, ArticleListItem>()
 
@@ -51,12 +62,15 @@ function ArticleColumnHeader({
   column,
   align = "left",
   hint,
+  icon,
 }: {
   title: string
   column: SortableColumn
   align?: "left" | "right"
   /** Texto de ayuda que se muestra en un icono junto al título. */
   hint?: string
+  /** Si se indica, sustituye al texto del encabezado por este icono. */
+  icon?: ReactNode
 }) {
   const wrapper = cn(
     "flex items-center gap-1",
@@ -66,7 +80,14 @@ function ArticleColumnHeader({
   if (!column.getCanSort()) {
     return (
       <div className={wrapper}>
-        <span className="font-medium">{title}</span>
+        {icon ? (
+          <>
+            {icon}
+            <span className="sr-only">{title}</span>
+          </>
+        ) : (
+          <span className="font-medium">{title}</span>
+        )}
         {hint ? <InfoHint text={hint} /> : null}
       </div>
     )
@@ -79,11 +100,12 @@ function ArticleColumnHeader({
       <Button
         variant="ghost"
         size="sm"
+        aria-label={icon ? title : undefined}
         className={`h-8 data-[sorted=true]:bg-accent ${align === "right" ? "ml-0" : "-ml-2"}`}
         data-sorted={sorted !== false}
         onClick={column.getToggleSortingHandler()}
       >
-        {title}
+        {icon ?? title}
         {/* La ayuda va entre el título y los chevrones de ordenación. */}
         {hint ? <InfoHint text={hint} /> : null}
         {sorted === "asc" ? (
@@ -290,67 +312,6 @@ export function PresentationPreview({
 }
 
 /**
- * Menús donde se usa el artículo.
- *
- * Todavía no existe el módulo de menús: la UI queda lista para cuando la API
- * devuelva `menus` en el artículo.
- */
-function MenuPreview({ article }: { article: ArticleListItem }) {
-  const menus = article.menus ?? []
-
-  return (
-    <HoverCard>
-      <HoverCardTrigger
-        render={<button type="button" />}
-        className={cn(
-          badgeVariants({ variant: "outline" }),
-          menus.length === 0 && "text-muted-foreground",
-          "cursor-default tabular-nums"
-        )}
-        aria-label={`${menus.length} ${menus.length === 1 ? "menú" : "menús"}. Ver detalle`}
-      >
-        <UtensilsCrossedIcon />
-        {menus.length}
-      </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-60 p-2">
-        <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
-          {menus.length === 1 ? "Menú" : "Menús"}
-        </p>
-        {menus.length === 0 ? (
-          <p className="px-2 py-1 text-sm text-muted-foreground">
-            Aún no se usa en ningún menú.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {menus.map((menu) => (
-              <div
-                key={menu.id}
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm"
-                title={menu.name}
-              >
-                <span
-                  className={cn(
-                    "truncate",
-                    !menu.isActive && "text-muted-foreground"
-                  )}
-                >
-                  {menu.name}
-                </span>
-                {!menu.isActive ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    Inactivo
-                  </Badge>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </HoverCardContent>
-    </HoverCard>
-  )
-}
-
-/**
  * Orden del nombre: primero los artículos activos y, dentro de cada grupo,
  * alfabético. Así, al desactivar un artículo, cae al final de la tabla.
  */
@@ -367,16 +328,43 @@ const sortArticlesByName: SortFn<DataTableFeatures, ArticleListItem> = (
   })
 }
 
+/** Receta base (sin presentación) de cada artículo. */
+function buildRecipeMap(recipes: Recipe[]): Map<string, Recipe> {
+  const map = new Map<string, Recipe>()
+
+  for (const recipe of recipes) {
+    if (!recipe.itemId) continue
+
+    const current = map.get(recipe.itemId)
+    if (!current || (current.variantId !== null && recipe.variantId === null)) {
+      map.set(recipe.itemId, recipe)
+    }
+  }
+
+  return map
+}
+
+/** Costo estimado del artículo a partir de su receta. */
+function articleRecipeCost(recipe: Recipe | null | undefined): number | null {
+  if (!recipe || recipe.estimatedCost === null) return null
+
+  const cost = Number(recipe.estimatedCost)
+  return Number.isFinite(cost) ? cost : null
+}
+
 /**
  * Definición de columnas de la tabla de artículos.
  *
- * Selección · SKU · Artículo · Precio · Categoría · Presentaciones · Menú ·
- * Acciones. Los estilos siguen la tabla de insumos de `/inventory`.
+ * Selección · Artículo · Precio/Sugerido · Costo ($/%) · Margen ($/%) ·
+ * Categoría · Ingredientes · Acciones. Sigue el mismo patrón que la tabla de
+ * recetas.
  */
 export function createArticleColumns(
   actions: ArticleRowActions,
-  options: { selectable: boolean }
+  options: { selectable: boolean; recipes: Recipe[] }
 ) {
+  const recipeByItemId = buildRecipeMap(options.recipes)
+
   return columnHelper.columns([
     ...(options.selectable
       ? [
@@ -414,19 +402,6 @@ export function createArticleColumns(
         ]
       : []),
 
-    columnHelper.accessor((article) => article.sku ?? "", {
-      id: "sku",
-      header: ({ column }) => (
-        <ArticleColumnHeader title="SKU" column={column} />
-      ),
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-muted-foreground">
-          {row.original.sku ?? "—"}
-        </span>
-      ),
-      enableSorting: false,
-    }),
-
     columnHelper.accessor("name", {
       id: "name",
       header: ({ column }) => (
@@ -435,22 +410,32 @@ export function createArticleColumns(
       cell: ({ row }) => {
         const hasRecipe =
           (row.original.recipes?.length ?? row.original._count.recipes) > 0
+        const recipe = recipeByItemId.get(row.original.id)
 
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="font-medium whitespace-nowrap">
               {row.original.name}
             </span>
+            <PresentationPreview
+              price={row.original.price}
+              variants={row.original.variants}
+              costs={recipe?.variantCosts}
+              compact
+            />
             {hasRecipe ? (
               <Badge
                 title="Publicado desde una receta"
                 aria-label="Publicado desde una receta"
               >
-                <BookOpenIcon />
+                <BlenderIcon />
               </Badge>
             ) : null}
             {row.original.isCombo ? (
-              <Badge variant="secondary">Combo</Badge>
+              <Badge variant="secondary">
+                <GroupIcon data-icon="inline-start" />
+                Combo
+              </Badge>
             ) : null}
             {row.original.isActive ? null : (
               <Badge
@@ -470,19 +455,119 @@ export function createArticleColumns(
       id: "price",
       header: ({ column }) => (
         <ArticleColumnHeader
-          title="Precio"
+          title="Precio/Sugerido"
           column={column}
           align="right"
-          hint="Precio del artículo y/o de la presentación principal"
+          hint="Precio del artículo y el precio sugerido a partir del costo, con un margen bruto del 65 %."
         />
       ),
-      cell: ({ getValue }) => (
-        <div className="text-right whitespace-nowrap font-medium tabular-nums">
-          {formatMoney(getValue())}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const price = Number(row.original.price)
+        const recipe = recipeByItemId.get(row.original.id)
+        const suggested = suggestedPriceFromCost(articleRecipeCost(recipe))
+
+        return (
+          <div
+            className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums"
+            title="Precio/Sugerido"
+          >
+            <span className="font-medium">{formatMoney(price)}</span>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-muted-foreground">
+              {suggested === null ? "—" : formatMoney(suggested)}
+            </span>
+          </div>
+        )
+      },
       sortFn: "basic",
     }),
+
+    columnHelper.accessor(
+      (article) => articleRecipeCost(recipeByItemId.get(article.id)),
+      {
+        id: "cost",
+        header: ({ column }) => (
+          <ArticleColumnHeader
+            title="Costo ($/%)"
+            column={column}
+            align="right"
+            hint="Costo estimado del artículo a partir de su receta y su porcentaje sobre el precio."
+          />
+        ),
+        cell: ({ row }) => {
+          const cost = articleRecipeCost(recipeByItemId.get(row.original.id))
+          if (cost === null) {
+            return <span className="block text-right">—</span>
+          }
+
+          const price = Number(row.original.price)
+          const share = price > 0 ? cost / price : null
+
+          return (
+            <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
+              <span className="font-medium">{formatMoney(cost)}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-muted-foreground">
+                {formatMarginPercent(share)}
+              </span>
+            </div>
+          )
+        },
+        sortFn: "basic",
+      }
+    ),
+
+    columnHelper.accessor(
+      (article) => {
+        const cost = articleRecipeCost(recipeByItemId.get(article.id))
+        if (cost === null) return null
+        return Number(article.price) - cost
+      },
+      {
+        id: "margin",
+        header: ({ column }) => (
+          <ArticleColumnHeader
+            title="Margen ($/%)"
+            column={column}
+            align="right"
+            hint="Diferencia entre el precio del artículo y su costo, y su margen bruto sobre el precio."
+          />
+        ),
+        cell: ({ row }) => {
+          const price = Number(row.original.price)
+          const cost = articleRecipeCost(recipeByItemId.get(row.original.id))
+
+          if (cost === null || price <= 0) {
+            return <span className="block text-right">—</span>
+          }
+
+          const margin = price - cost
+
+          return (
+            <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
+              <span
+                className={cn(
+                  "font-medium",
+                  margin < 0 && "text-destructive"
+                )}
+              >
+                {formatMoney(margin)}
+              </span>
+              <span className="text-muted-foreground">/</span>
+              <span
+                className={cn(
+                  "text-muted-foreground",
+                  margin < 0 && "text-destructive"
+                )}
+              >
+                {formatMarginPercent(margin / price)}
+              </span>
+            </div>
+          )
+        },
+        sortFn: "basic",
+      }
+    ),
 
     columnHelper.accessor((article) => article.category?.name ?? "", {
       id: "category",
@@ -501,31 +586,53 @@ export function createArticleColumns(
       enableSorting: false,
     }),
 
-    columnHelper.display({
-      id: "variants",
-      header: () => <span className="font-medium">Presentaciones</span>,
-      cell: ({ row }) => (
-        <div className="flex items-center">
-          <PresentationPreview
-            price={row.original.price}
-            variants={row.original.variants}
+    columnHelper.accessor(
+      (article) => recipeByItemId.get(article.id)?.ingredients.length ?? -1,
+      {
+        id: "ingredients",
+        header: ({ column }) => (
+          <ArticleColumnHeader
+            title="Ingredientes"
+            column={column}
+            align="right"
+            hint="Insumos de la receta del artículo; si no tiene receta, no hay ingredientes que mostrar."
+            icon={<BeefIcon className="size-4" />}
           />
-        </div>
-      ),
-      enableSorting: false,
-      enableGlobalFilter: false,
-    }),
+        ),
+        cell: ({ row }) => {
+          const recipe = recipeByItemId.get(row.original.id)
 
-    columnHelper.display({
-      id: "menus",
-      header: () => <span className="font-medium">Menú</span>,
+          if (!recipe) {
+            return <span className="block text-right">—</span>
+          }
+
+          return (
+            <div className="flex items-center justify-end">
+              <IngredientsPreview recipe={recipe} />
+            </div>
+          )
+        },
+        enableSorting: false,
+      }
+    ),
+
+    columnHelper.accessor((article) => article.menus?.length ?? 0, {
+      id: "menu",
+      header: ({ column }) => (
+        <ArticleColumnHeader
+          title="Menú"
+          column={column}
+          align="right"
+          hint="Menús donde se usa el artículo."
+          icon={<NotebookTextIcon className="size-4" />}
+        />
+      ),
       cell: ({ row }) => (
-        <div className="flex items-center">
-          <MenuPreview article={row.original} />
+        <div className="flex items-center justify-end">
+          <MenusCountBadge count={row.original.menus?.length ?? 0} />
         </div>
       ),
       enableSorting: false,
-      enableGlobalFilter: false,
     }),
 
     columnHelper.display({
@@ -548,10 +655,11 @@ export function createArticleColumns(
 
 export const ARTICLE_COLUMN_LABELS: Record<string, string> = {
   select: "Selección",
-  sku: "SKU",
   name: "Artículo",
-  price: "Precio",
+  price: "Precio/Sugerido",
+  cost: "Costo ($/%)",
+  margin: "Margen ($/%)",
   category: "Categoría",
-  variants: "Presentaciones",
-  menus: "Menú",
+  ingredients: "Ingredientes",
+  menu: "Menú",
 }

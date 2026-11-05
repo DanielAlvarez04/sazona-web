@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { Branch } from "@/lib/branches"
@@ -211,7 +212,10 @@ export function KitchenView({
             >
               <header className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-medium">{ROUND_STATUS_LABELS[status]}</h3>
+                  <h3 className="flex items-center gap-1.5 font-medium">
+                    <OrderStatusIcon status={status} className="size-4" />
+                    {ROUND_STATUS_LABELS[status]}
+                  </h3>
                   <p className="text-xs text-muted-foreground">
                     {COLUMN_HINTS[status]}
                   </p>

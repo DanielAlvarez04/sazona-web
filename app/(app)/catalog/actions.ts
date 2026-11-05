@@ -316,6 +316,17 @@ export async function deleteRecipe(recipeId: string): Promise<ActionResult> {
   ])
 }
 
+export async function deleteRecipes(
+  ids: string[]
+): Promise<ActionResult<{ deletedCount: number }>> {
+  return mutateApi<{ deletedCount: number }>(
+    "/catalog/recipes/bulk-delete",
+    "POST",
+    { ids },
+    ["/catalog"]
+  )
+}
+
 export async function publishRecipe(
   recipeId: string,
   input: RecipePublishInput
@@ -341,6 +352,8 @@ export async function unpublishRecipe(
 
 export interface RecipeDraftItemInput {
   price?: number
+  /** Categoría del artículo borrador (independiente de la de la receta). */
+  categoryId?: string | null
   variants?: ArticleInput["variants"]
   optionGroups?: ArticleInput["optionGroups"]
 }

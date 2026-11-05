@@ -1,9 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "cn"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+
+import { ScrollBar } from "@/components/ui/scroll-area"
 
 const Select = SelectPrimitive.Root
 
@@ -82,11 +85,20 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn("relative isolate z-50 max-h-[min(var(--available-height),20rem)] w-max min-w-(--anchor-width) max-w-max origin-(--transform-origin) overflow-x-hidden overflow-y-auto overscroll-contain rounded-md bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn("relative isolate z-50 w-max min-w-(--anchor-width) max-w-max origin-(--transform-origin) overflow-hidden overscroll-contain rounded-md bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <ScrollAreaPrimitive.Root className="relative max-h-[min(var(--available-height),20rem)]">
+            <SelectPrimitive.List
+              render={<ScrollAreaPrimitive.Viewport />}
+              className="no-scrollbar size-full max-h-[inherit] overscroll-contain rounded-[inherit] outline-none"
+            >
+              {children}
+            </SelectPrimitive.List>
+            <ScrollBar />
+            <ScrollAreaPrimitive.Corner />
+          </ScrollAreaPrimitive.Root>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>

@@ -7,7 +7,7 @@ import {
   FileTextIcon,
   ListPlusIcon,
   MinusIcon,
-  PackageOpenIcon,
+  PackageIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
@@ -424,13 +424,13 @@ export function IngredientsTable({
         }}
         emptyState={
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
-            <PackageOpenIcon className="size-6" />
+            <PackageIcon className="size-6" />
             <p>Todavía no hay insumos. Crea el primero para empezar.</p>
           </div>
         }
         filteredEmptyState={
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <PackageOpenIcon className="size-6" />
+            <PackageIcon className="size-6" />
             <p>No hay insumos que coincidan con los filtros.</p>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               <XIcon className="size-4" />

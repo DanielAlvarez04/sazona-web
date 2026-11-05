@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   CheckIcon,
   ChevronDownIcon,
-  FlaskConicalIcon,
+  BlenderIcon,
   GripVerticalIcon,
   Loader2Icon,
   PlusIcon,
@@ -1289,7 +1289,7 @@ function SortableOptionValue({
               />
             }
           >
-            <FlaskConicalIcon />
+            <BlenderIcon />
             {item.effects.length > 0 ? (
               <span className="text-[10px]">{item.effects.length}</span>
             ) : null}

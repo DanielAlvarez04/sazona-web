@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import {
+  BlenderIcon,
   ChevronDownIcon,
-  FlaskConicalIcon,
   PencilIcon,
   PlayIcon,
   PlusIcon,
@@ -14,6 +14,7 @@ import {
   XIcon,
 } from "lucide-react"
 import type { RowSelectionState } from "@tanstack/react-table"
+import { toast } from "sonner"
 
 import {
   DataTable,
@@ -21,6 +22,17 @@ import {
   type DataTableFilter,
   type DataTableViewMode,
 } from "@/components/data-table/data-table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -38,7 +50,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
-import type { Category, Recipe } from "@/lib/catalog"
+import type { ArticleListItem, Category, Recipe } from "@/lib/catalog"
 import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { RecipeCards } from "./recipe-cards"
@@ -49,8 +61,11 @@ import {
 
 export function RecipesTable({
   recipes,
+  articles,
   categories,
   canManage,
+  viewMode,
+  onViewModeChange,
   onCreate,
   onEdit,
   onPublish,
@@ -58,11 +73,17 @@ export function RecipesTable({
   onProduce,
   onToggleActive,
   onDelete,
+  onDeleteMany,
   onManageCategories,
 }: {
   recipes: Recipe[]
+  /** Artículos (incluidos los borradores) para precios y presentaciones. */
+  articles: ArticleListItem[]
   categories: Category[]
   canManage: boolean
+  /** Vista compartida con la tab de Artículos. */
+  viewMode: DataTableViewMode
+  onViewModeChange: (mode: DataTableViewMode) => void
   onCreate: () => void
   onEdit: (recipe: Recipe) => void
   onPublish: (recipe: Recipe) => void
@@ -70,6 +91,8 @@ export function RecipesTable({
   onProduce: (recipe: Recipe) => void
   onToggleActive: (recipe: Recipe) => void
   onDelete: (recipe: Recipe) => void
+  /** Elimina varias recetas no publicadas. */
+  onDeleteMany: (recipes: Recipe[]) => Promise<boolean>
   onManageCategories: () => void
 }) {
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -78,7 +101,10 @@ export function RecipesTable({
   const [publication, setPublication] = React.useState<string>(DATA_TABLE_ALL)
   const [produces, setProduces] = React.useState<string>(DATA_TABLE_ALL)
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
-  const [viewMode, setViewMode] = React.useState<DataTableViewMode>("cards")
+  const [pendingBulkDelete, setPendingBulkDelete] = React.useState<Recipe[] | null>(
+    null
+  )
+  const [bulkBusy, setBulkBusy] = React.useState(false)
 
   const filtered = React.useMemo(() => {
     const term = globalFilter.trim().toLowerCase()
@@ -199,6 +225,30 @@ export function RecipesTable({
     setProduces(DATA_TABLE_ALL)
   }, [])
 
+  const requestBulkDelete = React.useCallback(() => {
+    if (selected.length === 0) return
+
+    if (selected.some((recipe) => recipe.itemId)) {
+      toast.error("Despublica las recetas publicadas antes de eliminarlas")
+      return
+    }
+
+    setPendingBulkDelete(selected)
+  }, [selected])
+
+  async function confirmBulkDelete() {
+    if (!pendingBulkDelete) return
+
+    setBulkBusy(true)
+    const ok = await onDeleteMany(pendingBulkDelete)
+    setBulkBusy(false)
+
+    if (ok) {
+      setPendingBulkDelete(null)
+      setRowSelection({})
+    }
+  }
+
   const columns = React.useMemo(
     () =>
       createRecipeColumns(
@@ -212,14 +262,15 @@ export function RecipesTable({
           canManage,
           isPending: () => false,
         },
-        { selectable: canManage }
+        { selectable: canManage, articles }
       ),
-    [onEdit, onPublish, onUnpublish, onProduce, onToggleActive, onDelete, canManage]
+    [onEdit, onPublish, onUnpublish, onProduce, onToggleActive, onDelete, canManage, articles]
   )
 
   return (
-    <DataTable
-      idPrefix="recipes"
+    <>
+      <DataTable
+        idPrefix="recipes"
       data={filtered}
       columns={columns}
       getRowId={(recipe) => recipe.id}
@@ -269,10 +320,22 @@ export function RecipesTable({
       filters={filters}
       activeFilterCount={activeFilterCount}
       onClearFilters={clearFilters}
+      selectionActions={
+        canManage && selectedCount > 0 ? (
+          <Button
+            variant="destructive"
+            onClick={requestBulkDelete}
+            disabled={bulkBusy}
+          >
+            <Trash2Icon />
+            {bulkBusy ? "Eliminando…" : `Eliminar ${selectedCount}`}
+          </Button>
+        ) : null
+      }
       showColumnToggle={canManage}
       columnLabels={RECIPE_COLUMN_LABELS}
       viewMode={viewMode}
-      onViewModeChange={setViewMode}
+      onViewModeChange={onViewModeChange}
       cardsView={(rows) => (
         <RecipeCards
           recipes={rows}
@@ -361,13 +424,13 @@ export function RecipesTable({
       )}
       emptyState={
         <div className="flex flex-col items-center gap-1 text-muted-foreground">
-          <FlaskConicalIcon className="size-6" />
+          <BlenderIcon className="size-6" />
           <p>Todavía no hay recetas. Crea la primera para empezar.</p>
         </div>
       }
       filteredEmptyState={
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <FlaskConicalIcon className="size-6" />
+          <BlenderIcon className="size-6" />
           <p>No hay recetas que coincidan con los filtros.</p>
           <Button variant="outline" size="sm" onClick={clearFilters}>
             <XIcon className="size-4" />
@@ -382,6 +445,40 @@ export function RecipesTable({
           {activeFilterCount > 0 ? " (filtradas)" : ""}.
         </>
       }
-    />
+      />
+
+      <AlertDialog
+        open={pendingBulkDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingBulkDelete(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              ¿Eliminar {pendingBulkDelete?.length ?? 0} recetas?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminarán definitivamente las recetas seleccionadas. Si alguna
+              está publicada como artículo, primero debes despublicarla. Esta
+              acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void confirmBulkDelete()}
+              disabled={bulkBusy}
+            >
+              {bulkBusy ? "Eliminando…" : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

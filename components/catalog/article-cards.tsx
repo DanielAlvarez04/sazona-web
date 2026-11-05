@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { PencilIcon, PowerIcon, UtensilsCrossedIcon } from "lucide-react"
+import { PencilIcon, PowerIcon, SoupIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -67,7 +67,7 @@ function FullArticleCard({
           <div className="absolute inset-0 bg-muted">
             {showFallback ? (
               <div className="flex size-full items-center justify-center text-muted-foreground">
-                <UtensilsCrossedIcon className="size-12" aria-hidden />
+                <SoupIcon className="size-12" aria-hidden />
                 <span className="sr-only">Sin imagen</span>
               </div>
             ) : (
