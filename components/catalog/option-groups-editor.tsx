@@ -245,6 +245,7 @@ export function OptionGroupsEditor({
   hideHeader = false,
   ingredients,
   effectsEnabled = false,
+  taxRate = "0",
 }: {
   /** Biblioteca de grupos de la organización. */
   library: OptionGroup[]
@@ -258,6 +259,8 @@ export function OptionGroupsEditor({
   ingredients?: Ingredient[]
   /** Solo se pueden configurar efectos si la receta está activa. */
   effectsEnabled?: boolean
+  /** Tasa de IVA aplicable al precio de las opciones (fracción). */
+  taxRate?: string
 }) {
   // Operación en curso contra la API (crear grupo u opción).
   const [pending, setPending] = React.useState<string | null>(null)
@@ -704,6 +707,7 @@ export function OptionGroupsEditor({
                 disabled={disabled}
                 ingredients={ingredients}
                 effectsEnabled={effectsEnabled}
+                taxRate={taxRate}
                 onUpdate={(changes) => updateGroup(group.groupId, changes)}
                 onUpdateValue={(valueKey, changes) =>
                   updateValue(group.groupId, valueKey, changes)
@@ -893,6 +897,7 @@ function SortableGroupCard({
   disabled,
   ingredients,
   effectsEnabled,
+  taxRate,
   onUpdate,
   onUpdateValue,
   onAddValue,
@@ -904,6 +909,7 @@ function SortableGroupCard({
   disabled?: boolean
   ingredients?: Ingredient[]
   effectsEnabled?: boolean
+  taxRate: string
   onUpdate: (changes: Partial<OptionGroupDraft>) => void
   onUpdateValue: (
     valueKey: string,
@@ -1149,6 +1155,7 @@ function SortableGroupCard({
                     disabled={disabled}
                     ingredients={ingredients}
                     effectsEnabled={effectsEnabled}
+                    taxRate={taxRate}
                     onUpdateValue={(changes) =>
                       onUpdateValue(item.key, changes)
                     }
@@ -1179,6 +1186,7 @@ function SortableOptionValue({
   onRemove,
   ingredients,
   effectsEnabled,
+  taxRate,
 }: {
   group: OptionGroupDraft
   item: OptionGroupDraftValue
@@ -1188,6 +1196,7 @@ function SortableOptionValue({
   onRemove: () => void
   ingredients?: Ingredient[]
   effectsEnabled?: boolean
+  taxRate: string
 }) {
   const {
     attributes,
@@ -1270,7 +1279,7 @@ function SortableOptionValue({
         </div>
       )}
 
-      {ingredients && effectsEnabled ? (
+      {ingredients && effectsEnabled && !noPrice ? (
         <Popover>
           <PopoverTrigger
             render={
@@ -1302,6 +1311,7 @@ function SortableOptionValue({
               effects={item.effects}
               priceDelta={item.priceDelta}
               ingredients={ingredients}
+              taxRate={taxRate}
               disabled={disabled}
               onChange={(effects) => onUpdateValue({ effects })}
             />

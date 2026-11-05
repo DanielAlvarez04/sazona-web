@@ -132,7 +132,6 @@ function FullRecipeCard({
                     <PresentationPreview
                       price={item.price}
                       variants={item.variants}
-                      costs={recipe.variantCosts}
                       compact
                       className="border-white/40 bg-black/30 text-white/90 hover:bg-black/45 hover:text-white"
                     />

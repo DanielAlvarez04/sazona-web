@@ -70,11 +70,13 @@ export function ArticlesTable({
   canManage,
   viewMode,
   onViewModeChange,
+  taxRate,
   onCreate,
   onEdit,
   onActivate,
   onDeactivate,
   onDelete,
+  onEditCombo,
   onManageCategories,
   onImportCsv,
 }: {
@@ -86,11 +88,15 @@ export function ArticlesTable({
   /** Vista compartida con la tab de Recetas. */
   viewMode: DataTableViewMode
   onViewModeChange: (mode: DataTableViewMode) => void
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
   onCreate: () => void
   onEdit: (article: ArticleListItem) => void
   onActivate: (article: ArticleListItem) => Promise<boolean>
   onDeactivate: (article: ArticleListItem) => Promise<boolean>
   onDelete: (articles: ArticleListItem[]) => Promise<boolean>
+  /** Abre el combo indicado para editarlo. */
+  onEditCombo: (comboId: string) => void
   onManageCategories: () => void
   onImportCsv: () => void
 }) {
@@ -224,10 +230,19 @@ export function ArticlesTable({
       onActivate,
       onDeactivate: requestDeactivate,
       onDelete: requestDelete,
+      onEditCombo,
       canManage,
       isPending: () => busy,
     }),
-    [onEdit, onActivate, requestDeactivate, requestDelete, canManage, busy]
+    [
+      onEdit,
+      onActivate,
+      requestDeactivate,
+      requestDelete,
+      onEditCombo,
+      canManage,
+      busy,
+    ]
   )
 
   const columns = React.useMemo(
@@ -235,8 +250,9 @@ export function ArticlesTable({
       createArticleColumns(actions, {
         selectable: canManage,
         recipes,
+        taxRate,
       }),
-    [actions, canManage, recipes]
+    [actions, canManage, recipes, taxRate]
   )
 
   async function confirmPendingAction() {

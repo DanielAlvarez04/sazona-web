@@ -33,6 +33,7 @@ import {
 import {
   formatMarginPercent,
   formatMoney,
+  priceWithoutTax,
   suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
@@ -43,6 +44,8 @@ import type { DataTableFeatures } from "@/components/data-table/data-table-featu
 import { IngredientsPreview } from "./ingredients-preview"
 import { PresentationPreview } from "./articles-columns"
 import { MenusCountBadge } from "./menus-count"
+import { ComboBadge } from "./combo-badge"
+import { costPercentClass, marginPercentClass } from "./metric-colors"
 
 const columnHelper = createColumnHelper<DataTableFeatures, Recipe>()
 
@@ -125,6 +128,8 @@ export interface RecipeRowActions {
   onProduce: (recipe: Recipe) => void
   onToggleActive: (recipe: Recipe) => void
   onDelete: (recipe: Recipe) => void
+  /** Abre el combo indicado para editarlo. */
+  onEditCombo: (comboId: string) => void
   canManage: boolean
   isPending: (recipe: Recipe) => boolean
 }
@@ -186,9 +191,11 @@ export function RecipeActionsMenu({
               Publicar como artículo
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => actions.onToggleActive(recipe)}>
-            {recipe.isActive ? "Desactivar" : "Activar"}
-          </DropdownMenuItem>
+          {recipe.isActive ? null : (
+            <DropdownMenuItem onClick={() => actions.onToggleActive(recipe)}>
+              Activar
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         {actions.canManage ? (
           <>
@@ -223,9 +230,9 @@ function recipePrice(article: ArticleListItem | null): number | null {
   return Number.isFinite(price) ? price : null
 }
 
-/** Precio sugerido: el costo ocupa el 35 % y deja un margen bruto del 65 %. */
-function recipeSuggestedPrice(recipe: Recipe): number | null {
-  return suggestedPriceFromCost(recipeCost(recipe))
+/** Precio sugerido: costo / 35 % más el IVA correspondiente. */
+function recipeSuggestedPrice(recipe: Recipe, taxRate: string): number | null {
+  return suggestedPriceFromCost(recipeCost(recipe), taxRate)
 }
 
 /**
@@ -234,21 +241,32 @@ function recipeSuggestedPrice(recipe: Recipe): number | null {
  */
 function recipePriceBasis(
   recipe: Recipe,
-  article: ArticleListItem | null
+  article: ArticleListItem | null,
+  taxRate: string
 ): number | null {
   const price = recipePrice(article)
   if (price !== null && price > 0) return price
 
-  const suggested = recipeSuggestedPrice(recipe)
+  const suggested = recipeSuggestedPrice(recipe, taxRate)
   return suggested !== null && suggested > 0 ? suggested : null
 }
 
-/** Margen en dinero: precio de referencia menos costo. */
+/** Precio sin IVA usado para costo % y margen. */
+function recipeNetPriceBasis(
+  recipe: Recipe,
+  article: ArticleListItem | null,
+  taxRate: string
+): number | null {
+  return priceWithoutTax(recipePriceBasis(recipe, article, taxRate), taxRate)
+}
+
+/** Margen en dinero: precio sin IVA menos costo. */
 function recipeMargin(
   recipe: Recipe,
-  article: ArticleListItem | null
+  article: ArticleListItem | null,
+  taxRate: string
 ): number | null {
-  const price = recipePriceBasis(recipe, article)
+  const price = recipeNetPriceBasis(recipe, article, taxRate)
   const cost = recipeCost(recipe)
   if (price === null || cost === null) return null
   return price - cost
@@ -276,7 +294,7 @@ const sortRecipesByName: SortFn<DataTableFeatures, Recipe> = (rowA, rowB) => {
  */
 export function createRecipeColumns(
   actions: RecipeRowActions,
-  options: { selectable: boolean; articles: ArticleListItem[] }
+  options: { selectable: boolean; articles: ArticleListItem[]; taxRate: string }
 ) {
   const articleById = new Map<string, ArticleListItem>()
   const articleByCatalogEntry = new Map<string, ArticleListItem>()
@@ -295,6 +313,9 @@ export function createRecipeColumns(
     }
     return null
   }
+
+  const taxRateFor = (recipe: Recipe) =>
+    articleForRecipe(recipe)?.taxRate ?? options.taxRate
 
   return columnHelper.columns([
     ...(options.selectable
@@ -350,14 +371,19 @@ export function createRecipeColumns(
               <PresentationPreview
                 price={article.price}
                 variants={article.variants}
-                costs={row.original.variantCosts}
                 compact
               />
             ) : null}
+            <ComboBadge
+              combos={article?.componentOf ?? []}
+              onEditCombo={actions.onEditCombo}
+            />
             {row.original.itemId ? (
               <Badge
+                variant="outline"
                 title="Publicada como artículo"
                 aria-label="Publicada como artículo"
+                className="h-5 border-primary/90 bg-primary/5 px-2 py-0.5 text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
               >
                 <SoupIcon />
               </Badge>
@@ -387,7 +413,7 @@ export function createRecipeColumns(
         const price = recipePrice(articleForRecipe(recipe))
         return price !== null && price > 0
           ? price
-          : recipeSuggestedPrice(recipe)
+          : recipeSuggestedPrice(recipe, taxRateFor(recipe))
       },
       {
         id: "price",
@@ -396,13 +422,16 @@ export function createRecipeColumns(
             title="Precio/Sugerido"
             column={column}
             align="right"
-            hint="Precio guardado del producto; si aún no tiene precio, el sugerido con un margen bruto del 65 %."
+            hint="Precio guardado del producto; si aún no tiene precio, el sugerido con margen bruto del 65 % e IVA incluido."
           />
         ),
         cell: ({ row }) => {
           const price = recipePrice(articleForRecipe(row.original))
           const hasPrice = price !== null && price > 0
-          const suggested = recipeSuggestedPrice(row.original)
+          const suggested = recipeSuggestedPrice(
+            row.original,
+            taxRateFor(row.original)
+          )
 
           return (
             <div
@@ -434,7 +463,16 @@ export function createRecipeColumns(
     ),
 
     columnHelper.accessor(
-      (recipe) => recipeCost(recipe),
+      (recipe) => {
+        const cost = recipeCost(recipe)
+        if (cost === null) return null
+        const netPrice = recipeNetPriceBasis(
+          recipe,
+          articleForRecipe(recipe),
+          taxRateFor(recipe)
+        )
+        return netPrice !== null && netPrice > 0 ? cost / netPrice : null
+      },
       {
         id: "cost",
         header: ({ column }) => (
@@ -442,7 +480,7 @@ export function createRecipeColumns(
             title="Costo ($/%)"
             column={column}
             align="right"
-            hint="Costo estimado del producto y su porcentaje sobre el precio de referencia."
+            hint="Costo estimado del producto y su porcentaje sobre el precio sin IVA."
           />
         ),
         cell: ({ row }) => {
@@ -451,17 +489,19 @@ export function createRecipeColumns(
             return <span className="block text-right">—</span>
           }
 
-          const price = recipePriceBasis(
+          const netPrice = recipeNetPriceBasis(
             row.original,
-            articleForRecipe(row.original)
+            articleForRecipe(row.original),
+            taxRateFor(row.original)
           )
-          const share = price !== null && price > 0 ? cost / price : null
+          const share =
+            netPrice !== null && netPrice > 0 ? cost / netPrice : null
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
               <span className="font-medium">{formatMoney(cost)}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">
+              <span className={costPercentClass(share)}>
                 {formatMarginPercent(share)}
               </span>
             </div>
@@ -472,7 +512,17 @@ export function createRecipeColumns(
     ),
 
     columnHelper.accessor(
-      (recipe) => recipeMargin(recipe, articleForRecipe(recipe)),
+      (recipe) => {
+        const article = articleForRecipe(recipe)
+        const margin = recipeMargin(recipe, article, taxRateFor(recipe))
+        const netPrice = recipeNetPriceBasis(
+          recipe,
+          article,
+          taxRateFor(recipe)
+        )
+        if (margin === null || netPrice === null || netPrice <= 0) return null
+        return margin / netPrice
+      },
       {
         id: "margin",
         header: ({ column }) => (
@@ -480,20 +530,22 @@ export function createRecipeColumns(
             title="Margen ($/%)"
             column={column}
             align="right"
-            hint="Diferencia entre el precio de referencia y el costo, y su margen bruto sobre el precio."
+            hint="Diferencia entre el precio sin IVA y el costo, y su margen bruto sobre el precio sin IVA."
           />
         ),
         cell: ({ row }) => {
           const margin = recipeMargin(
             row.original,
-            articleForRecipe(row.original)
+            articleForRecipe(row.original),
+            taxRateFor(row.original)
           )
-          const price = recipePriceBasis(
+          const netPrice = recipeNetPriceBasis(
             row.original,
-            articleForRecipe(row.original)
+            articleForRecipe(row.original),
+            taxRateFor(row.original)
           )
 
-          if (margin === null || price === null || price <= 0) {
+          if (margin === null || netPrice === null || netPrice <= 0) {
             return <span className="block text-right">—</span>
           }
 
@@ -508,13 +560,8 @@ export function createRecipeColumns(
                 {formatMoney(margin)}
               </span>
               <span className="text-muted-foreground">/</span>
-              <span
-                className={cn(
-                  "text-muted-foreground",
-                  margin < 0 && "text-destructive"
-                )}
-              >
-                {formatMarginPercent(margin / price)}
+              <span className={marginPercentClass(margin / netPrice)}>
+                {formatMarginPercent(margin / netPrice)}
               </span>
             </div>
           )

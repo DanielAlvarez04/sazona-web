@@ -86,6 +86,7 @@ export function ProductDetailView({
           product={product}
           library={optionGroups}
           presets={optionPresets}
+          taxRate={product.taxRate ?? organizationTaxRate}
           canManage={canManage}
         />
 

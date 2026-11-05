@@ -9,7 +9,6 @@ import {
   ChevronsUpDownIcon,
   ChevronUpIcon,
   EllipsisVerticalIcon,
-  GroupIcon,
   LayersIcon,
   NotebookTextIcon,
   PencilIcon,
@@ -38,6 +37,7 @@ import {
 import {
   formatMarginPercent,
   formatMoney,
+  priceWithoutTax,
   suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
@@ -48,6 +48,8 @@ import { cn } from "cn"
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
 import { IngredientsPreview } from "./ingredients-preview"
 import { MenusCountBadge } from "./menus-count"
+import { ComboBadge } from "./combo-badge"
+import { costPercentClass, marginPercentClass } from "./metric-colors"
 
 const columnHelper = createColumnHelper<DataTableFeatures, ArticleListItem>()
 
@@ -128,6 +130,8 @@ export interface ArticleRowActions {
   onActivate: (article: ArticleListItem) => void
   onDeactivate: (article: ArticleListItem) => void
   onDelete: (article: ArticleListItem) => void
+  /** Abre el combo indicado para editarlo. */
+  onEditCombo: (comboId: string) => void
   canManage: boolean
   isPending: (article: ArticleListItem) => boolean
 }
@@ -214,15 +218,12 @@ export function ArticleActionsMenu({
 export function PresentationPreview({
   price,
   variants: allVariants,
-  costs,
   compact = false,
   className,
 }: {
   /** Precio del artículo; las presentaciones se calculan con su ajuste. */
   price: string
   variants: Variant[]
-  /** Costo base de cada presentación; opcional. */
-  costs?: Array<{ variantId: string; estimatedCost: string | null }>
   /** En tarjetas: solo icono y número, sin la etiqueta de texto. */
   compact?: boolean
   /** Estilos extra del badge (p. ej. sobre una imagen oscura). */
@@ -279,9 +280,6 @@ export function PresentationPreview({
         <div className="flex flex-col gap-0.5">
           {variants.map((variant) => {
             const isPrimary = variant.id === primary.id
-            const cost = costs?.find(
-              (candidate) => candidate.variantId === variant.id
-            )?.estimatedCost
 
             return (
               <div
@@ -297,11 +295,6 @@ export function PresentationPreview({
                     {formatMoney(base + Number(variant.priceAdjust))}
                   </span>
                 </div>
-                {costs ? (
-                  <div className="text-right text-xs text-muted-foreground">
-                    {cost ? `Costo ${formatMoney(cost)}` : "Sin costo"}
-                  </div>
-                ) : null}
               </div>
             )
           })}
@@ -361,7 +354,7 @@ function articleRecipeCost(recipe: Recipe | null | undefined): number | null {
  */
 export function createArticleColumns(
   actions: ArticleRowActions,
-  options: { selectable: boolean; recipes: Recipe[] }
+  options: { selectable: boolean; recipes: Recipe[]; taxRate: string }
 ) {
   const recipeByItemId = buildRecipeMap(options.recipes)
 
@@ -410,7 +403,6 @@ export function createArticleColumns(
       cell: ({ row }) => {
         const hasRecipe =
           (row.original.recipes?.length ?? row.original._count.recipes) > 0
-        const recipe = recipeByItemId.get(row.original.id)
 
         return (
           <div className="flex items-center gap-1.5">
@@ -420,21 +412,20 @@ export function createArticleColumns(
             <PresentationPreview
               price={row.original.price}
               variants={row.original.variants}
-              costs={recipe?.variantCosts}
               compact
+            />
+            <ComboBadge
+              combos={row.original.componentOf ?? []}
+              onEditCombo={actions.onEditCombo}
             />
             {hasRecipe ? (
               <Badge
+                variant="outline"
                 title="Publicado desde una receta"
                 aria-label="Publicado desde una receta"
+                className="h-5 border-primary/90 bg-primary/5 px-2 py-0.5 text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
               >
                 <BlenderIcon />
-              </Badge>
-            ) : null}
-            {row.original.isCombo ? (
-              <Badge variant="secondary">
-                <GroupIcon data-icon="inline-start" />
-                Combo
               </Badge>
             ) : null}
             {row.original.isActive ? null : (
@@ -458,13 +449,16 @@ export function createArticleColumns(
           title="Precio/Sugerido"
           column={column}
           align="right"
-          hint="Precio del artículo y el precio sugerido a partir del costo, con un margen bruto del 65 %."
+          hint="Precio final del artículo y el sugerido a partir del costo, con margen bruto del 65 % e IVA incluido."
         />
       ),
       cell: ({ row }) => {
         const price = Number(row.original.price)
         const recipe = recipeByItemId.get(row.original.id)
-        const suggested = suggestedPriceFromCost(articleRecipeCost(recipe))
+        const suggested = suggestedPriceFromCost(
+          articleRecipeCost(recipe),
+          row.original.taxRate ?? options.taxRate
+        )
 
         return (
           <div
@@ -483,7 +477,15 @@ export function createArticleColumns(
     }),
 
     columnHelper.accessor(
-      (article) => articleRecipeCost(recipeByItemId.get(article.id)),
+      (article) => {
+        const cost = articleRecipeCost(recipeByItemId.get(article.id))
+        if (cost === null) return null
+        const netPrice = priceWithoutTax(
+          Number(article.price),
+          article.taxRate ?? options.taxRate
+        )
+        return netPrice !== null && netPrice > 0 ? cost / netPrice : null
+      },
       {
         id: "cost",
         header: ({ column }) => (
@@ -491,7 +493,7 @@ export function createArticleColumns(
             title="Costo ($/%)"
             column={column}
             align="right"
-            hint="Costo estimado del artículo a partir de su receta y su porcentaje sobre el precio."
+            hint="Costo estimado del artículo y su porcentaje sobre el precio sin IVA."
           />
         ),
         cell: ({ row }) => {
@@ -500,14 +502,17 @@ export function createArticleColumns(
             return <span className="block text-right">—</span>
           }
 
-          const price = Number(row.original.price)
-          const share = price > 0 ? cost / price : null
+          const netPrice = priceWithoutTax(
+            Number(row.original.price),
+            row.original.taxRate ?? options.taxRate
+          )
+          const share = netPrice !== null && netPrice > 0 ? cost / netPrice : null
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
               <span className="font-medium">{formatMoney(cost)}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">
+              <span className={costPercentClass(share)}>
                 {formatMarginPercent(share)}
               </span>
             </div>
@@ -521,7 +526,12 @@ export function createArticleColumns(
       (article) => {
         const cost = articleRecipeCost(recipeByItemId.get(article.id))
         if (cost === null) return null
-        return Number(article.price) - cost
+        const netPrice = priceWithoutTax(
+          Number(article.price),
+          article.taxRate ?? options.taxRate
+        )
+        if (netPrice === null || netPrice <= 0) return null
+        return (netPrice - cost) / netPrice
       },
       {
         id: "margin",
@@ -530,18 +540,21 @@ export function createArticleColumns(
             title="Margen ($/%)"
             column={column}
             align="right"
-            hint="Diferencia entre el precio del artículo y su costo, y su margen bruto sobre el precio."
+            hint="Diferencia entre el precio sin IVA y el costo, y su margen bruto sobre el precio sin IVA."
           />
         ),
         cell: ({ row }) => {
-          const price = Number(row.original.price)
           const cost = articleRecipeCost(recipeByItemId.get(row.original.id))
+          const netPrice = priceWithoutTax(
+            Number(row.original.price),
+            row.original.taxRate ?? options.taxRate
+          )
 
-          if (cost === null || price <= 0) {
+          if (cost === null || netPrice === null || netPrice <= 0) {
             return <span className="block text-right">—</span>
           }
 
-          const margin = price - cost
+          const margin = netPrice - cost
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
@@ -554,13 +567,8 @@ export function createArticleColumns(
                 {formatMoney(margin)}
               </span>
               <span className="text-muted-foreground">/</span>
-              <span
-                className={cn(
-                  "text-muted-foreground",
-                  margin < 0 && "text-destructive"
-                )}
-              >
-                {formatMarginPercent(margin / price)}
+              <span className={marginPercentClass(margin / netPrice)}>
+                {formatMarginPercent(margin / netPrice)}
               </span>
             </div>
           )

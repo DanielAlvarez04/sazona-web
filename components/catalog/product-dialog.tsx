@@ -311,6 +311,7 @@ export function ProductDialog({
   ingredients,
   optionGroups,
   optionPresets,
+  taxRate,
   onSaved,
 }: {
   open: boolean
@@ -324,6 +325,8 @@ export function ProductDialog({
   ingredients: Ingredient[]
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
   /** Se llama tras crear un producto, para abrir el tab donde aparece. */
   onSaved?: (saveAs: ProductSaveAs) => void
 }) {
@@ -1535,6 +1538,18 @@ export function ProductDialog({
         ? "Se guardará como receta y aparecerá en Recetas. Las presentaciones y opciones que configures se conservan para cuando la publiques como artículo."
         : "Se venderá en el punto de venta y podrá usarse en menús. Si activas los insumos de la receta, también aparecerá en Recetas."
 
+  const entityLabel =
+    saveAs === "article"
+      ? "artículo"
+      : saveAs === "recipe"
+        ? "receta"
+        : "insumo";
+  const dialogTitle = isNew
+    ? saveAs === "recipe"
+      ? `Nueva ${entityLabel}`
+      : `Nuevo ${entityLabel}`
+    : `Editar ${entityLabel}`;
+
   const saveLabel = `${isNew ? "Crear" : "Guardar"} ${
     saveAs === "article"
       ? "artículo"
@@ -1622,9 +1637,7 @@ export function ProductDialog({
         <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
           <div className="grid gap-6">
         <DialogHeader>
-          <DialogTitle>
-            {isNew ? "Nuevo producto" : "Editar producto"}
-          </DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{descriptionText}</DialogDescription>
         </DialogHeader>
 
@@ -2079,6 +2092,7 @@ export function ProductDialog({
                       onChange={setGroups}
                       disabled={form.pending}
                       ingredients={ingredients}
+                      taxRate={article?.taxRate ?? taxRate}
                       effectsEnabled={effectiveRecipeEnabled}
                       hideHeader
                     />

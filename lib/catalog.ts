@@ -365,6 +365,11 @@ export interface ItemListItem {
   promotions?: ComboPromotion[]
   /** Componentes del combo (solo combos). */
   comboComponents?: ComboComponent[]
+  /** Combos que usan este artículo como componente. */
+  componentOf?: Array<{
+    id: string
+    combo: { id: string; name: string; isActive: boolean }
+  }>
   recipes?: Array<{
     id: string
     name: string
@@ -667,9 +672,29 @@ export function formatMoney(value: string | number): string {
 export const SUGGESTED_COST_SHARE = 0.35
 
 /** Precio sugerido a partir del costo, con un margen bruto del 65 %. */
-export function suggestedPriceFromCost(cost: number | null): number | null {
+export function suggestedPriceFromCost(
+  cost: number | null,
+  taxRate: string | number = 0
+): number | null {
   if (cost === null || !Number.isFinite(cost)) return null
-  return cost / SUGGESTED_COST_SHARE
+
+  const rate = Number(taxRate)
+  const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 0
+
+  return (cost / SUGGESTED_COST_SHARE) * (1 + safeRate)
+}
+
+/** Quita el IVA a un precio final para obtener el precio neto. */
+export function priceWithoutTax(
+  price: number | null,
+  taxRate: string | number = 0
+): number | null {
+  if (price === null || !Number.isFinite(price)) return null
+
+  const rate = Number(taxRate)
+  const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 0
+
+  return price / (1 + safeRate)
 }
 
 export function formatQuantity(value: string | number): string {

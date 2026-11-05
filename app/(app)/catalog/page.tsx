@@ -107,6 +107,7 @@ export default async function CatalogPage() {
       }
       canManage={canManageCatalog(user.roles)}
       branch={branch}
+      taxRate={user.organizationTaxRate}
     />
   )
 }

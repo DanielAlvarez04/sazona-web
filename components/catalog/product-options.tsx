@@ -33,11 +33,13 @@ export function ProductOptions({
   product,
   library,
   presets,
+  taxRate,
   canManage,
 }: {
   product: ItemDetail
   library: OptionGroup[]
   presets: OptionGroupPreset[]
+  taxRate: string
   canManage: boolean
 }) {
   const router = useRouter()
@@ -95,6 +97,7 @@ export function ProductOptions({
           value={groups}
           onChange={setGroups}
           disabled={!canManage || form.pending}
+          taxRate={taxRate}
         />
 
         {canManage ? (

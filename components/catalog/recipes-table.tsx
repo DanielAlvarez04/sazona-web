@@ -66,6 +66,7 @@ export function RecipesTable({
   canManage,
   viewMode,
   onViewModeChange,
+  taxRate,
   onCreate,
   onEdit,
   onPublish,
@@ -74,6 +75,7 @@ export function RecipesTable({
   onToggleActive,
   onDelete,
   onDeleteMany,
+  onEditCombo,
   onManageCategories,
 }: {
   recipes: Recipe[]
@@ -84,6 +86,8 @@ export function RecipesTable({
   /** Vista compartida con la tab de Artículos. */
   viewMode: DataTableViewMode
   onViewModeChange: (mode: DataTableViewMode) => void
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
   onCreate: () => void
   onEdit: (recipe: Recipe) => void
   onPublish: (recipe: Recipe) => void
@@ -93,6 +97,8 @@ export function RecipesTable({
   onDelete: (recipe: Recipe) => void
   /** Elimina varias recetas no publicadas. */
   onDeleteMany: (recipes: Recipe[]) => Promise<boolean>
+  /** Abre el combo indicado para editarlo. */
+  onEditCombo: (comboId: string) => void
   onManageCategories: () => void
 }) {
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -259,12 +265,24 @@ export function RecipesTable({
           onProduce,
           onToggleActive,
           onDelete,
+          onEditCombo,
           canManage,
           isPending: () => false,
         },
-        { selectable: canManage, articles }
+        { selectable: canManage, articles, taxRate }
       ),
-    [onEdit, onPublish, onUnpublish, onProduce, onToggleActive, onDelete, canManage, articles]
+    [
+      onEdit,
+      onPublish,
+      onUnpublish,
+      onProduce,
+      onToggleActive,
+      onDelete,
+      onEditCombo,
+      canManage,
+      articles,
+      taxRate,
+    ]
   )
 
   return (
@@ -346,6 +364,7 @@ export function RecipesTable({
             onProduce,
             onToggleActive,
             onDelete,
+            onEditCombo,
             canManage,
             isPending: () => false,
           }}

@@ -21,6 +21,7 @@ import {
 import {
   convertUnitValue,
   formatMoney,
+  priceWithoutTax,
   unitsOfDimension,
   type Ingredient,
   type OptionEffect,
@@ -37,12 +38,15 @@ export function OptionValueEffects({
   effects,
   priceDelta,
   ingredients,
+  taxRate = "0",
   disabled,
   onChange,
 }: {
   effects: OptionEffect[]
   priceDelta: string
   ingredients?: Ingredient[]
+  /** Tasa de IVA aplicable al precio de la opción (fracción). */
+  taxRate?: string
   disabled?: boolean
   onChange: (effects: OptionEffect[]) => void
 }) {
@@ -101,6 +105,7 @@ export function OptionValueEffects({
   }, 0)
 
   const delta = Number(priceDelta) || 0
+  const netDelta = priceWithoutTax(delta, taxRate) ?? delta
 
   return (
     <div className="flex flex-col gap-2">
@@ -265,7 +270,7 @@ export function OptionValueEffects({
         <span>
           Costo insumos {effectCost > 0 ? formatMoney(effectCost) : "—"}
         </span>
-        <span>Margen {formatMoney(delta - effectCost)}</span>
+        <span>Margen {formatMoney(netDelta - effectCost)}</span>
       </div>
     </div>
   )

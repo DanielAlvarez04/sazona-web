@@ -33,7 +33,7 @@ import { ImportDialog } from "@/components/catalog/import-dialog"
 import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
-import type { DataTableViewMode } from "@/components/data-table/data-table"
+import { usePersistentViewMode } from "@/hooks/use-persistent-view-mode"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +69,7 @@ export function CatalogClient({
   optionPresets,
   canManage,
   branch,
+  taxRate,
 }: {
   recipes: Recipe[]
   articles: ArticleListItem[]
@@ -80,6 +81,8 @@ export function CatalogClient({
   optionPresets: OptionGroupPreset[]
   canManage: boolean
   branch: Branch | null
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
 }) {
   const router = useRouter()
   const rowForm = useActionForm(() => router.refresh())
@@ -89,9 +92,9 @@ export function CatalogClient({
   const regularArticles = visibleArticles.filter((article) => !article.isCombo)
 
   const [tab, setTab] = useState("articulos")
-  // El modo de vista se comparte entre las tablas de Artículos y Recetas para
-  // que cambiar de tab no reinicie la preferencia.
-  const [viewMode, setViewMode] = useState<DataTableViewMode>("cards")
+  // El modo de vista se comparte entre Artículos y Recetas y se persiste entre
+  // recargas para no tener que cambiarlo manualmente cada vez.
+  const [viewMode, setViewMode] = usePersistentViewMode()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [initialSaveAs, setInitialSaveAs] =
     useState<ProductSaveAs>("article")
@@ -100,6 +103,8 @@ export function CatalogClient({
   )
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
   const [producing, setProducing] = useState<Recipe | null>(null)
+  // Combo que se quiere abrir desde el badge de combos de una tabla.
+  const [comboToEdit, setComboToEdit] = useState<string | null>(null)
 
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -294,7 +299,12 @@ export function CatalogClient({
 
         <TabsContent value="articulos" keepMounted>
           <div className="flex flex-col gap-4">
-            <CatalogSummary mode="articles" recipes={recipes} articles={regularArticles} />
+            <CatalogSummary
+              mode="articles"
+              recipes={recipes}
+              articles={regularArticles}
+              taxRate={taxRate}
+            />
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {rowForm.error}
@@ -307,11 +317,13 @@ export function CatalogClient({
               canManage={canManage}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              taxRate={taxRate}
               onCreate={() => openNewProduct("article")}
               onEdit={openArticle}
               onActivate={handleActivateArticle}
               onDeactivate={handleDeactivateArticle}
               onDelete={handleDeleteArticles}
+              onEditCombo={canManage ? setComboToEdit : () => {}}
               onManageCategories={() => setCategoriesOpen(true)}
               onImportCsv={() => setImportOpen(true)}
             />
@@ -323,7 +335,8 @@ export function CatalogClient({
             <CatalogSummary
               mode="recipes"
               recipes={recipes}
-              articles={visibleArticles}
+              articles={articles}
+              taxRate={taxRate}
             />
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
@@ -337,6 +350,7 @@ export function CatalogClient({
               canManage={canManage}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              taxRate={taxRate}
               onCreate={() => openNewProduct("recipe")}
               onEdit={(recipe) => openRecipe(recipe)}
               onPublish={(recipe) => openRecipe(recipe, true)}
@@ -345,6 +359,7 @@ export function CatalogClient({
               onToggleActive={toggleRecipeActive}
               onDelete={handleDeleteRecipe}
               onDeleteMany={handleDeleteRecipes}
+              onEditCombo={canManage ? setComboToEdit : () => {}}
               onManageCategories={() => setCategoriesOpen(true)}
             />
           </div>
@@ -361,6 +376,9 @@ export function CatalogClient({
             onActivate={handleActivateArticle}
             onDeactivate={handleDeactivateArticle}
             onDelete={handleDeleteArticles}
+            taxRate={taxRate}
+            editRequestId={comboToEdit}
+            onEditRequestHandled={() => setComboToEdit(null)}
           />
         </TabsContent>
 
@@ -388,6 +406,7 @@ export function CatalogClient({
           ingredients={ingredients}
           optionGroups={optionGroups}
           optionPresets={optionPresets}
+          taxRate={taxRate}
           onSaved={(saveAs) =>
             setTab(saveAs === "article" ? "articulos" : "recetas")
           }

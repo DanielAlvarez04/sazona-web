@@ -7,7 +7,7 @@ import {
   PackageIcon,
   PercentIcon,
   SoupIcon,
-  TagsIcon,
+  UtensilsCrossedIcon,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +21,8 @@ import {
 import {
   formatMarginPercent,
   formatMoney,
+  priceWithoutTax,
+  suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
 } from "@/lib/catalog"
@@ -30,10 +32,13 @@ export function CatalogSummary({
   mode,
   recipes,
   articles,
+  taxRate,
 }: {
   mode: "recipes" | "articles"
   recipes: Recipe[]
   articles: ArticleListItem[]
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
 }) {
   const metrics = React.useMemo(() => {
     const activeRecipes = recipes.filter((recipe) => recipe.isActive)
@@ -49,6 +54,42 @@ export function CatalogSummary({
             0
           ) / withCost.length
         : null
+
+    const articleById = new Map(
+      articles.map((article) => [article.id, article])
+    )
+    const articleByCatalogEntry = new Map(
+      articles
+        .filter((article) => article.catalogEntryId)
+        .map((article) => [article.catalogEntryId as string, article])
+    )
+
+    let totalCost = 0
+    let totalCostNetPrice = 0
+
+    for (const recipe of withCost) {
+      const cost = Number(recipe.estimatedCost)
+      const article = recipe.itemId
+        ? (articleById.get(recipe.itemId) ?? null)
+        : recipe.catalogEntryId
+          ? (articleByCatalogEntry.get(recipe.catalogEntryId) ?? null)
+          : null
+      const rate = article?.taxRate ?? taxRate
+      const actualPrice = article ? Number(article.price) : null
+      const finalPrice =
+        actualPrice !== null && actualPrice > 0
+          ? actualPrice
+          : suggestedPriceFromCost(cost, rate)
+      const netPrice = priceWithoutTax(finalPrice, rate)
+
+      if (netPrice === null || netPrice <= 0) continue
+
+      totalCost += cost
+      totalCostNetPrice += netPrice
+    }
+
+    const averageCostPercent =
+      totalCostNetPrice > 0 ? totalCost / totalCostNetPrice : null
 
     const activeArticles = articles.filter((article) => article.isActive)
     const withRecipe = articles.filter(
@@ -72,6 +113,7 @@ export function CatalogSummary({
         const recipe = costByProduct.get(article.id)
         if (!recipe) return []
 
+        const articleTaxRate = article.taxRate ?? taxRate
         const variants = article.variants.filter((variant) => variant.isActive)
         const costByVariant = new Map(
           (recipe.variantCosts ?? []).map((cost) => [
@@ -82,12 +124,15 @@ export function CatalogSummary({
 
         if (variants.length === 0) {
           if (recipe.estimatedCost === null) return []
-          const price = Number(article.price)
-          if (price <= 0) return []
+          const netPrice = priceWithoutTax(
+            Number(article.price),
+            articleTaxRate
+          )
+          if (netPrice === null || netPrice <= 0) return []
           return [
             {
-              price,
-              amount: price - Number(recipe.estimatedCost),
+              price: netPrice,
+              amount: netPrice - Number(recipe.estimatedCost),
             },
           ]
         }
@@ -96,9 +141,12 @@ export function CatalogSummary({
           const cost =
             costByVariant.get(variant.id) ?? recipe.estimatedCost
           if (cost === null || cost === undefined) return []
-          const price = Number(article.price) + Number(variant.priceAdjust)
-          if (price <= 0) return []
-          return [{ price, amount: price - Number(cost) }]
+          const netPrice = priceWithoutTax(
+            Number(article.price) + Number(variant.priceAdjust),
+            articleTaxRate
+          )
+          if (netPrice === null || netPrice <= 0) return []
+          return [{ price: netPrice, amount: netPrice - Number(cost) }]
         })
       })
 
@@ -125,6 +173,7 @@ export function CatalogSummary({
       standalone: recipes.length - published.length,
       produces: produces.length,
       averageCost,
+      averageCostPercent,
       activeArticles: activeArticles.length,
       inactiveArticles: articles.length - activeArticles.length,
       withRecipe: withRecipe.length,
@@ -132,7 +181,7 @@ export function CatalogSummary({
       averageMargin,
       averageMarginPercent,
     }
-  }, [recipes, articles])
+  }, [recipes, articles, taxRate])
 
   if (mode === "recipes") {
     return (
@@ -193,14 +242,19 @@ export function CatalogSummary({
               <CircleDollarSignIcon className="size-4" />
               Costo promedio
             </CardDescription>
-            <CardTitle className="text-2xl tabular-nums">
+            <CardTitle className="flex items-center gap-2 text-xl tabular-nums">
               {metrics.averageCost === null
                 ? "—"
                 : formatMoney(metrics.averageCost)}
+              <Separator orientation="vertical" className="h-5 self-center" />
+              {metrics.averageCostPercent === null
+                ? "—"
+                : formatMarginPercent(metrics.averageCostPercent)}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            Insumos default con costo registrado.
+            Insumos default con costo registrado y porcentaje sobre el precio
+            sin IVA.
           </CardContent>
         </Card>
       </div>
@@ -247,7 +301,7 @@ export function CatalogSummary({
       <Card size="sm">
         <CardHeader className="pb-2">
           <CardDescription className="flex items-center gap-1.5">
-            <TagsIcon className="size-4" />
+            <UtensilsCrossedIcon className="size-4" />
             Sin receta
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">
@@ -276,7 +330,7 @@ export function CatalogSummary({
           </CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
-          Precio menos costo de cada presentación, promedio ponderado.
+          Precio sin IVA menos costo de cada presentación, promedio ponderado.
         </CardContent>
       </Card>
     </div>

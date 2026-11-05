@@ -148,6 +148,9 @@ export function CombosPanel({
   onActivate,
   onDeactivate,
   onDelete,
+  taxRate,
+  editRequestId,
+  onEditRequestHandled,
 }: {
   combos: ArticleListItem[]
   products: ItemListItem[]
@@ -155,12 +158,23 @@ export function CombosPanel({
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
   canManage: boolean
+  /** Tasa de IVA por defecto de la organización (fracción). */
+  taxRate: string
   onActivate: (combo: ArticleListItem) => Promise<boolean>
   onDeactivate: (combo: ArticleListItem) => Promise<boolean>
   onDelete: (combos: ArticleListItem[]) => Promise<boolean>
+  /** Combo que se debe abrir para editar (desde el badge de combos). */
+  editRequestId?: string | null
+  onEditRequestHandled?: () => void
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ArticleListItem | null>(null)
+
+  const requestedCombo = editRequestId
+    ? (combos.find((row) => row.id === editRequestId) ?? null)
+    : null
+  const activeCombo = requestedCombo ?? editing
+  const isDialogOpen = dialogOpen || Boolean(requestedCombo)
 
   function openNew() {
     setEditing(null)
@@ -323,14 +337,19 @@ export function CombosPanel({
         </CardContent>
       </Card>
 
-      {dialogOpen && canManage ? (
+      {isDialogOpen && canManage ? (
         <ComboDialog
-          combo={editing}
+          combo={activeCombo}
           products={products}
           categories={categories}
           optionGroups={optionGroups}
           optionPresets={optionPresets}
-          onClose={() => setDialogOpen(false)}
+          taxRate={taxRate}
+          onClose={() => {
+            setDialogOpen(false)
+            setEditing(null)
+            onEditRequestHandled?.()
+          }}
         />
       ) : null}
     </div>
@@ -343,6 +362,7 @@ function ComboDialog({
   categories,
   optionGroups,
   optionPresets,
+  taxRate,
   onClose,
 }: {
   combo: ArticleListItem | null
@@ -350,6 +370,7 @@ function ComboDialog({
   categories: Category[]
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
+  taxRate: string
   onClose: () => void
 }) {
   const router = useRouter()
@@ -796,6 +817,7 @@ function ComboDialog({
             value={groups}
             onChange={setGroups}
             disabled={form.pending}
+            taxRate={combo?.taxRate ?? taxRate}
           />
 
           <Separator />
