@@ -18,11 +18,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import {
+  GripVerticalIcon,
+  ImageIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { scrollAncestorToBottom } from "@/lib/scroll"
 import { PRESENTATION_PRESETS } from "@/lib/catalog"
+import { IMAGE_ACCEPT, validateImageFile } from "@/lib/uploads"
 import {
   InputGroup,
   InputGroupAddon,
@@ -49,6 +57,13 @@ export interface PresentationRow {
   linkedName: boolean
   /** Id de la presentación ya guardada; ausente en borradores nuevos. */
   variantId?: string
+  /** Imagen propia ya guardada (null = usa la imagen base del artículo). */
+  imageKey: string | null
+  imageUrl: string | null
+  /** Archivo elegido en esta sesión; se sube al guardar. */
+  imageFile: File | null
+  /** Preview local del archivo pendiente. */
+  imagePreviewUrl: string | null
 }
 
 let presentationCounter = 0
@@ -68,6 +83,10 @@ export function createPresentationRow(
     recipeFactor: "1",
     isPrimary: false,
     linkedName: false,
+    imageKey: null,
+    imageUrl: null,
+    imageFile: null,
+    imagePreviewUrl: null,
     ...overrides,
   }
 }
@@ -108,6 +127,7 @@ export function PresentationRows({
   mode,
   onModeChange,
   showRecipeFactor,
+  fallbackImageUrl,
   disabled = false,
 }: {
   rows: PresentationRow[]
@@ -120,6 +140,8 @@ export function PresentationRows({
   onModeChange: (mode: PresentationMode) => void
   /** El switch de receta está activo: muestra el factor editable. */
   showRecipeFactor: boolean
+  /** Imagen base del artículo, usada cuando la presentación no tiene una. */
+  fallbackImageUrl: string | null
   disabled?: boolean
 }) {
   const sensors = useSensors(
@@ -131,6 +153,20 @@ export function PresentationRows({
   const addRowRef = React.useRef<HTMLDivElement>(null)
   /** Nº de filas del render anterior, para detectar cuándo se añadió una. */
   const previousRowCount = React.useRef(rows.length)
+  /** Filas actuales para liberar las previews al desmontar el diálogo. */
+  const rowsRef = React.useRef(rows)
+
+  React.useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
+
+  React.useEffect(() => {
+    return () => {
+      for (const row of rowsRef.current) {
+        if (row.imagePreviewUrl) URL.revokeObjectURL(row.imagePreviewUrl)
+      }
+    }
+  }, [])
 
   // El diálogo tiene scroll propio: al añadir una fila se baja hasta el final
   // del contenedor para que la fila nueva y el footer queden siempre visibles,
@@ -177,6 +213,12 @@ export function PresentationRows({
   }
 
   function remove(key: string) {
+    const target = rows.find((row) => row.key === key)
+
+    if (target?.imagePreviewUrl) {
+      URL.revokeObjectURL(target.imagePreviewUrl)
+    }
+
     const next = rows.filter((row) => row.key !== key)
 
     if (next.length > 0 && !next.some((row) => row.isPrimary)) {
@@ -277,6 +319,7 @@ export function PresentationRows({
                 onChange={onChange}
                 onRemove={remove}
                 showFactor={showFactor}
+                fallbackImageUrl={fallbackImageUrl}
                 disabled={disabled}
               />
             ))}
@@ -299,8 +342,105 @@ export function PresentationRows({
 
       <p className="text-xs text-muted-foreground">
         Arrastra con el asa para cambiar el orden: así se mostrarán en el menú.
-        La marcada es la presentación principal.
+        La marcada es la presentación principal. La imagen de cada presentación
+        es opcional: si no tiene, se usa la imagen del artículo. Si cambias o
+        quitas la imagen del artículo, la principal conserva la anterior.
       </p>
+    </div>
+  )
+}
+
+/** Miniatura de la imagen propia de una presentación. */
+function PresentationImageButton({
+  row,
+  fallbackUrl,
+  disabled,
+  onSelect,
+  onRemove,
+}: {
+  row: PresentationRow
+  fallbackUrl: string | null
+  disabled: boolean
+  onSelect: (file: File) => void
+  onRemove: () => void
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const ownUrl = row.imagePreviewUrl ?? row.imageUrl
+  const src = ownUrl ?? fallbackUrl
+  const inherited = !ownUrl && Boolean(fallbackUrl)
+  const hasOwn = Boolean(ownUrl)
+  const label = row.name.trim() || "esta presentación"
+
+  function handleFile(file: File | null | undefined) {
+    if (!file || disabled) return
+
+    const problem = validateImageFile(file)
+    if (problem) {
+      toast.error(problem)
+      return
+    }
+
+    onSelect(file)
+  }
+
+  return (
+    <div className="relative size-9 shrink-0">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={`${hasOwn ? "Reemplazar" : "Agregar"} imagen de ${label}`}
+        title={`${hasOwn ? "Reemplazar" : "Agregar"} imagen de ${label}`}
+        onClick={() => inputRef.current?.click()}
+        className={cn(
+          "relative flex size-9 items-center justify-center overflow-hidden rounded-md border bg-muted transition-colors hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          inherited && "border-dashed",
+          disabled && "cursor-not-allowed opacity-60"
+        )}
+      >
+        {src ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={src}
+            alt=""
+            className={cn(
+              "size-full object-cover",
+              inherited && "opacity-70"
+            )}
+          />
+        ) : (
+          <ImageIcon className="size-4 text-muted-foreground" />
+        )}
+        {inherited ? (
+          <span className="absolute inset-x-0 bottom-0 bg-background/85 text-center text-[8px] font-medium text-muted-foreground">
+            Base
+          </span>
+        ) : null}
+      </button>
+
+      {hasOwn ? (
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label={`Quitar imagen de ${label}`}
+          title={`Quitar imagen de ${label}`}
+          onClick={onRemove}
+          className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-destructive focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <XIcon className="size-2.5" />
+        </button>
+      ) : null}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        className="sr-only"
+        disabled={disabled}
+        onChange={(event) => {
+          handleFile(event.target.files?.[0])
+          event.target.value = ""
+        }}
+      />
     </div>
   )
 }
@@ -315,6 +455,7 @@ function SortablePresentationRow({
   onChange,
   onRemove,
   showFactor,
+  fallbackImageUrl,
   disabled,
 }: {
   row: PresentationRow
@@ -326,6 +467,7 @@ function SortablePresentationRow({
   onChange: (rows: PresentationRow[]) => void
   onRemove: (key: string) => void
   showFactor: boolean
+  fallbackImageUrl: string | null
   disabled: boolean
 }) {
   const {
@@ -348,6 +490,26 @@ function SortablePresentationRow({
         candidate.key === row.key ? { ...candidate, ...changes } : candidate
       )
     )
+  }
+
+  function selectImage(file: File) {
+    if (row.imagePreviewUrl) URL.revokeObjectURL(row.imagePreviewUrl)
+
+    update({
+      imageFile: file,
+      imagePreviewUrl: URL.createObjectURL(file),
+    })
+  }
+
+  function removeImage() {
+    if (row.imagePreviewUrl) URL.revokeObjectURL(row.imagePreviewUrl)
+
+    update({
+      imageFile: null,
+      imagePreviewUrl: null,
+      imageKey: null,
+      imageUrl: null,
+    })
   }
 
   const suggestedName = `${articleName.trim() || "Artículo"} #${index + 1}`
@@ -385,6 +547,13 @@ function SortablePresentationRow({
       />
 
       <div className="flex min-w-0 items-center gap-1.5">
+        <PresentationImageButton
+          row={row}
+          fallbackUrl={fallbackImageUrl}
+          disabled={disabled}
+          onSelect={selectImage}
+          onRemove={removeImage}
+        />
         <Input
           aria-label="Nombre de la presentación"
           value={row.name}

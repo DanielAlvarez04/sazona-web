@@ -24,6 +24,7 @@ import {
   updateArticle,
   updateArticleImage,
   updateRecipe,
+  updateVariant,
   type ArticleInput,
   type ComboComponentInput,
   type ComboPromotionInput,
@@ -123,7 +124,11 @@ import type {
   UnitCode,
 } from "@/lib/catalog"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
-import { uploadItemImage, uploadRecipeImage } from "@/lib/uploads"
+import {
+  uploadItemImage,
+  uploadRecipeImage,
+  uploadVariantImage,
+} from "@/lib/uploads"
 
 /** Imagen del diálogo: la guardada en R2 o un archivo local sin subir. */
 type DialogImage =
@@ -213,6 +218,10 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
       isPrimary: index === primaryIndex,
       linkedName: false,
       variantId: variant.id,
+      imageKey: variant.imageKey,
+      imageUrl: variant.imageUrl,
+      imageFile: null,
+      imagePreviewUrl: null,
     }
   })
 }
@@ -1355,6 +1364,7 @@ export function ProductDialog({
             : 1
 
         variants.push({
+          ...(row.variantId ? { id: row.variantId } : {}),
           name: rowName,
           priceAdjust: round2(rowPrice - priceBase),
           recipeFactor,
@@ -1928,6 +1938,62 @@ export function ProductDialog({
 
         if (!saved.ok) return saved
         changed = true
+      }
+
+      // -------------------------------------------------------------------
+      // Imágenes propias de cada presentación.
+      // -------------------------------------------------------------------
+      if (multiple && itemId && rows.length > 0) {
+        const activeVariants = articleVariants.filter(
+          (variant) => variant.isActive
+        )
+
+        for (const [index, row] of rows.entries()) {
+          const variant = row.variantId
+            ? (activeVariants.find(
+                (candidate) => candidate.id === row.variantId
+              ) ?? activeVariants[index])
+            : activeVariants[index]
+
+          if (!variant) continue
+
+          if (row.imageFile) {
+            const uploaded = await uploadVariantImage(
+              itemId,
+              variant.id,
+              row.imageFile
+            )
+
+            if (!uploaded.ok) {
+              imageWarning = [
+                imageWarning,
+                uploaded.message ??
+                  `No se pudo subir la imagen de «${row.name.trim() || "la presentación"}».`,
+              ]
+                .filter(Boolean)
+                .join(" ")
+              continue
+            }
+
+            const saved = await updateVariant(itemId, variant.id, {
+              imageKey: uploaded.key ?? null,
+            })
+
+            if (!saved.ok) return saved
+            changed = true
+            continue
+          }
+
+          // Imagen quitada: el PATCH la limpia (y borra el objeto anterior).
+          if ((row.imageKey ?? null) !== (variant.imageKey ?? null)) {
+            const saved = await updateVariant(itemId, variant.id, {
+              imageKey: row.imageKey ?? null,
+            })
+
+            if (!saved.ok) return saved
+            changed = true
+          }
+        }
       }
 
       if (imageWarning) {
@@ -2614,6 +2680,7 @@ export function ProductDialog({
                       mode={presentationMode}
                       onModeChange={handlePresentationModeChange}
                       showRecipeFactor={effectiveRecipeEnabled}
+                      fallbackImageUrl={image?.url ?? null}
                       disabled={form.pending}
                     />
                   ) : null}

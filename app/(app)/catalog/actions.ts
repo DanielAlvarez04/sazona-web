@@ -151,6 +151,8 @@ export interface VariantUpdateInput {
   priceAdjust?: number
   recipeFactor?: number
   isActive?: boolean
+  /** Clave en R2; `null` quita la imagen propia de la presentación. */
+  imageKey?: string | null
 }
 
 export async function updateVariant(
@@ -247,6 +249,7 @@ export interface RecipePublishInput {
   categoryId?: string
   taxRate?: number | null
   variants?: Array<{
+    id?: string
     name: string
     priceAdjust?: number
     recipeFactor?: number
@@ -399,6 +402,8 @@ export interface ArticleInput {
   imageKey?: string | null
   isCombo?: boolean
   variants?: Array<{
+    /** Presentación existente; permite renombrarla sin perder su imagen. */
+    id?: string
     name: string
     priceAdjust?: number
     recipeFactor?: number
@@ -501,6 +506,18 @@ export async function presignRecipeImage(
 ): Promise<ActionResult<PresignedImage>> {
   return mutateApi<PresignedImage>(
     `/uploads/catalog/recipes/${recipeId}`,
+    "POST",
+    input
+  )
+}
+
+export async function presignVariantImage(
+  itemId: string,
+  variantId: string,
+  input: PresignImageInput
+): Promise<ActionResult<PresignedImage>> {
+  return mutateApi<PresignedImage>(
+    `/uploads/catalog/items/${itemId}/variants/${variantId}`,
     "POST",
     input
   )

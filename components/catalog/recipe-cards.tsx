@@ -18,10 +18,19 @@ import { cn } from "cn"
 import { PresentationPreview } from "./articles-columns"
 import { RecipeActionsMenu, type RecipeRowActions } from "./recipes-columns"
 
-/** Estado de la imagen del artículo publicado; las recetas usan la del item. */
+/**
+ * Estado de la imagen de la receta.
+ *
+ * Las recetas por presentación prefieren la imagen propia de su variante; si
+ * no existe, usan la imagen base de la receta o del artículo publicado.
+ */
 function useRecipeImage(recipe: Recipe) {
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
-  const src = recipe.imageUrl ?? recipe.item?.imageUrl ?? null
+  const variant = recipe.item?.variants.find(
+    (candidate) => candidate.id === recipe.variantId
+  )
+  const src =
+    variant?.imageUrl ?? recipe.imageUrl ?? recipe.item?.imageUrl ?? null
 
   return {
     src,

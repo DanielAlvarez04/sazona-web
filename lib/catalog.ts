@@ -155,6 +155,10 @@ export interface Variant {
   priceAdjust: string
   /** Multiplicador del consumo de la receta base. Regular = 1. */
   recipeFactor: string
+  /** Imagen propia; si es null se usa la imagen base del artículo. */
+  imageKey: string | null
+  imageUrl: string | null
+  imageName: string | null
   isActive: boolean
   sortOrder: number
 }

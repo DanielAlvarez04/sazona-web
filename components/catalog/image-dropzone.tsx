@@ -129,7 +129,7 @@ export function ImageDropzone({
               Se recomienda 1:1 (cuadrada)
             </span>
             <span className="mt-1 text-[11px] leading-tight text-muted-foreground">
-              Opcional. Una imagen por artículo.
+              Opcional. Es la imagen base si una presentación no tiene la suya.
             </span>
           </button>
         )}

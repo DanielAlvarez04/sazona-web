@@ -32,6 +32,8 @@ type Presentation = {
   variantName: string | null
   name: string
   price: number
+  /** Imagen propia de la presentación o, si falta, la del artículo. */
+  imageUrl: string | null
 }
 
 function comboKey(itemId: string, variantId?: string | null) {
@@ -51,6 +53,7 @@ function flattenPresentations(products: ArticleListItem[]): Presentation[] {
           variantName: null,
           name: item.name,
           price: Number(item.price),
+          imageUrl: item.imageUrl,
         },
       ]
     }
@@ -62,6 +65,7 @@ function flattenPresentations(products: ArticleListItem[]): Presentation[] {
       variantName: variant.name,
       name: `${item.name} · ${variant.name}`,
       price: Number(item.price) + Number(variant.priceAdjust),
+      imageUrl: variant.imageUrl ?? item.imageUrl,
     }))
   })
 }
@@ -236,11 +240,11 @@ export function ComboComponentsPicker({
                     )}
                   >
                     <div className="absolute inset-0 bg-muted">
-                      {presentation.item.imageUrl ? (
+                      {presentation.imageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
-                          src={presentation.item.imageUrl}
-                          alt={presentation.item.name}
+                          src={presentation.imageUrl}
+                          alt={presentation.name}
                           className="size-full object-cover"
                         />
                       ) : (

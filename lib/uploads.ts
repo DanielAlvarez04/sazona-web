@@ -1,6 +1,10 @@
 "use client"
 
-import { presignItemImage, presignRecipeImage } from "@/app/(app)/catalog/actions"
+import {
+  presignItemImage,
+  presignRecipeImage,
+  presignVariantImage,
+} from "@/app/(app)/catalog/actions"
 
 /** Límite por archivo: 5 MB (la API y el bucket lo repiten). */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -97,6 +101,17 @@ async function uploadImage(
 /** Sube la imagen de un artículo ya guardado. */
 export function uploadItemImage(itemId: string, file: File) {
   return uploadImage(file, (input) => presignItemImage(itemId, input))
+}
+
+/** Sube la imagen propia de una presentación ya guardada. */
+export function uploadVariantImage(
+  itemId: string,
+  variantId: string,
+  file: File
+) {
+  return uploadImage(file, (input) =>
+    presignVariantImage(itemId, variantId, input)
+  )
 }
 
 /** Sube la imagen propia de una receta ya guardada. */
