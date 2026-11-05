@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import {
   BlenderIcon,
+  GroupIcon,
   Loader2Icon,
   PackageIcon,
   SaveIcon,
@@ -16,16 +17,25 @@ import {
   createArticle,
   createRecipe,
   publishRecipe,
+  replaceComboComponents,
+  replaceComboPromotions,
   saveRecipeDraftItem,
   unpublishRecipe,
   updateArticle,
   updateArticleImage,
   updateRecipe,
   type ArticleInput,
+  type ComboComponentInput,
+  type ComboPromotionInput,
   type RecipeIngredientInput,
   type RecipeInput,
 } from "@/app/(app)/catalog/actions"
 import { ImageDropzone } from "@/components/catalog/image-dropzone"
+import {
+  ComboComponentsPicker,
+  type ComboComponentRow,
+} from "@/components/catalog/combo-components-picker"
+import { ComboPromotionFields } from "@/components/catalog/combo-promotion-fields"
 import {
   OptionGroupsEditor,
   optionGroupDrafts,
@@ -95,6 +105,7 @@ import { useActionForm } from "@/hooks/use-action-form"
 import { cn } from "cn"
 import {
   PRESENTATION_PRESETS,
+  PROMOTION_TYPE_LABELS,
   UNIT_DEFINITIONS,
   convertUnitValue,
   isNoPriceOptionGroup,
@@ -107,6 +118,7 @@ import type {
   IngredientCategory,
   OptionGroup,
   OptionGroupPreset,
+  PromotionType,
   Recipe,
   UnitCode,
 } from "@/lib/catalog"
@@ -262,7 +274,7 @@ function initialRecipeRows(recipe: Recipe | null): RecipeRow[] {
   return rows.length > 0 ? rows : [emptyRecipeRow()]
 }
 
-export type ProductSaveAs = "article" | "recipe" | "ingredient"
+export type ProductSaveAs = "article" | "recipe" | "ingredient" | "combo"
 
 const SAVE_AS_OPTIONS: Array<{
   value: ProductSaveAs
@@ -272,6 +284,7 @@ const SAVE_AS_OPTIONS: Array<{
   { value: "article", label: "Artículo", icon: SoupIcon },
   { value: "recipe", label: "Receta", icon: BlenderIcon },
   { value: "ingredient", label: "Insumo", icon: PackageIcon },
+  { value: "combo", label: "Combo", icon: GroupIcon },
 ]
 
 function saveAsChipClass(active: boolean): string {
@@ -288,6 +301,7 @@ function initialProductSaveAs(
   article: ArticleListItem | null,
   requested?: ProductSaveAs
 ): ProductSaveAs {
+  if (article?.isCombo) return "combo"
   if (recipe?.producesIngredientId) return "ingredient"
   if (requested) return requested
   if (recipe?.itemId || (article && !article.isArchived)) return "article"
@@ -298,6 +312,37 @@ function initialProductSaveAs(
 function initialIngredientCategoryId(recipe: Recipe | null): string {
   return recipe?.producesIngredient?.category?.id ?? ""
 }
+
+function comboKey(itemId: string, variantId?: string | null) {
+  return `${itemId}:${variantId ?? ""}`
+}
+
+function initialComboComponents(
+  article: ArticleListItem | null
+): ComboComponentRow[] {
+  return (article?.comboComponents ?? []).map((component) => ({
+    key: comboKey(component.componentItem.id, component.variant?.id),
+    itemId: component.componentItem.id,
+    variantId: component.variant?.id ?? "",
+    quantity: component.quantity,
+  }))
+}
+
+const COMBO_PROMOTION_OPTIONS: Array<{
+  value: "NONE" | PromotionType
+  label: string
+}> = [
+  { value: "NONE", label: "Ninguna" },
+  { value: "PAY_X_GET_Y", label: PROMOTION_TYPE_LABELS.PAY_X_GET_Y },
+  { value: "PERCENT", label: PROMOTION_TYPE_LABELS.PERCENT },
+  { value: "FIXED", label: PROMOTION_TYPE_LABELS.FIXED },
+  { value: "SPECIAL_PRICE", label: PROMOTION_TYPE_LABELS.SPECIAL_PRICE },
+  { value: "FREE_ITEM", label: PROMOTION_TYPE_LABELS.FREE_ITEM },
+  {
+    value: "SECOND_HALF_PRICE",
+    label: PROMOTION_TYPE_LABELS.SECOND_HALF_PRICE,
+  },
+]
 
 export function ProductDialog({
   open,
@@ -311,6 +356,7 @@ export function ProductDialog({
   ingredients,
   optionGroups,
   optionPresets,
+  products,
   taxRate,
   onSaved,
 }: {
@@ -325,6 +371,8 @@ export function ProductDialog({
   ingredients: Ingredient[]
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
+  /** Artículos disponibles para armar un combo. */
+  products: ArticleListItem[]
   /** Tasa de IVA por defecto de la organización (fracción). */
   taxRate: string
   /** Se llama tras crear un producto, para abrir el tab donde aparece. */
@@ -337,6 +385,7 @@ export function ProductDialog({
   )
   // Un insumo es terminal: no puede convertirse en artículo ni receta.
   const locked = Boolean(recipe?.producesIngredientId)
+  const isComboProduct = Boolean(article?.isCombo)
   const [pendingSaveAs, setPendingSaveAs] = useState<ProductSaveAs | null>(null)
 
   const form = useActionForm(() => {
@@ -345,13 +394,17 @@ export function ProductDialog({
         ? article
           ? "Artículo actualizado"
           : "Artículo creado"
-        : saveAs === "ingredient"
-          ? recipe
-            ? "Insumo actualizado"
-            : "Insumo creado"
-          : recipe
-            ? "Receta actualizada"
-            : "Receta creada"
+        : saveAs === "combo"
+          ? article
+            ? "Combo actualizado"
+            : "Combo creado"
+          : saveAs === "ingredient"
+            ? recipe
+              ? "Insumo actualizado"
+              : "Insumo creado"
+            : recipe
+              ? "Receta actualizada"
+              : "Receta creada"
     )
     router.refresh()
     if (isNew) onSaved?.(saveAs)
@@ -460,6 +513,55 @@ export function ProductDialog({
   const [yieldQuantity, setYieldQuantity] = useState(storedYield.quantity)
   const [yieldUnit, setYieldUnit] = useState<UnitCode>(storedYield.unit)
 
+  const existingComboPromotion = article?.promotions?.[0] ?? null
+  const [comboPriceAuto, setComboPriceAuto] = useState(isNew)
+  const [comboComponents, setComboComponents] = useState<ComboComponentRow[]>(
+    () => initialComboComponents(article)
+  )
+  const [comboPromotionType, setComboPromotionType] = useState<
+    "NONE" | PromotionType
+  >(() => existingComboPromotion?.type ?? "NONE")
+  const [comboPromotionActive, setComboPromotionActive] = useState(
+    () => existingComboPromotion?.isActive ?? true
+  )
+  const [comboPayQuantity, setComboPayQuantity] = useState(
+    () => String(existingComboPromotion?.payQuantity ?? 1)
+  )
+  const [comboGetQuantity, setComboGetQuantity] = useState(
+    () => String(existingComboPromotion?.getQuantity ?? 2)
+  )
+  const [comboPercent, setComboPercent] = useState(() =>
+    existingComboPromotion?.type === "PERCENT"
+      ? String(Number(existingComboPromotion.value))
+      : ""
+  )
+  const [comboFixed, setComboFixed] = useState(() =>
+    existingComboPromotion?.type === "FIXED"
+      ? String(Number(existingComboPromotion.value))
+      : ""
+  )
+  const [comboSpecialPrice, setComboSpecialPrice] = useState(() =>
+    existingComboPromotion?.type === "SPECIAL_PRICE"
+      ? String(Number(existingComboPromotion.specialPrice ?? 0))
+      : ""
+  )
+  const [comboFreeKey, setComboFreeKey] = useState(() =>
+    existingComboPromotion?.freeItemId
+      ? comboKey(
+          existingComboPromotion.freeItemId,
+          existingComboPromotion.freeVariantId
+        )
+      : ""
+  )
+  const [comboSecondKey, setComboSecondKey] = useState(() =>
+    existingComboPromotion?.discountedItemId
+      ? comboKey(
+          existingComboPromotion.discountedItemId,
+          existingComboPromotion.discountedVariantId
+        )
+      : ""
+  )
+
   // Confirmación al apagar «Múltiples presentaciones» de un producto guardado.
   const [confirmDisableVariants, setConfirmDisableVariants] = useState(false)
   // Confirmación al apagar las opciones de un producto ya guardado.
@@ -523,10 +625,10 @@ export function ProductDialog({
 
   // El precio es opcional en una receta; solo el artículo lo exige.
   const priceVisible = saveAs !== "ingredient"
-  const priceRequired = saveAs === "article"
+  const priceRequired = saveAs === "article" || saveAs === "combo"
   const yieldVisible = saveAs === "ingredient"
   const notesVisible =
-    saveAs !== "article" || effectiveRecipeEnabled
+    saveAs !== "combo" && (saveAs !== "article" || effectiveRecipeEnabled)
 
   /** El nombre arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
@@ -699,6 +801,8 @@ export function ProductDialog({
 
     if (next === "ingredient") {
       setDialogTab("receta")
+    } else if (next === "combo") {
+      setDialogTab("articulos")
     }
 
     if (next !== "article") {
@@ -711,6 +815,7 @@ export function ProductDialog({
 
   function handleSaveAsChange(next: ProductSaveAs) {
     if (next === saveAs || locked) return
+    if (isComboProduct && next !== "combo") return
 
     // Salir de Artículo archiva el artículo: se pide confirmación.
     if (next !== "article" && article && !article.isArchived) {
@@ -741,7 +846,24 @@ export function ProductDialog({
     setRecipeEnabled(saveAs !== "article")
     setYieldQuantity("")
     setYieldUnit("KG")
-    setDialogTab(saveAs === "ingredient" ? "receta" : "presentaciones")
+    setComboComponents([])
+    setComboPriceAuto(isNew)
+    setComboPromotionType("NONE")
+    setComboPromotionActive(true)
+    setComboPayQuantity("1")
+    setComboGetQuantity("2")
+    setComboPercent("")
+    setComboFixed("")
+    setComboSpecialPrice("")
+    setComboFreeKey("")
+    setComboSecondKey("")
+    setDialogTab(
+      saveAs === "ingredient"
+        ? "receta"
+        : saveAs === "combo"
+          ? "articulos"
+          : "presentaciones"
+    )
     form.setError(null)
   }
 
@@ -817,7 +939,300 @@ export function ProductDialog({
     return { rows: payload }
   }
 
+  const comboComponentOptions = comboComponents.map((row) => {
+    const product = products.find((candidate) => candidate.id === row.itemId)
+    const variant = product?.variants.find(
+      (candidate) => candidate.id === row.variantId
+    )
+
+    return {
+      key: row.key,
+      label: `${product?.name ?? "Artículo"}${
+        variant ? ` · ${variant.name}` : ""
+      }`,
+      itemId: row.itemId,
+      variantId: row.variantId,
+    }
+  })
+
+  const comboAutoPrice = comboComponents.reduce((total, row) => {
+    const product = products.find((candidate) => candidate.id === row.itemId)
+    const variant = product?.variants.find(
+      (candidate) => candidate.id === row.variantId
+    )
+
+    return (
+      total +
+      (Number(product?.price ?? 0) + Number(variant?.priceAdjust ?? 0)) *
+        row.quantity
+    )
+  }, 0)
+  const comboAutoPriceString = String(round2(comboAutoPrice))
+
+  function handleComboPriceAuto(next: boolean) {
+    setComboPriceAuto(next)
+    if (!next) setPrice(comboAutoPriceString)
+  }
+
+  function promotionSignature(promotion: ComboPromotionInput | null): string {
+    if (!promotion) return "none"
+
+    const usesValue =
+      promotion.type === "PERCENT" || promotion.type === "FIXED"
+
+    return JSON.stringify({
+      type: promotion.type,
+      value: usesValue ? (promotion.value ?? null) : null,
+      payQuantity: promotion.payQuantity ?? null,
+      getQuantity: promotion.getQuantity ?? null,
+      specialPrice: promotion.specialPrice ?? null,
+      freeItemId: promotion.freeItemId ?? null,
+      freeVariantId: promotion.freeVariantId ?? null,
+      discountedItemId: promotion.discountedItemId ?? null,
+      discountedVariantId: promotion.discountedVariantId ?? null,
+      isActive: promotion.isActive ?? true,
+    })
+  }
+
+  function buildComboPromotion(): ComboPromotionInput | null {
+    if (comboPromotionType === "NONE") return null
+
+    const freeParts = comboFreeKey.split(":")
+    const secondParts = comboSecondKey.split(":")
+
+    return {
+      type: comboPromotionType,
+      isActive: comboPromotionActive,
+      ...(comboPromotionType === "PERCENT"
+        ? { value: toNumber(comboPercent) }
+        : {}),
+      ...(comboPromotionType === "FIXED"
+        ? { value: toNumber(comboFixed) }
+        : {}),
+      ...(comboPromotionType === "PAY_X_GET_Y"
+        ? {
+            payQuantity: Math.trunc(Number(comboPayQuantity)),
+            getQuantity: Math.trunc(Number(comboGetQuantity)),
+          }
+        : {}),
+      ...(comboPromotionType === "SPECIAL_PRICE"
+        ? { specialPrice: toNumber(comboSpecialPrice) }
+        : {}),
+      ...(comboPromotionType === "FREE_ITEM" && comboFreeKey
+        ? {
+            freeItemId: freeParts[0],
+            freeVariantId: freeParts[1] || null,
+          }
+        : {}),
+      ...(comboPromotionType === "SECOND_HALF_PRICE" && comboSecondKey
+        ? {
+            discountedItemId: secondParts[0],
+            discountedVariantId: secondParts[1] || null,
+          }
+        : {}),
+    }
+  }
+
+  function saveCombo() {
+    const trimmedName = name.trim()
+    const numericPrice = comboPriceAuto ? comboAutoPrice : toNumber(price)
+    const components = comboComponents
+      .filter((row) => row.itemId)
+      .map<ComboComponentInput>((row) => ({
+        itemId: row.itemId,
+        ...(row.variantId ? { variantId: row.variantId } : {}),
+        quantity: row.quantity,
+      }))
+
+    if (!trimmedName) {
+      form.setError("El nombre del combo es obligatorio")
+      return
+    }
+    if (
+      (!comboPriceAuto && !price.trim()) ||
+      !Number.isFinite(numericPrice) ||
+      numericPrice < 0
+    ) {
+      form.setError("Indica un precio válido")
+      return
+    }
+    if (components.length === 0) {
+      form.setError("Selecciona al menos un artículo para el combo")
+      return
+    }
+
+    if (comboPromotionType === "PERCENT") {
+      const value = toNumber(comboPercent)
+      if (!Number.isFinite(value) || value <= 0 || value > 100) {
+        form.setError("Indica un porcentaje entre 1 y 100")
+        return
+      }
+    }
+    if (comboPromotionType === "FIXED") {
+      const value = toNumber(comboFixed)
+      if (!Number.isFinite(value) || value <= 0) {
+        form.setError("Indica un descuento fijo mayor que cero")
+        return
+      }
+    }
+    if (comboPromotionType === "SPECIAL_PRICE") {
+      const value = toNumber(comboSpecialPrice)
+      if (!Number.isFinite(value) || value <= 0 || value >= numericPrice) {
+        form.setError("El precio especial debe ser mayor que cero y menor que el precio normal")
+        return
+      }
+    }
+    if (comboPromotionType === "PAY_X_GET_Y") {
+      const pay = Math.trunc(Number(comboPayQuantity))
+      const get = Math.trunc(Number(comboGetQuantity))
+      if (pay < 1 || get < 1 || get <= pay) {
+        form.setError("La cantidad que se recibe debe ser mayor que la que se paga")
+        return
+      }
+    }
+    if (
+      (comboPromotionType === "FREE_ITEM" ||
+        comboPromotionType === "SECOND_HALF_PRICE") &&
+      !comboComponentOptions.some((option) =>
+        option.key ===
+        (comboPromotionType === "FREE_ITEM" ? comboFreeKey : comboSecondKey)
+      )
+    ) {
+      form.setError("Selecciona uno de los artículos del combo")
+      return
+    }
+
+    const promotion = buildComboPromotion()
+
+    form.run(async () => {
+      let itemId = article?.id ?? null
+      let changed = false
+
+      if (!itemId) {
+        const created = await createArticle({
+          name: trimmedName,
+          description: description.trim() || null,
+          price: numericPrice,
+          isCombo: true,
+          categoryId: null,
+          comboComponents: components,
+          promotions: promotion ? [promotion] : [],
+        })
+
+        if (!created.ok) return created
+
+        itemId = created.data?.id ?? null
+        if (!itemId) {
+          return { ok: false, message: "No se pudo crear el combo" }
+        }
+        changed = true
+      } else {
+        if (!article) {
+          return { ok: false, message: "No se encontró el combo" }
+        }
+
+        const changes: Partial<ArticleInput> = {
+          ...(sameText(article.name, trimmedName) ? {} : { name: trimmedName }),
+          ...(sameText(article.description, description.trim() || null)
+            ? {}
+            : { description: description.trim() || null }),
+          ...(sameNumber(article.price, numericPrice)
+            ? {}
+            : { price: numericPrice }),
+          ...(article.category ? { categoryId: null } : {}),
+        }
+
+        if (!isEmptyPatch(changes)) {
+          const updated = await updateArticle(itemId, changes)
+          if (!updated.ok) return updated
+          changed = true
+        }
+
+        const currentComponents = (article.comboComponents ?? [])
+          .map(
+            (component) =>
+              `${component.componentItem.id}:${component.variant?.id ?? ""}:${component.quantity}`
+          )
+          .sort()
+          .join("|")
+        const nextComponents = components
+          .map(
+            (component) =>
+              `${component.itemId}:${component.variantId ?? ""}:${component.quantity}`
+          )
+          .sort()
+          .join("|")
+
+        if (currentComponents !== nextComponents) {
+          const replaced = await replaceComboComponents(itemId, components)
+          if (!replaced.ok) return replaced
+          changed = true
+        }
+
+        const currentPromotion = article.promotions?.[0] ?? null
+        const currentSignature = currentPromotion
+          ? promotionSignature({
+              type: currentPromotion.type,
+              value: Number(currentPromotion.value),
+              payQuantity: currentPromotion.payQuantity ?? undefined,
+              getQuantity: currentPromotion.getQuantity ?? undefined,
+              specialPrice:
+                currentPromotion.specialPrice === null
+                  ? undefined
+                  : Number(currentPromotion.specialPrice),
+              freeItemId: currentPromotion.freeItemId,
+              freeVariantId: currentPromotion.freeVariantId,
+              discountedItemId: currentPromotion.discountedItemId,
+              discountedVariantId: currentPromotion.discountedVariantId,
+              isActive: currentPromotion.isActive,
+            })
+          : "none"
+
+        if (currentSignature !== promotionSignature(promotion)) {
+          const replaced = await replaceComboPromotions(
+            itemId,
+            promotion ? [promotion] : []
+          )
+          if (!replaced.ok) return replaced
+          changed = true
+        }
+      }
+
+      const imagePending = image?.kind === "pending"
+      const hasStoredImage = Boolean(article?.imageKey)
+
+      if (imagePending && image) {
+        const uploaded = await uploadItemImage(itemId, image.file)
+
+        if (uploaded.ok) {
+          const saved = await updateArticleImage(itemId, uploaded.key ?? null)
+          if (!saved.ok) return saved
+          changed = true
+        } else {
+          toast.error(
+            uploaded.message ?? "Los datos se guardaron, pero la imagen no se pudo subir."
+          )
+        }
+      } else if (!image && hasStoredImage) {
+        const saved = await updateArticleImage(itemId, null)
+        if (!saved.ok) return saved
+        changed = true
+      }
+
+      if (!changed && !imagePending) {
+        toast.info("Sin cambios")
+      }
+
+      return { ok: true }
+    })
+  }
+
   function save() {
+    if (saveAs === "combo") {
+      saveCombo()
+      return
+    }
+
     const trimmedName = name.trim()
 
     setInvalidFields(new Set())
@@ -1532,18 +1947,22 @@ export function ProductDialog({
   }
 
   const descriptionText =
-    saveAs === "ingredient"
-      ? "Se guardará en Inventario como insumo producido y también aparecerá en Recetas. El costo unitario se calcula con el costo de los insumos y el rendimiento."
-      : saveAs === "recipe"
-        ? "Se guardará como receta y aparecerá en Recetas. Las presentaciones y opciones que configures se conservan para cuando la publiques como artículo."
-        : "Se venderá en el punto de venta y podrá usarse en menús. Si activas los insumos de la receta, también aparecerá en Recetas."
+    saveAs === "combo"
+      ? "Se venderá en el punto de venta como un paquete de artículos. Puedes asignarle una promoción opcional."
+      : saveAs === "ingredient"
+        ? "Se guardará en Inventario como insumo producido y también aparecerá en Recetas. El costo unitario se calcula con el costo de los insumos y el rendimiento."
+        : saveAs === "recipe"
+          ? "Se guardará como receta y aparecerá en Recetas. Las presentaciones y opciones que configures se conservan para cuando la publiques como artículo."
+          : "Se venderá en el punto de venta y podrá usarse en menús. Si activas los insumos de la receta, también aparecerá en Recetas."
 
   const entityLabel =
     saveAs === "article"
       ? "artículo"
       : saveAs === "recipe"
         ? "receta"
-        : "insumo";
+        : saveAs === "combo"
+          ? "combo"
+          : "insumo";
   const dialogTitle = isNew
     ? saveAs === "recipe"
       ? `Nueva ${entityLabel}`
@@ -1555,18 +1974,24 @@ export function ProductDialog({
       ? "artículo"
       : saveAs === "recipe"
         ? "receta"
-        : "insumo"
+        : saveAs === "combo"
+          ? "combo"
+          : "insumo"
   }`
 
   const visibleTabs: string[] =
-    saveAs === "ingredient"
-      ? ["receta", "notas"]
-      : [
-          "presentaciones",
-          "opciones",
-          "receta",
-          ...(notesVisible ? ["notas"] : []),
-        ]
+    saveAs === "combo"
+      ? comboPromotionType === "NONE"
+        ? ["articulos"]
+        : ["articulos", "promocion"]
+      : saveAs === "ingredient"
+        ? ["receta", "notas"]
+        : [
+            "presentaciones",
+            "opciones",
+            "receta",
+            ...(notesVisible ? ["notas"] : []),
+          ]
   const activeTab = visibleTabs.includes(dialogTab)
     ? dialogTab
     : visibleTabs[0]
@@ -1669,7 +2094,8 @@ export function ProductDialog({
                           aria-pressed={saveAs === option.value}
                           disabled={
                             form.pending ||
-                            (locked && option.value !== "ingredient")
+                            (locked && option.value !== "ingredient") ||
+                            (isComboProduct && option.value !== "combo")
                           }
                           className={saveAsChipClass(saveAs === option.value)}
                           onClick={() => handleSaveAsChange(option.value)}
@@ -1683,6 +2109,10 @@ export function ProductDialog({
                   {locked ? (
                     <p className="text-xs text-muted-foreground">
                       Un insumo no puede convertirse en artículo ni receta.
+                    </p>
+                  ) : isComboProduct ? (
+                    <p className="text-xs text-muted-foreground">
+                      Un combo no puede convertirse en artículo, receta ni insumo.
                     </p>
                   ) : saveAs === "ingredient" ? (
                     <p className="text-xs text-muted-foreground">
@@ -1708,9 +2138,11 @@ export function ProductDialog({
                   placeholder={
                     saveAs === "article"
                       ? "Ej. Café americano"
-                      : saveAs === "ingredient"
+                      : saveAs === "recipe"
                         ? "Ej. Salsa verde"
-                        : "Ej. Salsa verde"
+                        : saveAs === "combo"
+                          ? "Ej. Combo chilaquiles + café"
+                          : "Ej. Salsa verde"
                   }
                 />
               </Field>
@@ -1731,11 +2163,29 @@ export function ProductDialog({
                       </FieldLabel>
                       <InfoHint
                         text={
-                          priceRequired
-                            ? "Precio final con IVA incluido. Con varias presentaciones, es el de la presentación principal."
-                            : "Opcional. Si lo indicas, se conserva para cuando publiques la receta como artículo."
+                          saveAs === "combo"
+                            ? "Precio normal del combo, con IVA incluido. La promoción puede reemplazarlo temporalmente."
+                            : priceRequired
+                              ? "Precio final con IVA incluido. Con varias presentaciones, es el de la presentación principal."
+                              : "Opcional. Si lo indicas, se conserva para cuando publiques la receta como artículo."
                         }
                       />
+                      {saveAs === "combo" ? (
+                        <div className="ml-auto flex items-center gap-1.5">
+                          <Label
+                            htmlFor="product-price-auto"
+                            className="text-xs text-muted-foreground"
+                          >
+                            Auto
+                          </Label>
+                          <Switch
+                            id="product-price-auto"
+                            checked={comboPriceAuto}
+                            onCheckedChange={handleComboPriceAuto}
+                            disabled={form.pending}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                     <InputGroup>
                       <InputGroupAddon align="inline-start">
@@ -1746,7 +2196,12 @@ export function ProductDialog({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={price}
+                        value={
+                          saveAs === "combo" && comboPriceAuto
+                            ? comboAutoPriceString
+                            : price
+                        }
+                        disabled={saveAs === "combo" && comboPriceAuto}
                         aria-invalid={invalidFields.has("price") || undefined}
                         onChange={(event) => {
                           clearInvalid("price")
@@ -1811,40 +2266,78 @@ export function ProductDialog({
                   </Field>
                 ) : null}
 
-                <Field
-                  data-invalid={
-                    invalidFields.has("category") ? "true" : undefined
-                  }
-                >
-                  <FieldLabel htmlFor="product-category">
-                    {categoryLabel} <span className="text-destructive">*</span>
-                  </FieldLabel>
-                  <Select
-                    value={categoryValue || null}
-                    onValueChange={(value) => setCategoryValue(value ?? "")}
-                    items={categoryOptions.map((category) => ({
-                      value: category.id,
-                      label: category.name,
-                    }))}
-                  >
-                    <SelectTrigger
-                      id="product-category"
-                      className="w-full"
-                      aria-invalid={
-                        invalidFields.has("category") || undefined
-                      }
+                {saveAs === "combo" ? (
+                  <Field>
+                    <FieldLabel htmlFor="product-promotion">Promoción</FieldLabel>
+                    <Select
+                      value={comboPromotionType}
+                      onValueChange={(value) => {
+                        const next = (value ?? "NONE") as
+                          | "NONE"
+                          | PromotionType
+                        setComboPromotionType(next)
+                        if (next === "NONE") {
+                          setDialogTab("articulos")
+                        } else {
+                          setDialogTab("promocion")
+                        }
+                        if (next !== "FREE_ITEM") setComboFreeKey("")
+                        if (next !== "SECOND_HALF_PRICE") setComboSecondKey("")
+                      }}
+                      items={COMBO_PROMOTION_OPTIONS.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                      }))}
                     >
-                      <SelectValue placeholder="Selecciona una categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categoryOptions.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+                      <SelectTrigger id="product-promotion" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMBO_PROMOTION_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                ) : (
+                  <Field
+                    data-invalid={
+                      invalidFields.has("category") ? "true" : undefined
+                    }
+                  >
+                    <FieldLabel htmlFor="product-category">
+                      {categoryLabel}{" "}
+                      <span className="text-destructive">*</span>
+                    </FieldLabel>
+                    <Select
+                      value={categoryValue || null}
+                      onValueChange={(value) => setCategoryValue(value ?? "")}
+                      items={categoryOptions.map((category) => ({
+                        value: category.id,
+                        label: category.name,
+                      }))}
+                    >
+                      <SelectTrigger
+                        id="product-category"
+                        className="w-full"
+                        aria-invalid={
+                          invalidFields.has("category") || undefined
+                        }
+                      >
+                        <SelectValue placeholder="Selecciona una categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categoryOptions.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
 
               </div>
             </div>
@@ -1862,7 +2355,9 @@ export function ProductDialog({
                   ? "Ej. Café espresso con leche vaporizada y un toque de canela."
                   : saveAs === "recipe"
                     ? "Ej. Salsa de tomate cocida a fuego lento con albahaca fresca."
-                    : "Ej. Tomate rojo fresco para salsas y guisos."
+                    : saveAs === "combo"
+                      ? "Ej. Chilaquiles verdes con café y postre."
+                      : "Ej. Tomate rojo fresco para salsas y guisos."
               }
             />
             {saveAs === "article" ? (
@@ -1876,25 +2371,92 @@ export function ProductDialog({
 
           <Tabs value={activeTab} onValueChange={setDialogTab} className="gap-4">
             <TabsList>
-              {saveAs !== "ingredient" ? (
-                <TabsTrigger type="button" value="presentaciones">
-                  Presentaciones
-                </TabsTrigger>
-              ) : null}
-              {saveAs !== "ingredient" ? (
-                <TabsTrigger type="button" value="opciones">
-                  Opciones
-                </TabsTrigger>
-              ) : null}
-              <TabsTrigger type="button" value="receta">
-                Receta
-              </TabsTrigger>
-              {notesVisible ? (
-                <TabsTrigger type="button" value="notas">
-                  Notas
-                </TabsTrigger>
-              ) : null}
+              {saveAs === "combo" ? (
+                <>
+                  <TabsTrigger type="button" value="articulos">
+                    Artículos del combo
+                  </TabsTrigger>
+                  {comboPromotionType !== "NONE" ? (
+                    <TabsTrigger type="button" value="promocion">
+                      Promoción
+                    </TabsTrigger>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {saveAs !== "ingredient" ? (
+                    <TabsTrigger type="button" value="presentaciones">
+                      Presentaciones
+                    </TabsTrigger>
+                  ) : null}
+                  {saveAs !== "ingredient" ? (
+                    <TabsTrigger type="button" value="opciones">
+                      Opciones
+                    </TabsTrigger>
+                  ) : null}
+                  <TabsTrigger type="button" value="receta">
+                    Receta
+                  </TabsTrigger>
+                  {notesVisible ? (
+                    <TabsTrigger type="button" value="notas">
+                      Notas
+                    </TabsTrigger>
+                  ) : null}
+                </>
+              )}
             </TabsList>
+
+            {saveAs === "combo" ? (
+              <>
+                <TabsContent value="articulos" keepMounted>
+                  <ComboComponentsPicker
+                    products={products}
+                    value={comboComponents}
+                    onChange={setComboComponents}
+                    disabled={form.pending}
+                  />
+                </TabsContent>
+
+                {comboPromotionType !== "NONE" ? (
+                  <TabsContent value="promocion" keepMounted>
+                    <ComboPromotionFields
+                      type={comboPromotionType}
+                      active={comboPromotionActive}
+                      onActiveChange={setComboPromotionActive}
+                      payQuantity={comboPayQuantity}
+                      onPayQuantityChange={setComboPayQuantity}
+                      getQuantity={comboGetQuantity}
+                      onGetQuantityChange={setComboGetQuantity}
+                      percent={comboPercent}
+                      onPercentChange={setComboPercent}
+                      fixed={comboFixed}
+                      onFixedChange={setComboFixed}
+                      specialPrice={comboSpecialPrice}
+                      onSpecialPriceChange={setComboSpecialPrice}
+                      freeKey={
+                        comboComponentOptions.some(
+                          (option) => option.key === comboFreeKey
+                        )
+                          ? comboFreeKey
+                          : ""
+                      }
+                      onFreeKeyChange={setComboFreeKey}
+                      secondKey={
+                        comboComponentOptions.some(
+                          (option) => option.key === comboSecondKey
+                        )
+                          ? comboSecondKey
+                          : ""
+                      }
+                      onSecondKeyChange={setComboSecondKey}
+                      components={comboComponentOptions}
+                      disabled={form.pending}
+                    />
+                  </TabsContent>
+                ) : null}
+              </>
+            ) : (
+              <>
 
             <TabsContent value="receta" keepMounted>
               <section className="flex flex-col gap-3">
@@ -2100,6 +2662,8 @@ export function ProductDialog({
                 </section>
               </TabsContent>
             ) : null}
+              </>
+            )}
           </Tabs>
 
           {form.error ? <FieldError>{form.error}</FieldError> : null}

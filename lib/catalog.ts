@@ -203,7 +203,14 @@ export interface Extra {
 
 export type OptionSelection = "SINGLE" | "MULTIPLE"
 export type OptionEffectAction = "ADD" | "REPLACE" | "REMOVE"
-export type PromotionType = "PERCENT" | "FIXED" | "BOGO"
+export type PromotionType =
+  | "PERCENT"
+  | "FIXED"
+  | "BOGO"
+  | "PAY_X_GET_Y"
+  | "SPECIAL_PRICE"
+  | "FREE_ITEM"
+  | "SECOND_HALF_PRICE"
 
 /** Valor de la biblioteca del negocio (sin precio: el precio es por artículo). */
 export interface OptionValue {
@@ -313,6 +320,13 @@ export interface ComboPromotion {
   name: string
   type: PromotionType
   value: string
+  payQuantity: number | null
+  getQuantity: number | null
+  specialPrice: string | null
+  freeItemId: string | null
+  freeVariantId: string | null
+  discountedItemId: string | null
+  discountedVariantId: string | null
   startsAt: string | null
   endsAt: string | null
   daysOfWeek: number[]
@@ -322,9 +336,13 @@ export interface ComboPromotion {
 }
 
 export const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
-  PERCENT: "Descuento %",
+  PERCENT: "Descuento porcentual",
   FIXED: "Descuento fijo",
   BOGO: "2x1",
+  PAY_X_GET_Y: "2x1 / 3x2",
+  SPECIAL_PRICE: "Precio especial",
+  FREE_ITEM: "Producto gratis",
+  SECOND_HALF_PRICE: "Segundo producto al 50 %",
 }
 
 export const OPTION_SELECTION_LABELS: Record<OptionSelection, string> = {
@@ -396,7 +414,7 @@ export interface ComboComponent {
   id: string
   quantity: number
   componentItem: { id: string; name: string; price: string; isActive: boolean }
-  variant: { id: string; name: string } | null
+  variant: { id: string; name: string; priceAdjust: string } | null
 }
 
 export interface RecipeIngredientRef {

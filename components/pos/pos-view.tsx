@@ -4,17 +4,36 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CreditCardIcon,
+  GroupIcon,
   Loader2Icon,
   MinusIcon,
   PencilLineIcon,
   PlusIcon,
   SearchIcon,
   SoupIcon,
+  SparklesIcon,
   Trash2Icon,
+  Undo2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { PageHeader } from "@/components/page-header"
@@ -40,6 +59,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
 import {
+  PROMOTION_TYPE_LABELS,
   formatMoney,
   isItemOptionValueAvailable,
   itemOptionValueName,
@@ -85,6 +105,129 @@ interface CartLine {
 
 function cartLineTotal(line: CartLine): number {
   return line.unitPrice * line.quantity
+}
+
+function newCartKey() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Solo se pueden convertir líneas sin opciones, extras, notas ni exclusiones. */
+function isPlainLine(line: CartLine): boolean {
+  return (
+    line.extras.length === 0 &&
+    line.options.length === 0 &&
+    line.excludedIngredientIds.length === 0 &&
+    !line.notes?.trim()
+  )
+}
+
+interface ComboConsumption {
+  key: string
+  quantity: number
+}
+
+interface ComboMatch {
+  combo: ItemListItem
+  consumption: ComboConsumption[]
+  line: CartLine
+  componentsTotal: number
+  comboPrice: number
+}
+
+/**
+ * Busca combos cuyos componentes estén disponibles en el carrito. Solo se
+ * consideran combos que incluyan la línea que acaba de agregarse/cambiarse.
+ */
+function findComboMatches(
+  cart: CartLine[],
+  products: ItemListItem[],
+  trigger: { itemId: string; variantId?: string }
+): ComboMatch[] {
+  const matches: ComboMatch[] = []
+  const triggerVariant = trigger.variantId ?? ""
+
+  for (const combo of products) {
+    if (!combo.isCombo || !combo.isActive) continue
+    if (combo.variants.some((variant) => variant.isActive)) continue
+    if ((combo.optionGroups?.length ?? 0) > 0) continue
+
+    const components = combo.comboComponents ?? []
+    if (components.length === 0) continue
+
+    const includesTrigger = components.some(
+      (component) =>
+        component.componentItem.id === trigger.itemId &&
+        (component.variant?.id ?? "") === triggerVariant
+    )
+    if (!includesTrigger) continue
+
+    const consumption: ComboConsumption[] = []
+    let componentsTotal = 0
+    let complete = true
+
+    for (const component of components) {
+      let remaining = component.quantity
+
+      const lines = cart.filter(
+        (line) =>
+          isPlainLine(line) &&
+          line.itemId === component.componentItem.id &&
+          (line.variantId ?? "") === (component.variant?.id ?? "")
+      )
+
+      for (const line of lines) {
+        if (remaining <= 0) break
+
+        const take = Math.min(line.quantity, remaining)
+        consumption.push({ key: line.key, quantity: take })
+        componentsTotal += line.unitPrice * take
+        remaining -= take
+      }
+
+      if (remaining > 0) {
+        complete = false
+        break
+      }
+    }
+
+    if (!complete) continue
+
+    const comboPrice = Number(combo.price)
+
+    matches.push({
+      combo,
+      consumption,
+      componentsTotal,
+      comboPrice,
+      line: {
+        key: newCartKey(),
+        itemId: combo.id,
+        itemName: combo.name,
+        unitPrice: comboPrice,
+        quantity: 1,
+        extras: [],
+        options: [],
+        excludedIngredientIds: [],
+        excludedNames: [],
+      },
+    })
+  }
+
+  return matches
+}
+
+function consumeComponents(
+  cart: CartLine[],
+  consumption: ComboConsumption[]
+): CartLine[] {
+  return cart.flatMap((line) => {
+    const take =
+      consumption.find((item) => item.key === line.key)?.quantity ?? 0
+    if (take === 0) return [line]
+
+    const remaining = line.quantity - take
+    return remaining > 0 ? [{ ...line, quantity: remaining }] : []
+  })
 }
 
 function lineToInput(line: CartLine): RoundItemInput {
@@ -142,6 +285,17 @@ export function PosView({
     React.useState<ItemListItem | null>(null)
   const [charging, setCharging] = React.useState(false)
 
+  const [comboNotice, setComboNotice] = React.useState<{
+    message: string
+    undo: () => void
+  } | null>(null)
+  const [comboUndoAvailable, setComboUndoAvailable] = React.useState(false)
+  const comboUndoTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [comboConflict, setComboConflict] = React.useState<{
+    cart: CartLine[]
+    matches: ComboMatch[]
+  } | null>(null)
+
   const [orderId, setOrderId] = React.useState("")
   const [tableNumber, setTableNumber] = React.useState("")
   const [takeaway, setTakeaway] = React.useState(false)
@@ -149,6 +303,102 @@ export function PosView({
 
   const activeOrder = orders.find((order) => order.id === orderId) ?? null
   const total = cart.reduce((sum, line) => sum + cartLineTotal(line), 0)
+
+  React.useEffect(() => {
+    return () => {
+      if (comboUndoTimer.current) clearTimeout(comboUndoTimer.current)
+    }
+  }, [])
+
+  function dismissComboNotice() {
+    setComboNotice(null)
+    setComboUndoAvailable(false)
+    if (comboUndoTimer.current) clearTimeout(comboUndoTimer.current)
+  }
+
+  function showComboNotice(message: string, undo: () => void) {
+    if (comboUndoTimer.current) clearTimeout(comboUndoTimer.current)
+
+    setComboNotice({
+      message,
+      undo: () => {
+        undo()
+        dismissComboNotice()
+      },
+    })
+    setComboUndoAvailable(true)
+    comboUndoTimer.current = setTimeout(() => {
+      setComboUndoAvailable(false)
+    }, 3000)
+  }
+
+  function applyComboMatch(match: ComboMatch, previousCart: CartLine[]) {
+    const nextCart = [
+      ...consumeComponents(previousCart, match.consumption),
+      match.line,
+    ]
+    setCart(nextCart)
+
+    const restoredLines = match.consumption.flatMap((item) => {
+      const original = previousCart.find((line) => line.key === item.key)
+      return original ? [{ ...original, quantity: item.quantity }] : []
+    })
+
+    const difference = match.componentsTotal - match.comboPrice
+    const message =
+      difference > 0
+        ? `Se aplicó el combo «${match.combo.name}»: ${formatMoney(
+            match.comboPrice
+          )} en lugar de ${formatMoney(match.componentsTotal)}.`
+        : `Se aplicó el combo «${match.combo.name}» por ${formatMoney(
+            match.comboPrice
+          )}.`
+
+    showComboNotice(message, () => {
+      setCart((current) => {
+        let next = current.filter((line) => line.key !== match.line.key)
+
+        for (const restoredLine of restoredLines) {
+          const existing = next.find((line) => line.key === restoredLine.key)
+
+          if (existing) {
+            next = next.map((line) =>
+              line.key === restoredLine.key
+                ? { ...line, quantity: line.quantity + restoredLine.quantity }
+                : line
+            )
+          } else {
+            next = [...next, restoredLine]
+          }
+        }
+
+        return next
+      })
+    })
+  }
+
+  function runComboDetection(
+    nextCart: CartLine[],
+    trigger: { itemId: string; variantId?: string }
+  ) {
+    const matches = findComboMatches(nextCart, products, trigger)
+
+    if (matches.length === 0) return
+    if (matches.length === 1) {
+      applyComboMatch(matches[0], nextCart)
+      return
+    }
+
+    setComboConflict({ cart: nextCart, matches })
+  }
+
+  function chooseComboConflict(match: ComboMatch) {
+    if (!comboConflict) return
+
+    const previousCart = comboConflict.cart
+    setComboConflict(null)
+    applyComboMatch(match, previousCart)
+  }
 
   const filtered = React.useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -174,10 +424,16 @@ export function PosView({
   const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
   const addLine = (line: Omit<CartLine, "key">) => {
-    setCart((current) => [
-      ...current,
-      { ...line, key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
-    ])
+    const nextLine = { ...line, key: newCartKey() }
+    const nextCart = [...cart, nextLine]
+    setCart(nextCart)
+
+    if (isPlainLine(nextLine)) {
+      runComboDetection(nextCart, {
+        itemId: nextLine.itemId,
+        variantId: nextLine.variantId,
+      })
+    }
 
     // La posición dentro del menú filtrado alimenta las sugerencias de orden.
     const position = filtered.findIndex((product) => product.id === line.itemId)
@@ -195,13 +451,25 @@ export function PosView({
   }
 
   const changeQuantity = (key: string, delta: number) => {
-    setCart((current) =>
-      current.flatMap((line) => {
-        if (line.key !== key) return [line]
-        const quantity = line.quantity + delta
-        return quantity <= 0 ? [] : [{ ...line, quantity }]
+    const line = cart.find((candidate) => candidate.key === key)
+    if (!line) return
+
+    const quantity = line.quantity + delta
+    const nextCart =
+      quantity <= 0
+        ? cart.filter((candidate) => candidate.key !== key)
+        : cart.map((candidate) =>
+            candidate.key === key ? { ...candidate, quantity } : candidate
+          )
+
+    setCart(nextCart)
+
+    if (delta > 0 && isPlainLine(line)) {
+      runComboDetection(nextCart, {
+        itemId: line.itemId,
+        variantId: line.variantId,
       })
-    )
+    }
   }
 
   const removeLine = (key: string) => {
@@ -211,6 +479,8 @@ export function PosView({
   const selectOrder = (value: string) => {
     setOrderId(value)
     setCart([])
+    dismissComboNotice()
+    setComboConflict(null)
   }
 
   const handleSend = async () => {
@@ -240,6 +510,8 @@ export function PosView({
       setCart([])
       setTableNumber("")
       setTakeaway(false)
+      dismissComboNotice()
+      setComboConflict(null)
     }
 
     // Guarda la comanda en IndexedDB. Nunca se anuncia como recibida por
@@ -502,7 +774,25 @@ export function PosView({
                     {formatMoney(product.price)}
                   </span>
                   {product.isCombo ? (
-                    <Badge variant="secondary">Combo</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary">Combo</Badge>
+                      {product.promotions?.find((promotion) => promotion.isActive)
+                        ? (
+                            <Badge
+                              variant="outline"
+                              className="border-sky-500/50 bg-sky-500/10 text-sky-700 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-400"
+                            >
+                              {
+                                PROMOTION_TYPE_LABELS[
+                                  product.promotions.find(
+                                    (promotion) => promotion.isActive
+                                  )!.type
+                                ]
+                              }
+                            </Badge>
+                          )
+                        : null}
+                    </div>
                   ) : null}
                 </button>
               ))}
@@ -547,6 +837,30 @@ export function PosView({
           ) : null}
 
           <Separator />
+
+          {comboNotice ? (
+            <Alert className="border-chart-3/50! bg-chart-3/10! text-chart-3!">
+              <SparklesIcon />
+              <AlertTitle>Precio de combo ajustado</AlertTitle>
+              <AlertDescription className="text-chart-3/80!">
+                {comboNotice.message}
+              </AlertDescription>
+              {comboUndoAvailable ? (
+                <AlertAction>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-chart-3 hover:bg-chart-3/15 hover:text-chart-3"
+                    onClick={comboNotice.undo}
+                  >
+                    <Undo2Icon />
+                    Revertir
+                  </Button>
+                </AlertAction>
+              ) : null}
+            </Alert>
+          ) : null}
 
           {cart.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -715,6 +1029,60 @@ export function PosView({
         </aside>
       </div>
 
+      <AlertDialog
+        open={comboConflict !== null}
+        onOpenChange={(open) => {
+          if (!open) setComboConflict(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-chart-3/10 text-chart-3">
+              <GroupIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Elige el combo correcto</AlertDialogTitle>
+            <AlertDialogDescription>
+              Los artículos agregados coinciden con más de un combo. Confirma
+              cuál opción debe aplicarse.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="flex flex-col gap-2">
+            {comboConflict?.matches.map((match) => {
+              const promotion = match.combo.promotions?.[0]
+
+              return (
+                <Button
+                  key={match.combo.id}
+                  type="button"
+                  variant="outline"
+                  className="h-auto justify-between gap-3 py-2 text-left"
+                  onClick={() => chooseComboConflict(match)}
+                >
+                  <span className="flex min-w-0 flex-col items-start gap-0.5">
+                    <span className="truncate font-medium">
+                      {match.combo.name}
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {promotion?.isActive
+                        ? PROMOTION_TYPE_LABELS[promotion.type]
+                        : "Precio normal"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {formatMoney(match.comboPrice)}
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {selectedProduct ? (
         <AddItemDialog
           product={selectedProduct}
@@ -736,6 +1104,8 @@ export function PosView({
             setCharging(false)
             setOrderId("")
             setCart([])
+            dismissComboNotice()
+            setComboConflict(null)
             router.refresh()
           }}
         />

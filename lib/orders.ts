@@ -1,3 +1,5 @@
+import type { PromotionType } from "./catalog"
+
 export type OrderStatus = "OPEN" | "CLOSED" | "CANCELLED"
 
 export type PaymentMethod = "CASH" | "CARD" | "TRANSFER"
@@ -116,6 +118,10 @@ export interface OrderItem {
   subtotal: string
   /** Descuento aplicado por una promoción del combo. */
   discountAmount: string
+  /** Snapshot de la promoción aplicada, para reportes y marketing. */
+  promotionId: string | null
+  promotionName: string | null
+  promotionType: PromotionType | null
   extras: OrderItemExtra[]
   options: OrderItemOption[]
   exclusions: OrderItemExclusion[]

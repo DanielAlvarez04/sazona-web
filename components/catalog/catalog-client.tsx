@@ -28,7 +28,8 @@ import {
 import { ArticlesTable } from "@/components/catalog/articles-table"
 import { CatalogSummary } from "@/components/catalog/catalog-summary"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
-import { CombosPanel } from "@/components/catalog/combos-panel"
+import { CombosSummary } from "@/components/catalog/combos-summary"
+import { CombosTable } from "@/components/catalog/combos-table"
 import { ImportDialog } from "@/components/catalog/import-dialog"
 import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
@@ -103,8 +104,6 @@ export function CatalogClient({
   )
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
   const [producing, setProducing] = useState<Recipe | null>(null)
-  // Combo que se quiere abrir desde el badge de combos de una tabla.
-  const [comboToEdit, setComboToEdit] = useState<string | null>(null)
 
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -158,6 +157,18 @@ export function CatalogClient({
     )
     setInitialSaveAs("article")
     setDialogOpen(true)
+  }
+
+  function openCombo(combo: ArticleListItem) {
+    setEditingArticle(combo)
+    setEditingRecipe(null)
+    setInitialSaveAs("combo")
+    setDialogOpen(true)
+  }
+
+  function openComboById(comboId: string) {
+    const combo = articles.find((article) => article.id === comboId)
+    if (combo) openCombo(combo)
   }
 
   function toggleRecipeActive(recipe: Recipe) {
@@ -254,6 +265,51 @@ export function CatalogClient({
     )
   }
 
+  function handleDeactivateCombo(combo: ArticleListItem): Promise<boolean> {
+    return rowForm.run(() =>
+      deactivateItem(combo.id).then((result) => {
+        if (result.ok) {
+          toast.success("Combo desactivado")
+        } else {
+          toast.error(result.message ?? "No se pudo desactivar el combo")
+        }
+        return result
+      })
+    )
+  }
+
+  function handleActivateCombo(combo: ArticleListItem): Promise<boolean> {
+    return rowForm.run(() =>
+      activateItem(combo.id).then((result) => {
+        if (result.ok) {
+          toast.success("Combo activado")
+        } else {
+          toast.error(result.message ?? "No se pudo activar el combo")
+        }
+        return result
+      })
+    )
+  }
+
+  function handleDeleteCombos(combos: ArticleListItem[]): Promise<boolean> {
+    const ids = combos.map((combo) => combo.id)
+
+    return rowForm.run(() =>
+      deleteItems(ids).then((result) => {
+        if (result.ok) {
+          toast.success(
+            ids.length === 1
+              ? "Combo eliminado"
+              : `${result.data?.deletedCount ?? ids.length} combos eliminados`
+          )
+        } else {
+          toast.error(result.message ?? "No se pudieron eliminar los combos")
+        }
+        return result
+      })
+    )
+  }
+
   function handleDeleteArticles(
     targets: ArticleListItem[]
   ): Promise<boolean> {
@@ -323,7 +379,7 @@ export function CatalogClient({
               onActivate={handleActivateArticle}
               onDeactivate={handleDeactivateArticle}
               onDelete={handleDeleteArticles}
-              onEditCombo={canManage ? setComboToEdit : () => {}}
+              onEditCombo={canManage ? openComboById : () => {}}
               onManageCategories={() => setCategoriesOpen(true)}
               onImportCsv={() => setImportOpen(true)}
             />
@@ -359,27 +415,31 @@ export function CatalogClient({
               onToggleActive={toggleRecipeActive}
               onDelete={handleDeleteRecipe}
               onDeleteMany={handleDeleteRecipes}
-              onEditCombo={canManage ? setComboToEdit : () => {}}
+              onEditCombo={canManage ? openComboById : () => {}}
               onManageCategories={() => setCategoriesOpen(true)}
             />
           </div>
         </TabsContent>
 
         <TabsContent value="combos" keepMounted>
-          <CombosPanel
-            combos={visibleArticles.filter((article) => article.isCombo)}
-            products={visibleArticles.filter((article) => !article.isCombo)}
-            categories={articleCategories}
-            optionGroups={optionGroups}
-            optionPresets={optionPresets}
-            canManage={canManage}
-            onActivate={handleActivateArticle}
-            onDeactivate={handleDeactivateArticle}
-            onDelete={handleDeleteArticles}
-            taxRate={taxRate}
-            editRequestId={comboToEdit}
-            onEditRequestHandled={() => setComboToEdit(null)}
-          />
+          <div className="flex flex-col gap-4">
+            <CombosSummary
+              combos={visibleArticles.filter((article) => article.isCombo)}
+              recipes={recipes}
+            />
+            <CombosTable
+              combos={visibleArticles.filter((article) => article.isCombo)}
+              recipes={recipes}
+              canManage={canManage}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onCreate={() => openNewProduct("combo")}
+              onEdit={openCombo}
+              onActivate={handleActivateCombo}
+              onDeactivate={handleDeactivateCombo}
+              onDelete={handleDeleteCombos}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="grupos-opciones" keepMounted>
@@ -406,9 +466,18 @@ export function CatalogClient({
           ingredients={ingredients}
           optionGroups={optionGroups}
           optionPresets={optionPresets}
+          products={articles.filter(
+            (article) => !article.isCombo && !article.isArchived
+          )}
           taxRate={taxRate}
           onSaved={(saveAs) =>
-            setTab(saveAs === "article" ? "articulos" : "recetas")
+            setTab(
+              saveAs === "combo"
+                ? "combos"
+                : saveAs === "article"
+                  ? "articulos"
+                  : "recetas"
+            )
           }
         />
       ) : null}

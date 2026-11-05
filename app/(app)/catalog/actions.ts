@@ -447,14 +447,16 @@ export interface OptionGroupInput {
 }
 
 export interface ComboPromotionInput {
-  name: string
+  name?: string
   type: PromotionType
   value?: number
-  startsAt?: string | null
-  endsAt?: string | null
-  daysOfWeek?: number[]
-  startTime?: string | null
-  endTime?: string | null
+  payQuantity?: number
+  getQuantity?: number
+  specialPrice?: number
+  freeItemId?: string | null
+  freeVariantId?: string | null
+  discountedItemId?: string | null
+  discountedVariantId?: string | null
   isActive?: boolean
 }
 
