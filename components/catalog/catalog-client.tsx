@@ -5,7 +5,6 @@ import { useState } from "react"
 import {
   BlenderIcon,
   GroupIcon,
-  ListChecksIcon,
   SoupIcon,
   Trash2Icon,
   UnlinkIcon,
@@ -31,9 +30,9 @@ import { CategoryDialog } from "@/components/catalog/category-dialog"
 import { CombosSummary } from "@/components/catalog/combos-summary"
 import { CombosTable } from "@/components/catalog/combos-table"
 import { ImportDialog } from "@/components/catalog/import-dialog"
-import { OptionGroupsPanel } from "@/components/catalog/option-groups-panel"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { usePersistentViewMode } from "@/hooks/use-persistent-view-mode"
 import {
   AlertDialog,
@@ -58,6 +57,8 @@ import type {
   OptionGroupPreset,
   Recipe,
 } from "@/lib/catalog"
+
+const CATALOG_TABS = ["articulos", "recetas", "combos"] as const
 
 export function CatalogClient({
   recipes,
@@ -92,7 +93,12 @@ export function CatalogClient({
   const visibleArticles = articles.filter((article) => !article.isArchived)
   const regularArticles = visibleArticles.filter((article) => !article.isCombo)
 
-  const [tab, setTab] = useState("articulos")
+  // La pestaña se recuerda entre visitas (incluida la vuelta desde Cocina).
+  const [tab, setTab] = usePersistentTab(
+    "catalog-tab",
+    CATALOG_TABS,
+    "articulos"
+  )
   // El modo de vista se comparte entre Artículos y Recetas y se persiste entre
   // recargas para no tener que cambiarlo manualmente cada vez.
   const [viewMode, setViewMode] = usePersistentViewMode()
@@ -347,10 +353,6 @@ export function CatalogClient({
             <GroupIcon className="size-4" />
             Combos
           </TabsTrigger>
-          <TabsTrigger type="button" value="grupos-opciones">
-            <ListChecksIcon className="size-4" />
-            Grupos de opciones
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="articulos" keepMounted>
@@ -442,13 +444,6 @@ export function CatalogClient({
           </div>
         </TabsContent>
 
-        <TabsContent value="grupos-opciones" keepMounted>
-          <OptionGroupsPanel
-            groups={optionGroups}
-            presets={optionPresets}
-            canManage={canManage}
-          />
-        </TabsContent>
       </Tabs>
 
       {canManage && dialogOpen ? (

@@ -60,6 +60,11 @@ export interface PresentationRow {
   /** Imagen propia ya guardada (null = usa la imagen base del artículo). */
   imageKey: string | null
   imageUrl: string | null
+  /**
+   * Imagen base anterior que la principal conservará al cambiarla o quitarla.
+   * Es solo preview: el servidor hace la copia real al guardar.
+   */
+  imageInheritedUrl: string | null
   /** Archivo elegido en esta sesión; se sube al guardar. */
   imageFile: File | null
   /** Preview local del archivo pendiente. */
@@ -85,6 +90,7 @@ export function createPresentationRow(
     linkedName: false,
     imageKey: null,
     imageUrl: null,
+    imageInheritedUrl: null,
     imageFile: null,
     imagePreviewUrl: null,
     ...overrides,
@@ -366,8 +372,8 @@ function PresentationImageButton({
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const ownUrl = row.imagePreviewUrl ?? row.imageUrl
-  const src = ownUrl ?? fallbackUrl
-  const inherited = !ownUrl && Boolean(fallbackUrl)
+  const src = ownUrl ?? row.imageInheritedUrl ?? fallbackUrl
+  const inherited = !ownUrl && Boolean(src)
   const hasOwn = Boolean(ownUrl)
   const label = row.name.trim() || "esta presentación"
 
@@ -498,6 +504,7 @@ function SortablePresentationRow({
     update({
       imageFile: file,
       imagePreviewUrl: URL.createObjectURL(file),
+      imageInheritedUrl: null,
     })
   }
 
@@ -507,6 +514,7 @@ function SortablePresentationRow({
     update({
       imageFile: null,
       imagePreviewUrl: null,
+      imageInheritedUrl: null,
       imageKey: null,
       imageUrl: null,
     })

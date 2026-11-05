@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import {
   BlenderIcon,
   GroupIcon,
@@ -135,6 +135,10 @@ type DialogImage =
   | { kind: "existing"; key: string; url: string }
   | { kind: "pending"; file: File; url: string }
 
+function isFile(value: DialogImage | File): value is File {
+  return typeof File !== "undefined" && value instanceof File
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
@@ -220,23 +224,11 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
       variantId: variant.id,
       imageKey: variant.imageKey,
       imageUrl: variant.imageUrl,
+      imageInheritedUrl: null,
       imageFile: null,
       imagePreviewUrl: null,
     }
   })
-}
-
-/** Preferencia del switch «Insumos de la receta». */
-const RECIPE_SWITCH_KEY = "np:catalog:recipe-enabled"
-
-function initialRecipeEnabled(): boolean {
-  if (typeof window === "undefined") return false
-
-  try {
-    return window.localStorage.getItem(RECIPE_SWITCH_KEY) === "1"
-  } catch {
-    return false
-  }
 }
 
 /** Unidad visible por defecto para el rendimiento de un insumo producido. */
@@ -495,28 +487,13 @@ export function ProductDialog({
   )
   /** null = receta común; si no, id de presentación o `draft:<key>`. */
   const [recipeScope, setRecipeScope] = useState<string | null>(null)
-  // El switch solo muestra la captura. Si el registro ya trae insumos, arranca
-  // encendido; si no, se recuerda la última preferencia del usuario.
+  // En un producto nuevo el switch arranca apagado. Solo se enciende si el
+  // registro que se edita ya trae insumos capturados.
   const [recipeEnabled, setRecipeEnabled] = useState(
-    () => Boolean(recipe?.ingredients.length) || initialRecipeEnabled()
+    () => Boolean(recipe?.ingredients.length)
   )
   const effectiveRecipeEnabled = saveAs === "article" ? recipeEnabled : true
   const [dialogTab, setDialogTab] = useState("presentaciones")
-
-  useEffect(() => {
-    // La preferencia solo aplica a la chip Artículo; en Receta/Insumo la
-    // receta siempre está activa.
-    if (saveAs !== "article") return
-
-    try {
-      window.localStorage.setItem(
-        RECIPE_SWITCH_KEY,
-        recipeEnabled ? "1" : "0"
-      )
-    } catch {
-      // Sin localStorage (modo privado) el switch solo vive en la sesión.
-    }
-  }, [recipeEnabled, saveAs])
 
   const storedYield = initialYield(recipe)
   const [yieldQuantity, setYieldQuantity] = useState(storedYield.quantity)
@@ -648,19 +625,85 @@ export function ProductDialog({
     )
   }
 
-  /** Vista previa local: la imagen se sube a R2 al guardar. */
+  /**
+   * Asigna a la presentación principal una imagen base.
+   *
+   * Si es un archivo nuevo, la principal guarda su propia copia al subir. Si
+   * ya estaba guardada, se muestra como heredada y el servidor hace la copia
+   * real al guardar. En ambos casos el preview aparece de inmediato.
+   */
+  function withPrimaryBaseImage(
+    sourceRows: PresentationRow[],
+    image: DialogImage | File | null
+  ): PresentationRow[] {
+    if (sourceRows.length === 0 || !image) return sourceRows
+
+    const base =
+      isFile(image)
+        ? { kind: "pending" as const, file: image }
+        : image.kind === "existing"
+          ? { kind: "existing" as const, url: image.url }
+          : { kind: "pending" as const, file: image.file }
+
+    const index = Math.max(
+      sourceRows.findIndex((row) => row.isPrimary),
+      0
+    )
+    const primary = sourceRows[index]
+
+    if (
+      !primary ||
+      primary.imageFile ||
+      primary.imageUrl ||
+      primary.imageInheritedUrl
+    ) {
+      return sourceRows
+    }
+
+    return sourceRows.map((row, rowIndex) => {
+      if (rowIndex !== index) return row
+
+      if (base.kind === "pending") {
+        return {
+          ...row,
+          imageFile: base.file,
+          imagePreviewUrl: URL.createObjectURL(base.file),
+        }
+      }
+
+      // Imagen ya guardada: se muestra como herencia; el servidor la copia
+      // cuando la base cambie o se quite.
+      return { ...row, imageInheritedUrl: base.url }
+    })
+  }
+
   function handleSelectImage(file: File) {
+    const previous = image
+
     setImage((current) => {
       if (current?.kind === "pending") URL.revokeObjectURL(current.url)
       return { kind: "pending", file, url: URL.createObjectURL(file) }
     })
+
+    if (!multiple) return
+
+    // Si la base anterior existía, la principal la conserva. Si era la
+    // primera imagen, la principal toma la nueva (con su propia copia).
+    setRows((current) => withPrimaryBaseImage(current, previous ?? file))
   }
 
   function handleRemoveImage() {
+    const previous = image
+
     setImage((current) => {
       if (current?.kind === "pending") URL.revokeObjectURL(current.url)
       return null
     })
+
+    if (!multiple) return
+
+    // Quitar la base no borra la imagen de la principal: se conserva la anterior.
+    setRows((current) => withPrimaryBaseImage(current, previous))
   }
 
   /** Aplica el cambio del interruptor de presentaciones. */
@@ -672,7 +715,7 @@ export function ProductDialog({
     }
 
     if (next && rows.length === 0) {
-      setRows(defaultPresentationRows(name))
+      setRows(withPrimaryBaseImage(defaultPresentationRows(name), image))
       setPresentationMode("variant")
       presentationDrafts.current = { size: null, variant: null }
     }
@@ -712,6 +755,24 @@ export function ProductDialog({
 
   /** Al quitar una presentación, se limpian sus filas de receta. */
   function handlePresentationRowsChange(next: PresentationRow[]) {
+    const previousPrimary = rows.find((row) => row.isPrimary) ?? rows[0]
+    const nextPrimary = next.find((row) => row.isPrimary) ?? next[0]
+
+    // Si no hay imagen base y la principal estrena una, el artículo la toma
+    // como base. Se adelanta el preview; el guardado sube ambas copias.
+    if (
+      !image &&
+      nextPrimary?.imageFile &&
+      previousPrimary?.imageFile !== nextPrimary.imageFile
+    ) {
+      const file = nextPrimary.imageFile
+
+      setImage((current) => {
+        if (current?.kind === "pending") URL.revokeObjectURL(current.url)
+        return { kind: "pending", file, url: URL.createObjectURL(file) }
+      })
+    }
+
     const nextKeys = new Set(next.map((presentation) => presentation.key))
     const removed = rows.filter(
       (presentation) => !nextKeys.has(presentation.key)

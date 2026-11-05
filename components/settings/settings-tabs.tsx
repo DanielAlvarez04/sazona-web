@@ -3,6 +3,15 @@
 import type { ReactNode } from "react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
+
+const SETTINGS_TABS = [
+  "account",
+  "business",
+  "catalog",
+  "inventory",
+  "personalization",
+] as const
 
 /**
  * Pestañas laterales de Configuración.
@@ -23,9 +32,16 @@ export function SettingsTabs({
   inventory: ReactNode
   personalization: ReactNode
 }) {
+  const [tab, setTab] = usePersistentTab(
+    "settings-tab",
+    SETTINGS_TABS,
+    "account"
+  )
+
   return (
     <Tabs
-      defaultValue="account"
+      value={tab}
+      onValueChange={setTab}
       orientation="vertical"
       className="gap-6 max-md:flex-col"
     >

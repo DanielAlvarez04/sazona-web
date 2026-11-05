@@ -11,6 +11,7 @@ import { InventorySummary } from "@/components/inventory/inventory-summary"
 import { KardexTable } from "@/components/inventory/kardex-table"
 import { listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   type IngredientCategory,
   type IngredientLocation,
@@ -19,6 +20,8 @@ import {
 } from "@/lib/catalog"
 import type { InventoryReport } from "@/lib/dashboard"
 import { type Branch } from "@/lib/branches"
+
+const INVENTORY_TABS = ["inventario", "kardex"] as const
 
 interface InventoryClientProps {
   initialIngredients: Ingredient[]
@@ -38,6 +41,11 @@ export function InventoryClient({
   initialBranch,
 }: InventoryClientProps) {
   const [branch] = useState<Branch | null>(initialBranch)
+  const [tab, setTab] = usePersistentTab(
+    "inventory-tab",
+    INVENTORY_TABS,
+    "inventario"
+  )
   const [categories, setCategories] = useState<IngredientCategory[]>([])
   const [locations, setLocations] = useState<IngredientLocation[]>([])
   const [creating, setCreating] = useState(false)
@@ -68,7 +76,7 @@ export function InventoryClient({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <Tabs defaultValue="inventario" className="gap-4">
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
         <TabsList>
           <TabsTrigger type="button" value="inventario">
             <PackageIcon className="size-4" />

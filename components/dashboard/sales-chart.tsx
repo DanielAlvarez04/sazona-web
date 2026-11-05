@@ -1,6 +1,6 @@
 "use client"
 
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import {
   Card,
@@ -20,9 +20,17 @@ import { formatMoney } from "@/lib/catalog"
 const chartConfig = {
   sales: {
     label: "Ventas",
-    color: "var(--primary)",
+    color: "var(--chart-4)",
   },
 } satisfies ChartConfig
+
+/** Eje compacto para que los importes no ocupen media gráfica. */
+const axisMoneyFormatter = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  notation: "compact",
+  maximumFractionDigits: 1,
+})
 
 export function SalesChart({
   data,
@@ -42,7 +50,11 @@ export function SalesChart({
           config={chartConfig}
           className="aspect-auto h-[260px] w-full"
         >
-          <AreaChart data={data}>
+          <AreaChart
+            accessibilityLayer
+            data={data}
+            margin={{ left: 0, right: 12 }}
+          >
             <defs>
               <linearGradient id="fillSales" x1="0" y1="0" x2="0" y2="1">
                 <stop
@@ -53,7 +65,7 @@ export function SalesChart({
                 <stop
                   offset="95%"
                   stopColor="var(--color-sales)"
-                  stopOpacity={0.1}
+                  stopOpacity={0.15}
                 />
               </linearGradient>
             </defs>
@@ -68,6 +80,15 @@ export function SalesChart({
                 const [, month, day] = value.split("-")
                 return `${day}/${month}`
               }}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              width={56}
+              tickFormatter={(value: number) =>
+                axisMoneyFormatter.format(value)
+              }
             />
             <ChartTooltip
               cursor={false}
@@ -84,7 +105,7 @@ export function SalesChart({
             />
             <Area
               dataKey="sales"
-              type="natural"
+              type="linear"
               fill="url(#fillSales)"
               stroke="var(--color-sales)"
               strokeWidth={2}

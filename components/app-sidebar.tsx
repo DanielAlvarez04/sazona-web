@@ -35,7 +35,7 @@ import {
 } from "lucide-react"
 
 const data = {
-  navMain: [
+  navService: [
     {
       title: "Dashboard",
       url: "/dashboard",
@@ -47,19 +47,21 @@ const data = {
       icon: <ShoppingBasketIcon />,
     },
     {
+      title: "Menús",
+      url: "/menus",
+      icon: <NotebookTextIcon />,
+    },
+    {
       title: "Cocina",
       url: "/kitchen",
       icon: <ChefHatIcon />,
     },
+  ],
+  navApplication: [
     {
       title: "Catálogo",
       url: "/catalog",
       icon: <CookingPotIcon />,
-    },
-    {
-      title: "Menús",
-      url: "/menus",
-      icon: <NotebookTextIcon />,
     },
     {
       title: "Inventario",
@@ -143,7 +145,9 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarSeparator />
-        <NavMain items={data.navMain} label="Aplicación" />
+        <NavMain items={data.navService} label="Servicio" />
+        <SidebarSeparator />
+        <NavMain items={data.navApplication} label="Aplicación" />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>

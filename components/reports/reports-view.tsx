@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useMemo } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { formatMoney, formatQuantity } from "@/lib/catalog"
 import type { Branch } from "@/lib/branches"
 import type {
@@ -34,6 +36,8 @@ import {
   ROUND_STATUS_LABELS,
   type RoundStatus,
 } from "@/lib/orders"
+
+const REPORT_TABS = ["sales", "inventory", "kitchen"] as const
 
 const MOVEMENT_LABELS: Record<string, string> = {
   ADJUSTMENT: "Ajuste",
@@ -59,7 +63,23 @@ export function ReportsView({
   /** Sucursal activa; `null` = vista consolidada. */
   branch: Branch | null
 }) {
-  const defaultTab = sales ? "sales" : inventory ? "inventory" : "kitchen"
+  const availableTabs = useMemo(
+    () =>
+      REPORT_TABS.filter((tab) =>
+        tab === "sales"
+          ? Boolean(sales)
+          : tab === "inventory"
+            ? Boolean(inventory)
+            : Boolean(kitchen)
+      ),
+    [sales, inventory, kitchen]
+  )
+  const defaultTab = availableTabs[0] ?? "sales"
+  const [tab, setTab] = usePersistentTab(
+    "reports-tab",
+    availableTabs,
+    defaultTab
+  )
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
@@ -85,7 +105,7 @@ export function ReportsView({
         }
       />
 
-      <Tabs defaultValue={defaultTab}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           {sales ? <TabsTrigger value="sales">Ventas</TabsTrigger> : null}
           {inventory ? (
