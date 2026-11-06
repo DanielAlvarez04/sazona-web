@@ -334,6 +334,7 @@ export function ArticlesTable({
         columnLabels={ARTICLE_COLUMN_LABELS}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
+        cardColumnsStorageKey="catalog-card-columns"
         cardsView={(rows) => (
           <ArticleCards
             articles={rows}

@@ -1,21 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarClockIcon,
   NotebookTextIcon,
-  PencilIcon,
-  PlusIcon,
   PowerIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
   activateMenu,
   deactivateMenu,
+  deleteMenu,
+  duplicateMenu,
 } from "@/app/(app)/menus/actions"
+import { MenuScheduleBoard } from "@/components/menus/menu-schedule-board"
 import { MenuDialog } from "@/components/menus/menu-dialog"
+import { MenusSummary } from "@/components/menus/menus-summary"
+import { MenusTable } from "@/components/menus/menus-table"
+import { UnassignedItemsSheet } from "@/components/menus/unassigned-items-sheet"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,18 +32,20 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActionForm } from "@/hooks/use-action-form"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
+import { usePersistentViewMode } from "@/hooks/use-persistent-view-mode"
 import type { ArticleListItem, Category } from "@/lib/catalog"
-import { formatMenuSchedule, type Menu } from "@/lib/menus"
+import type { Menu } from "@/lib/menus"
+import type { MenuRowActions } from "@/components/menus/menus-columns"
+
+const MENUS_TABS = ["menus", "programacion"] as const
+
+type ConfirmAction = {
+  kind: "deactivate" | "delete"
+  menu: Menu
+}
 
 export function MenusClient({
   menus,
@@ -54,28 +61,69 @@ export function MenusClient({
   const router = useRouter()
   const rowForm = useActionForm(() => router.refresh())
 
+  const [tab, setTab] = usePersistentTab(
+    "menus-tab",
+    MENUS_TABS,
+    "menus"
+  )
+  const [viewMode, setViewMode] = usePersistentViewMode("menus-view-mode")
+  const [now, setNow] = useState<Date | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Menu | null>(null)
-  const [confirmDeactivate, setConfirmDeactivate] = useState<Menu | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmAction | null>(null)
+  const [unassignedOpen, setUnassignedOpen] = useState(false)
+  const [pendingMenuId, setPendingMenuId] = useState<string | null>(null)
 
-  const active = menus.filter((menu) => menu.isActive)
-  const availableNow = active.filter((menu) => menu.isAvailableNow)
-  const assignedItems = new Set(
-    active.flatMap((menu) => menu.items.map((item) => item.itemId))
-  ).size
+  useEffect(() => {
+    const tick = () => setNow(new Date())
+    tick()
+
+    const interval = window.setInterval(tick, 60_000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const imageById = useMemo(
+    () => new Map(items.map((item) => [item.id, item.imageUrl])),
+    [items]
+  )
+
+  const unassignedItems = useMemo(() => {
+    const assigned = new Set(
+      menus
+        .filter((menu) => menu.isActive)
+        .flatMap((menu) => menu.items.map((entry) => entry.itemId))
+    )
+
+    return items.filter(
+      (item) => item.isActive && !item.isArchived && !assigned.has(item.id)
+    )
+  }, [menus, items])
 
   function openNew() {
+    if (!canManage) return
     setEditing(null)
     setDialogOpen(true)
   }
 
   function openEdit(menu: Menu) {
+    if (!canManage) return
     setEditing(menu)
     setDialogOpen(true)
   }
 
+  function runFor(
+    menu: Menu,
+    action: () => Promise<{ ok: boolean; message?: string }>
+  ) {
+    setPendingMenuId(menu.id)
+
+    return rowForm.run(action).finally(() => {
+      setPendingMenuId(null)
+    })
+  }
+
   function handleActivate(menu: Menu) {
-    rowForm.run(() =>
+    void runFor(menu, () =>
       activateMenu(menu.id).then((result) => {
         if (result.ok) toast.success("Menú activado")
         return result
@@ -83,166 +131,110 @@ export function MenusClient({
     )
   }
 
-  function confirmDeactivateAction() {
-    const menu = confirmDeactivate
-    if (!menu) return
-
-    rowForm.run(() =>
-      deactivateMenu(menu.id).then((result) => {
-        if (result.ok) toast.success("Menú desactivado")
+  function handleDuplicate(menu: Menu) {
+    void runFor(menu, () =>
+      duplicateMenu(menu.id).then((result) => {
+        if (result.ok) {
+          toast.success("Menú duplicado como borrador inactivo")
+          setTab("menus")
+        }
         return result
       })
     )
-    setConfirmDeactivate(null)
+  }
+
+  function handleDeactivate(menu: Menu) {
+    setConfirm({ kind: "deactivate", menu })
+  }
+
+  function handleDelete(menu: Menu) {
+    setConfirm({ kind: "delete", menu })
+  }
+
+  function confirmAction() {
+    const pending = confirm
+    if (!pending) return
+
+    setConfirm(null)
+
+    void runFor(pending.menu, () =>
+      (pending.kind === "delete"
+        ? deleteMenu(pending.menu.id)
+        : deactivateMenu(pending.menu.id)
+      ).then((result) => {
+        if (result.ok) {
+          toast.success(
+            pending.kind === "delete"
+              ? "Menú eliminado"
+              : "Menú desactivado"
+          )
+        }
+        return result
+      })
+    )
+  }
+
+  const actions: MenuRowActions = {
+    onEdit: openEdit,
+    onDuplicate: handleDuplicate,
+    onActivate: handleActivate,
+    onDeactivate: handleDeactivate,
+    onDelete: handleDelete,
+    canManage,
+    isPending: (menu) => rowForm.pending && pendingMenuId === menu.id,
   }
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-            <NotebookTextIcon className="size-5" />
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+        <TabsList>
+          <TabsTrigger type="button" value="menus">
+            <NotebookTextIcon className="size-4" />
             Menús
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Colecciones de artículos para filtrar el punto de venta por
-            ocasión u horario.
-          </p>
-        </div>
-        {canManage ? (
-          <Button type="button" onClick={openNew}>
-            <PlusIcon />
-            Nuevo menú
-          </Button>
-        ) : null}
-      </div>
+          </TabsTrigger>
+          <TabsTrigger type="button" value="programacion">
+            <CalendarClockIcon className="size-4" />
+            Programación
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Menús" value={menus.length} />
-        <SummaryCard label="Activos" value={active.length} />
-        <SummaryCard label="En horario ahora" value={availableNow.length} />
-        <SummaryCard label="Artículos asignados" value={assignedItems} />
-      </div>
+        <TabsContent value="menus" keepMounted>
+          <div className="flex flex-col gap-4">
+            <MenusSummary
+              menus={menus}
+              items={items}
+              now={now}
+              onOpenUnassigned={() => setUnassignedOpen(true)}
+            />
 
-      {rowForm.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {rowForm.error}
-        </p>
-      ) : null}
-
-      {menus.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <NotebookTextIcon className="size-8 text-muted-foreground" />
-            <div>
-              <p className="font-medium">Todavía no hay menús</p>
-              <p className="text-sm text-muted-foreground">
-                Crea el menú infantil, el nocturno o cualquier colección que
-                quieras usar como filtro en el POS.
+            {rowForm.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {rowForm.error}
               </p>
-            </div>
-            {canManage ? (
-              <Button type="button" onClick={openNew}>
-                <PlusIcon />
-                Crear el primer menú
-              </Button>
             ) : null}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {menus.map((menu) => (
-            <Card key={menu.id} className="flex flex-col">
-              <CardHeader className="gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate">{menu.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">
-                      {menu.description ?? "Sin descripción"}
-                    </CardDescription>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge variant={menu.isActive ? "secondary" : "outline"}>
-                      {menu.isActive ? "Activo" : "Inactivo"}
-                    </Badge>
-                    {menu.isActive ? (
-                      <Badge
-                        variant={menu.isAvailableNow ? "outline" : "destructive"}
-                      >
-                        {menu.isAvailableNow
-                          ? "En horario"
-                          : "Fuera de horario"}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-1 flex-col gap-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CalendarClockIcon className="size-3.5 shrink-0" />
-                  {formatMenuSchedule(menu)}
-                </p>
 
-                <div className="flex flex-wrap gap-1.5">
-                  {menu.items.slice(0, 4).map((row) => (
-                    <span
-                      key={row.id}
-                      className="rounded-md bg-muted px-1.5 py-0.5 text-xs"
-                    >
-                      {row.item.name}
-                    </span>
-                  ))}
-                  {menu.items.length > 4 ? (
-                    <span className="px-1 text-xs text-muted-foreground">
-                      +{menu.items.length - 4}
-                    </span>
-                  ) : null}
-                </div>
+            <MenusTable
+              menus={menus}
+              imageById={imageById}
+              actions={actions}
+              canManage={canManage}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              now={now}
+              onCreate={openNew}
+            />
+          </div>
+        </TabsContent>
 
-                <p className="text-xs text-muted-foreground">
-                  {menu.items.length} artículo
-                  {menu.items.length === 1 ? "" : "s"}
-                </p>
-
-                {canManage ? (
-                  <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEdit(menu)}
-                    >
-                      <PencilIcon />
-                      Editar
-                    </Button>
-                    {menu.isActive ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmDeactivate(menu)}
-                      >
-                        <PowerIcon />
-                        Desactivar
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleActivate(menu)}
-                      >
-                        <PowerIcon />
-                        Activar
-                      </Button>
-                    )}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+        <TabsContent value="programacion" keepMounted>
+          <MenuScheduleBoard
+            menus={menus}
+            now={now}
+            canManage={canManage}
+            onEdit={openEdit}
+          />
+        </TabsContent>
+      </Tabs>
 
       {dialogOpen && canManage ? (
         <MenuDialog
@@ -253,43 +245,64 @@ export function MenusClient({
         />
       ) : null}
 
+      <UnassignedItemsSheet
+        open={unassignedOpen}
+        onOpenChange={setUnassignedOpen}
+        items={unassignedItems}
+      />
+
       <AlertDialog
-        open={confirmDeactivate !== null}
+        open={confirm !== null}
         onOpenChange={(open) => {
-          if (!open) setConfirmDeactivate(null)
+          if (!open) setConfirm(null)
         }}
       >
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
-            <AlertDialogMedia>
-              <PowerIcon />
+            <AlertDialogMedia
+              className={
+                confirm?.kind === "delete" ? "text-destructive" : undefined
+              }
+            >
+              {confirm?.kind === "delete" ? (
+                <Trash2Icon />
+              ) : (
+                <PowerIcon />
+              )}
             </AlertDialogMedia>
-            <AlertDialogTitle>Desactivar menú</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirm?.kind === "delete"
+                ? "Eliminar menú"
+                : "Desactivar menú"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              El menú «{confirmDeactivate?.name ?? ""}» dejará de aparecer como
-              filtro en el punto de venta. Los artículos seguirán disponibles
-              en «Todos los menús».
+              {confirm?.kind === "delete" ? (
+                <>
+                  Se eliminará «{confirm.menu.name}» y sus asignaciones de
+                  artículos. Los artículos seguirán disponibles en el catálogo.
+                  Esta acción no se puede deshacer.
+                </>
+              ) : (
+                <>
+                  El menú «{confirm?.menu.name ?? ""}» dejará de aparecer como
+                  filtro en el punto de venta. Los artículos seguirán
+                  disponibles en «Todos los menús».
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeactivateAction}>
-              Desactivar
+            <AlertDialogAction
+              variant={confirm?.kind === "delete" ? "destructive" : "default"}
+              onClick={confirmAction}
+              disabled={rowForm.pending}
+            >
+              {confirm?.kind === "delete" ? "Eliminar" : "Desactivar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-function SummaryCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <CardContent className="py-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
   )
 }

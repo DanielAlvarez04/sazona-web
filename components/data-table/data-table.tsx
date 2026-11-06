@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
 import { ACTIVE_FILTER_OUTLINE } from "@/lib/utils"
 
 import {
@@ -139,6 +140,15 @@ export interface DataTableProps<TData extends RowData> {
    * (ya filtradas, ordenadas y paginadas) para reutilizar la misma paginación.
    */
   cardsView?: (rows: TData[]) => React.ReactNode
+  /** Columnas iniciales de la vista de tarjetas (4–7 salvo que se indique). */
+  defaultCardColumns?: number
+  /** Rango permitido para el control de tamaño de tarjetas. */
+  cardColumnRange?: { min: number; max: number }
+  /**
+   * Clave de `localStorage` para recordar el número de columnas de tarjetas
+   * entre recargas y navegaciones. Si se omite, el tamaño solo vive en memoria.
+   */
+  cardColumnsStorageKey?: string
 
   // Filas
   onRowClick?: (row: TData) => void
@@ -194,6 +204,9 @@ export function DataTable<TData extends RowData>({
   viewMode = "table",
   onViewModeChange,
   cardsView,
+  defaultCardColumns = 6,
+  cardColumnRange = { min: 4, max: 7 },
+  cardColumnsStorageKey,
   onRowClick,
   rowClassName,
   rowContextMenu,
@@ -218,8 +231,22 @@ export function DataTable<TData extends RowData>({
     pageIndex: 0,
     pageSize: defaultPageSize,
   })
-  // Columnas visibles en la vista de tarjetas (4–7).
-  const [cardColumns, setCardColumns] = React.useState(6)
+  // Columnas visibles en la vista de tarjetas (4–7 por defecto). Con
+  // `cardColumnsStorageKey` el tamaño elegido se persiste por página.
+  const [localCardColumns, setLocalCardColumns] =
+    React.useState(defaultCardColumns)
+  const [storedCardColumns, setStoredCardColumns] = usePersistentCardColumns(
+    cardColumnsStorageKey ?? null,
+    defaultCardColumns,
+    cardColumnRange.min,
+    cardColumnRange.max
+  )
+  const cardColumns = cardColumnsStorageKey
+    ? storedCardColumns
+    : localCardColumns
+  const setCardColumns = cardColumnsStorageKey
+    ? setStoredCardColumns
+    : setLocalCardColumns
   // La selección puede ser controlada por el consumidor o interna.
   const [internalRowSelection, setInternalRowSelection] =
     React.useState<RowSelectionState>({})
@@ -456,9 +483,11 @@ export function DataTable<TData extends RowData>({
           size="icon"
           aria-label="Tarjetas más pequeñas"
           title="Tarjetas más pequeñas"
-          disabled={cardColumns >= 7}
+          disabled={cardColumns >= cardColumnRange.max}
           onClick={() =>
-            setCardColumns((current) => Math.min(7, current + 1))
+            setCardColumns((current) =>
+              Math.min(cardColumnRange.max, current + 1)
+            )
           }
         >
           <MinusIcon className="size-4" />
@@ -469,9 +498,11 @@ export function DataTable<TData extends RowData>({
           size="icon"
           aria-label="Tarjetas más grandes"
           title="Tarjetas más grandes"
-          disabled={cardColumns <= 4}
+          disabled={cardColumns <= cardColumnRange.min}
           onClick={() =>
-            setCardColumns((current) => Math.max(4, current - 1))
+            setCardColumns((current) =>
+              Math.max(cardColumnRange.min, current - 1)
+            )
           }
         >
           <PlusIcon className="size-4" />

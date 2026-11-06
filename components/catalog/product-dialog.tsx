@@ -123,6 +123,7 @@ import type {
   Recipe,
   UnitCode,
 } from "@/lib/catalog"
+import { jalapenoChipClass } from "@/lib/chips"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 import {
   uploadItemImage,
@@ -289,12 +290,7 @@ const SAVE_AS_OPTIONS: Array<{
 ]
 
 function saveAsChipClass(active: boolean): string {
-  return cn(
-    "h-7 gap-1.5 rounded-full px-2.5 text-xs shadow-none",
-    active
-      ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2 dark:border-chart-2/50 dark:bg-chart-2/15 dark:hover:bg-chart-2/25"
-      : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground"
-  )
+  return jalapenoChipClass(active)
 }
 
 function initialProductSaveAs(

@@ -354,6 +354,7 @@ export function RecipesTable({
       columnLabels={RECIPE_COLUMN_LABELS}
       viewMode={viewMode}
       onViewModeChange={onViewModeChange}
+      cardColumnsStorageKey="catalog-card-columns"
       cardsView={(rows) => (
         <RecipeCards
           recipes={rows}

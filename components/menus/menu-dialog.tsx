@@ -4,8 +4,12 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2Icon, SaveIcon } from "lucide-react"
 import { toast } from "sonner"
+import type { DateRange } from "react-day-picker"
 
+import { MenuDateRangePicker } from "@/components/menus/menu-date-range-picker"
 import { MenuItemsPicker } from "@/components/menus/menu-items-picker"
+import { MenuTimePicker } from "@/components/menus/menu-time-picker"
+import { InfoHint } from "@/components/info-hint"
 import {
   createMenu,
   updateMenu,
@@ -25,20 +29,50 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { ArticleListItem, Category } from "@/lib/catalog"
-import { MENU_DAY_LABELS, type Menu } from "@/lib/menus"
+import { jalapenoChipClass } from "@/lib/chips"
+import { diffFields, isEmptyPatch, sameStringSet, sameText } from "@/lib/diff"
+import {
+  formatMenuSchedule,
+  MENU_DAY_LABELS,
+  MENU_WEEK_DAYS,
+  type Menu,
+} from "@/lib/menus"
 
-function toDateInput(value: string | null): string {
-  return value ? value.slice(0, 10) : ""
+function toLocalDate(value: string | null): Date | undefined {
+  if (!value) return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
 }
 
-function dateInputToIso(value: string, endOfDay: boolean): string | null {
-  if (!value) return null
-  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+/** Fecha local → ISO; el fin de vigencia cubre el día completo. */
+function toIso(date: Date | undefined, endOfDay: boolean): string | null {
+  if (!date) return null
+
+  const next = new Date(date)
+  if (endOfDay) next.setHours(23, 59, 59, 999)
+  else next.setHours(0, 0, 0, 0)
+
+  return next.toISOString()
+}
+
+function rangeFromMenu(menu: Menu | null): DateRange | undefined {
+  const from = toLocalDate(menu?.startsAt ?? null)
+  const to = toLocalDate(menu?.endsAt ?? null)
+
+  return from || to ? { from, to } : undefined
+}
+
+/** Todos los días de la semana; en la API un arreglo vacío también significa todos. */
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
+/** Viernes, sábado y domingo. */
+const WEEKEND_DAYS = [5, 6, 0]
+
+function initialDays(menu: Menu | null): number[] {
+  if (!menu) return ALL_DAYS
+  return menu.daysOfWeek.length > 0 ? menu.daysOfWeek : ALL_DAYS
 }
 
 export function MenuDialog({
@@ -61,12 +95,12 @@ export function MenuDialog({
 
   const [name, setName] = useState(menu?.name ?? "")
   const [description, setDescription] = useState(menu?.description ?? "")
-  const [isActive, setIsActive] = useState(menu?.isActive ?? true)
-  const [days, setDays] = useState<number[]>(menu?.daysOfWeek ?? [])
+  const [days, setDays] = useState<number[]>(() => initialDays(menu))
+  const [range, setRange] = useState<DateRange | undefined>(() =>
+    rangeFromMenu(menu)
+  )
   const [startTime, setStartTime] = useState(menu?.startTime ?? "")
   const [endTime, setEndTime] = useState(menu?.endTime ?? "")
-  const [startsAt, setStartsAt] = useState(toDateInput(menu?.startsAt ?? null))
-  const [endsAt, setEndsAt] = useState(toDateInput(menu?.endsAt ?? null))
   const [selected, setSelected] = useState<MenuItemInput[]>(() =>
     (menu?.items ?? []).map((row, index) => ({
       itemId: row.itemId,
@@ -74,12 +108,36 @@ export function MenuDialog({
     }))
   )
 
+  const startsAtIso = toIso(range?.from, false)
+  const endsAtIso = toIso(range?.to, true)
+
+  const schedulePreview = formatMenuSchedule({
+    daysOfWeek: days,
+    startTime: startTime || null,
+    endTime: endTime || null,
+    startsAt: startsAtIso,
+    endsAt: endsAtIso,
+  })
+
   function toggleDay(day: number) {
     setDays((current) =>
       current.includes(day)
         ? current.filter((value) => value !== day)
         : [...current, day].sort((left, right) => left - right)
     )
+  }
+
+  const isDaily = days.length === ALL_DAYS.length
+  const isWeekend = sameStringSet(days.map(String), WEEKEND_DAYS.map(String))
+
+  /** «Diario» se activa y desactiva: sin días seleccionados también es diario. */
+  function toggleDaily() {
+    setDays(isDaily ? [] : ALL_DAYS)
+  }
+
+  /** «Finde» marca o desmarca viernes, sábado y domingo. */
+  function toggleWeekend() {
+    setDays(isWeekend ? [] : WEEKEND_DAYS)
   }
 
   function save() {
@@ -100,30 +158,27 @@ export function MenuDialog({
       return
     }
 
-    if (startsAt && endsAt && endsAt < startsAt) {
-      form.setError("La fecha de fin debe ser posterior a la de inicio")
-      return
-    }
-
     const items = selected.map((row, index) => ({
       itemId: row.itemId,
       sortOrder: index,
     }))
 
-    const base: Omit<MenuInput, "name"> & { name: string } = {
+    const next: MenuInput = {
       name: trimmedName,
       description: description.trim() || null,
-      isActive,
-      daysOfWeek: days,
+      // La API interpreta `[]` como «todos los días»: sin días marcados
+      // el menú aplica siempre y no hay restricción que guardar.
+      daysOfWeek:
+        days.length === ALL_DAYS.length || days.length === 0 ? [] : days,
       startTime: startTime || null,
       endTime: endTime || null,
-      startsAt: dateInputToIso(startsAt, false),
-      endsAt: dateInputToIso(endsAt, true),
+      startsAt: startsAtIso,
+      endsAt: endsAtIso,
       items,
     }
 
     if (!menu) {
-      form.run(() => createMenu(base))
+      form.run(() => createMenu(next))
       return
     }
 
@@ -140,33 +195,42 @@ export function MenuDialog({
           row.sortOrder !== items[index].sortOrder
       )
 
-    const changes: Partial<Omit<MenuInput, "items">> & {
-      items?: MenuItemInput[]
-    } = {
-      ...(menu.name === trimmedName ? {} : { name: trimmedName }),
-      ...((menu.description ?? "") === (base.description ?? "")
-        ? {}
-        : { description: base.description }),
-      ...(menu.isActive === isActive ? {} : { isActive }),
-      ...(JSON.stringify(menu.daysOfWeek) === JSON.stringify(days)
-        ? {}
-        : { daysOfWeek: days }),
-      ...((menu.startTime ?? "") === (base.startTime ?? "")
-        ? {}
-        : { startTime: base.startTime }),
-      ...((menu.endTime ?? "") === (base.endTime ?? "")
-        ? {}
-        : { endTime: base.endTime }),
-      ...((menu.startsAt ?? "") === (base.startsAt ?? "")
-        ? {}
-        : { startsAt: base.startsAt }),
-      ...((menu.endsAt ?? "") === (base.endsAt ?? "")
-        ? {}
-        : { endsAt: base.endsAt }),
+    const changes = {
+      ...diffFields(
+        {
+          name: menu.name,
+          description: menu.description,
+          daysOfWeek: menu.daysOfWeek,
+          startTime: menu.startTime,
+          endTime: menu.endTime,
+          startsAt: menu.startsAt,
+          endsAt: menu.endsAt,
+        },
+        {
+          name: next.name,
+          description: next.description,
+          daysOfWeek: next.daysOfWeek,
+          startTime: next.startTime,
+          endTime: next.endTime,
+          startsAt: next.startsAt,
+          endsAt: next.endsAt,
+        },
+        {
+          name: (left, right) =>
+            sameText(left as string, right as string),
+          description: (left, right) =>
+            sameText(left as string | null, right as string | null),
+          daysOfWeek: (left, right) =>
+            sameStringSet(
+              (left as number[]).map(String),
+              (right as number[]).map(String)
+            ),
+        }
+      ),
       ...(itemsChanged ? { items } : {}),
     }
 
-    if (Object.keys(changes).length === 0) {
+    if (isEmptyPatch(changes)) {
       toast.info("Sin cambios")
       onClose()
       return
@@ -177,162 +241,187 @@ export function MenuDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-4xl">
+      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-5xl">
         <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
           <div className="grid gap-6">
-        <DialogHeader>
-          <DialogTitle>{menu ? "Editar menú" : "Nuevo menú"}</DialogTitle>
-          <DialogDescription>
-            Un menú es una colección de artículos para filtrar el punto de
-            venta. No cambia precios ni consume inventario por sí mismo.
-          </DialogDescription>
-        </DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{menu ? "Editar menú" : "Nuevo menú"}</DialogTitle>
+              <DialogDescription>
+                Un menú agrupa artículos para filtrarlos en el punto de venta.
+                Aparecerá solo los días, en el horario y durante las fechas que
+                definas: sin horario aplica todo el día y sin vigencia no
+                caduca. No cambia precios ni inventario.
+              </DialogDescription>
+            </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-            <Field>
-              <FieldLabel htmlFor="menu-name">
-                Nombre <span className="text-destructive">*</span>
-              </FieldLabel>
-              <Input
-                id="menu-name"
-                value={name}
-                maxLength={80}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Ej. Menú infantil"
-              />
-            </Field>
+            <div className="grid gap-6 md:grid-cols-[2fr_1px_3fr]">
+              <section className="flex min-w-0 flex-col gap-3">
+                <Field>
+                  <FieldLabel htmlFor="menu-name">
+                    Nombre <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <Input
+                    id="menu-name"
+                    value={name}
+                    maxLength={80}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Ej. Menú infantil"
+                  />
+                </Field>
 
-            <div className="flex items-end justify-between gap-3 rounded-lg border p-3">
+                <Field className="h-full">
+                  <FieldLabel htmlFor="menu-description">Descripción</FieldLabel>
+                  <Textarea
+                    id="menu-description"
+                    value={description}
+                    maxLength={300}
+                    rows={4}
+                    className="h-[-webkit-fill-available] resize-none"
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Para quién o cuándo aplica este menú"
+                  />
+                </Field>
+              </section>
+
+              <Separator orientation="vertical" className="hidden md:block" />
+              <Separator className="md:hidden" />
+
+              <section className="flex min-w-0 flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm font-medium">Días</Label>
+                    <InfoHint
+                      text="Sin días marcados el menú aplica a todos los días."
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      aria-pressed={isDaily}
+                      className={jalapenoChipClass(isDaily)}
+                      onClick={toggleDaily}
+                    >
+                      Diario
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      aria-pressed={isWeekend}
+                      className={jalapenoChipClass(isWeekend)}
+                      onClick={toggleWeekend}
+                    >
+                      Finde
+                    </Button>
+
+                    <span
+                      aria-hidden
+                      className="mx-0.5 h-5 w-px self-center bg-border"
+                    />
+
+                    {MENU_WEEK_DAYS.map((day) => {
+                      const selected = days.includes(day)
+
+                      return (
+                        <Button
+                          key={day}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-pressed={selected}
+                          className={jalapenoChipClass(selected)}
+                          onClick={() => toggleDay(day)}
+                        >
+                          {MENU_DAY_LABELS[day]}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+                  <Field>
+                    <FieldLabel htmlFor="menu-date-range">Vigencia</FieldLabel>
+                    <MenuDateRangePicker
+                      id="menu-date-range"
+                      value={range}
+                      onChange={setRange}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="menu-start-time">
+                      Hora inicio
+                    </FieldLabel>
+                    <MenuTimePicker
+                      id="menu-start-time"
+                      value={startTime}
+                      onChange={setStartTime}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="menu-end-time">Hora fin</FieldLabel>
+                    <MenuTimePicker
+                      id="menu-end-time"
+                      value={endTime}
+                      onChange={setEndTime}
+                    />
+                  </Field>
+                </div>
+
+                <p className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Resumen: </span>
+                  {schedulePreview}
+                </p>
+              </section>
+            </div>
+
+            <Separator />
+
+            <section className="flex flex-col gap-2">
               <div>
-                <p className="text-sm font-medium">Activo</p>
+                <Label className="text-sm font-medium">
+                  Artículos del menú
+                  <span className="ml-1 text-muted-foreground tabular-nums">
+                    ({selected.length})
+                  </span>{" "}
+                  <span className="text-destructive">*</span>
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  Visible en el POS
+                  Puedes incluir artículos y combos. El orden se usa para
+                  mostrarlos en el POS.
                 </p>
               </div>
-              <Switch checked={isActive} onCheckedChange={setIsActive} />
-            </div>
-          </div>
+              <MenuItemsPicker
+                items={items}
+                categories={categories}
+                value={selected}
+                onChange={setSelected}
+                disabled={form.pending}
+              />
+            </section>
 
-          <Field>
-            <FieldLabel htmlFor="menu-description">Descripción</FieldLabel>
-            <Textarea
-              id="menu-description"
-              value={description}
-              maxLength={300}
-              rows={2}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Para quién o cuándo aplica este menú"
-            />
-          </Field>
+            {form.error ? <FieldError>{form.error}</FieldError> : null}
 
-          <Separator />
-
-          <section className="flex flex-col gap-3">
-            <div>
-              <Label className="text-sm font-medium">Disponibilidad</Label>
-              <p className="text-xs text-muted-foreground">
-                Sin días ni horas, el menú está siempre disponible. Si solo
-                eliges horas, aplican todos los días.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {MENU_DAY_LABELS.map((label, day) => (
-                <Button
-                  key={label}
-                  type="button"
-                  size="sm"
-                  variant={days.includes(day) ? "secondary" : "outline"}
-                  onClick={() => toggleDay(day)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field>
-                <FieldLabel htmlFor="menu-start-time">Hora inicio</FieldLabel>
-                <Input
-                  id="menu-start-time"
-                  type="time"
-                  value={startTime}
-                  onChange={(event) => setStartTime(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="menu-end-time">Hora fin</FieldLabel>
-                <Input
-                  id="menu-end-time"
-                  type="time"
-                  value={endTime}
-                  onChange={(event) => setEndTime(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="menu-starts-at">Desde fecha</FieldLabel>
-                <Input
-                  id="menu-starts-at"
-                  type="date"
-                  value={startsAt}
-                  onChange={(event) => setStartsAt(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="menu-ends-at">Hasta fecha</FieldLabel>
-                <Input
-                  id="menu-ends-at"
-                  type="date"
-                  value={endsAt}
-                  onChange={(event) => setEndsAt(event.target.value)}
-                />
-              </Field>
-            </div>
-          </section>
-
-          <Separator />
-
-          <section className="flex flex-col gap-2">
-            <div>
-              <Label className="text-sm font-medium">
-                Artículos del menú <span className="text-destructive">*</span>
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Puedes incluir artículos y combos. El orden se usa para
-                mostrarlos en el POS.
-              </p>
-            </div>
-            <MenuItemsPicker
-              items={items}
-              categories={categories}
-              value={selected}
-              onChange={setSelected}
-              disabled={form.pending}
-            />
-          </section>
-
-          {form.error ? <FieldError>{form.error}</FieldError> : null}
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={form.pending}
-          >
-            Cancelar
-          </Button>
-          <Button type="button" onClick={save} disabled={form.pending}>
-            {form.pending ? (
-              <Loader2Icon className="animate-spin" />
-            ) : (
-              <SaveIcon />
-            )}
-            {menu ? "Guardar menú" : "Crear menú"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={form.pending}
+              >
+                Cancelar
+              </Button>
+              <Button type="button" onClick={save} disabled={form.pending}>
+                {form.pending ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : (
+                  <SaveIcon />
+                )}
+                {menu ? "Guardar menú" : "Crear menú"}
+              </Button>
+            </DialogFooter>
           </div>
         </div>
       </DialogContent>

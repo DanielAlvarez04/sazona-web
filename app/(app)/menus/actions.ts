@@ -63,6 +63,26 @@ export async function deactivateMenu(menuId: string): Promise<ActionResult> {
   )
 }
 
+export async function duplicateMenu(
+  menuId: string
+): Promise<ActionResult<Menu>> {
+  return mutateApi<Menu>(
+    `/catalog/menus/${menuId}/duplicate`,
+    "POST",
+    undefined,
+    MENU_PATHS
+  )
+}
+
+export async function deleteMenu(menuId: string): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/menus/${menuId}/permanent`,
+    "DELETE",
+    undefined,
+    MENU_PATHS
+  )
+}
+
 export async function activateMenu(menuId: string): Promise<ActionResult> {
   return mutateApi(
     `/catalog/menus/${menuId}`,
