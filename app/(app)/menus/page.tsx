@@ -8,24 +8,19 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
-import {
-  canManageCatalog,
-  type ArticleListItem,
-  type Category,
-} from "@/lib/catalog"
+import { canManageCatalog, type ArticleListItem } from "@/lib/catalog"
 import type { Menu } from "@/lib/menus"
 import { requireUser } from "@/lib/session"
 
 export default async function MenusPage() {
   const user = await requireUser()
 
-  const [menusResponse, itemsResponse, categoriesResponse] = await Promise.all([
+  const [menusResponse, itemsResponse] = await Promise.all([
     apiFetch("/catalog/menus?includeInactive=true"),
     apiFetch("/catalog/items?includeInactive=true"),
-    apiFetch("/catalog/categories?kind=article"),
   ])
 
-  if (!menusResponse.ok || !itemsResponse.ok || !categoriesResponse.ok) {
+  if (!menusResponse.ok || !itemsResponse.ok) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <Card className="max-w-md text-center">
@@ -42,17 +37,15 @@ export default async function MenusPage() {
     )
   }
 
-  const [menus, items, categories] = await Promise.all([
+  const [menus, items] = await Promise.all([
     menusResponse.json() as Promise<Menu[]>,
     itemsResponse.json() as Promise<ArticleListItem[]>,
-    categoriesResponse.json() as Promise<Category[]>,
   ])
 
   return (
     <MenusClient
       menus={menus}
       items={items}
-      categories={categories}
       canManage={canManageCatalog(user.roles)}
     />
   )

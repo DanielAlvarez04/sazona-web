@@ -15,6 +15,7 @@ import {
   PresentationPreview,
   type ArticleRowActions,
 } from "./articles-columns"
+import { ArticleGroupSelect } from "./article-group-select"
 
 /**
  * Estado de la imagen del artículo: qué mostrar cuando no hay imagen o la URL
@@ -41,15 +42,28 @@ function useArticleImage(article: ArticleListItem) {
 function FullArticleCard({
   article,
   actions,
+  showActions = true,
   canSelect,
+  selectDisabled = false,
   selected,
   onSelectedChange,
+  groups = [],
+  group = null,
+  onGroupChange,
 }: {
   article: ArticleListItem
   actions: ArticleRowActions
+  /** `false` oculta el pie de acciones (selector de artículos del menú). */
+  showActions?: boolean
   canSelect: boolean
+  /** Bloquea el checkbox (p. ej. artículos inactivos en el menú). */
+  selectDisabled?: boolean
   selected: boolean
   onSelectedChange: (id: string, selected: boolean) => void
+  /** Secciones disponibles para asignar el artículo. */
+  groups?: string[]
+  group?: string | null
+  onGroupChange?: (id: string, group: string | null) => void
 }) {
   const { showFallback, handleError } = useArticleImage(article)
 
@@ -92,6 +106,7 @@ function FullArticleCard({
               {canSelect ? (
                 <Checkbox
                   checked={selected}
+                  disabled={selectDisabled}
                   onCheckedChange={(value) =>
                     onSelectedChange(article.id, !!value)
                   }
@@ -102,12 +117,14 @@ function FullArticleCard({
                 <span />
               )}
 
-              <ArticleActionsMenu
-                article={article}
-                actions={actions}
-                triggerSize="icon-sm"
-                triggerClassName="text-white/90 hover:bg-white/15 hover:text-white aria-expanded:bg-white/15 [&_svg]:drop-shadow-[0_1px_2px_rgb(0_0_0/0.85)]"
-              />
+              {showActions ? (
+                <ArticleActionsMenu
+                  article={article}
+                  actions={actions}
+                  triggerSize="icon-sm"
+                  triggerClassName="text-white/90 hover:bg-white/15 hover:text-white aria-expanded:bg-white/15 [&_svg]:drop-shadow-[0_1px_2px_rgb(0_0_0/0.85)]"
+                />
+              ) : null}
             </div>
 
             {/*
@@ -143,41 +160,56 @@ function FullArticleCard({
           </div>
         </div>
 
-        {/* Footer con las acciones, mismo fondo que el pie de los diálogos. */}
+        {/* Pie: acciones en Catálogo, grupo del menú en el selector. */}
         <div
           role="group"
-          aria-label={`Acciones de ${article.name}`}
-          className="flex items-center justify-end gap-1 border-t bg-muted px-2 py-2"
+          aria-label={
+            showActions ? `Acciones de ${article.name}` : `Grupo de ${article.name}`
+          }
+          className={cn(
+            "flex min-h-11 items-center gap-1 border-t bg-muted px-2",
+            showActions && "justify-end py-2"
+          )}
         >
-          {article.isActive ? (
-            <Button
-              size="sm"
-              className="w-max shadow-sm"
-              onClick={() => actions.onEdit(article)}
-            >
-              <PencilIcon className="size-4" />
-              Editar
-            </Button>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => actions.onEdit(article)}
-                aria-label={`Editar ${article.name}`}
-              >
-                <PencilIcon className="size-4" />
-              </Button>
+          {showActions ? (
+            article.isActive ? (
               <Button
                 size="sm"
                 className="w-max shadow-sm"
-                onClick={() => actions.onActivate(article)}
+                onClick={() => actions.onEdit(article)}
               >
-                <PowerIcon className="size-4" />
-                Activar
+                <PencilIcon className="size-4" />
+                Editar
               </Button>
-            </>
-          )}
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => actions.onEdit(article)}
+                  aria-label={`Editar ${article.name}`}
+                >
+                  <PencilIcon className="size-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  className="w-max shadow-sm"
+                  onClick={() => actions.onActivate(article)}
+                >
+                  <PowerIcon className="size-4" />
+                  Activar
+                </Button>
+              </>
+            )
+          ) : selected ? (
+            <ArticleGroupSelect
+              groups={groups}
+              value={group}
+              disabled={!onGroupChange}
+              ariaLabel={`Grupo de ${article.name}`}
+              onChange={(next) => onGroupChange?.(article.id, next)}
+            />
+          ) : null}
         </div>
       </Card>
     </div>
@@ -193,16 +225,29 @@ function FullArticleCard({
 export function ArticleCards({
   articles,
   actions,
+  showActions = true,
   canSelect = false,
   selectedIds,
   onSelectedChange,
+  groups,
+  groupByItemId,
+  onGroupChange,
+  isSelectable,
 }: {
   articles: ArticleListItem[]
   actions: ArticleRowActions
+  /** `false` oculta el pie de acciones (selector de artículos del menú). */
+  showActions?: boolean
   /** Muestra el checkbox de selección para acciones en lote. */
   canSelect?: boolean
   selectedIds: Record<string, boolean>
   onSelectedChange: (id: string, selected: boolean) => void
+  /** Secciones del menú y grupo asignado a cada artículo. */
+  groups?: string[]
+  groupByItemId?: Record<string, string | null>
+  onGroupChange?: (id: string, group: string | null) => void
+  /** Restringe qué artículos se pueden marcar (p. ej. solo activos). */
+  isSelectable?: (article: ArticleListItem) => boolean
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-[repeat(var(--np-card-columns,6),minmax(0,1fr))]">
@@ -211,9 +256,14 @@ export function ArticleCards({
           key={article.id}
           article={article}
           actions={actions}
+          showActions={showActions}
           canSelect={canSelect}
+          selectDisabled={isSelectable ? !isSelectable(article) : false}
           selected={selectedIds[article.id] ?? false}
           onSelectedChange={onSelectedChange}
+          groups={groups}
+          group={groupByItemId?.[article.id] ?? null}
+          onGroupChange={onGroupChange}
         />
       ))}
     </div>

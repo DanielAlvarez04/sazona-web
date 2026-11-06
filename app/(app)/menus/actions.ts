@@ -9,6 +9,8 @@ const menuPaths = (menuId: string) => [...MENU_PATHS, `/menus/${menuId}`]
 export interface MenuItemInput {
   itemId: string
   sortOrder?: number
+  /** Sección del menú; `null` = «Sin grupo». */
+  group?: string | null
 }
 
 export interface MenuInput {
@@ -21,6 +23,7 @@ export interface MenuInput {
   endTime?: string | null
   startsAt?: string | null
   endsAt?: string | null
+  groups?: string[]
   items: MenuItemInput[]
 }
 
@@ -44,12 +47,13 @@ export async function updateMenu(
 
 export async function replaceMenuItems(
   menuId: string,
-  items: MenuItemInput[]
+  items: MenuItemInput[],
+  groups?: string[]
 ): Promise<ActionResult> {
   return mutateApi(
     `/catalog/menus/${menuId}/items`,
     "PUT",
-    { items },
+    { items, ...(groups ? { groups } : {}) },
     menuPaths(menuId)
   )
 }

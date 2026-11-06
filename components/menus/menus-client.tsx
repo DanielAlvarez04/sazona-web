@@ -36,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActionForm } from "@/hooks/use-action-form"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { usePersistentViewMode } from "@/hooks/use-persistent-view-mode"
-import type { ArticleListItem, Category } from "@/lib/catalog"
+import type { ArticleListItem } from "@/lib/catalog"
 import type { Menu } from "@/lib/menus"
 import type { MenuRowActions } from "@/components/menus/menus-columns"
 
@@ -50,12 +50,10 @@ type ConfirmAction = {
 export function MenusClient({
   menus,
   items,
-  categories,
   canManage,
 }: {
   menus: Menu[]
   items: ArticleListItem[]
-  categories: Category[]
   canManage: boolean
 }) {
   const router = useRouter()
@@ -240,7 +238,6 @@ export function MenusClient({
         <MenuDialog
           menu={editing}
           items={items}
-          categories={categories}
           onClose={() => setDialogOpen(false)}
         />
       ) : null}

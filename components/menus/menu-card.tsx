@@ -107,6 +107,9 @@ export function MenuCard({
               <UtensilsCrossedIcon className="size-3.5 shrink-0" />
               {menu.items.length} artículo
               {menu.items.length === 1 ? "" : "s"}
+              {menu.groups.length > 0
+                ? ` · ${menu.groups.length} grupo${menu.groups.length === 1 ? "" : "s"}`
+                : ""}
               {combos > 0 ? ` · ${combos} combo${combos === 1 ? "" : "s"}` : ""}
             </span>
             <span

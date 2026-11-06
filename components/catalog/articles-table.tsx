@@ -52,11 +52,13 @@ import type { ArticleListItem, Category, Recipe } from "@/lib/catalog"
 import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { ArticleCards } from "./article-cards"
+import { ArticleGroupSelect } from "./article-group-select"
 import {
   ARTICLE_COLUMN_LABELS,
   createArticleColumns,
   type ArticleRowActions,
 } from "./articles-columns"
+import { ArticlePriceFilter, type PriceRange } from "./article-price-filter"
 
 /** Acción que requiere confirmación en un alert dialog. */
 type PendingAction =
@@ -65,12 +67,12 @@ type PendingAction =
 
 export function ArticlesTable({
   articles,
-  recipes,
+  recipes = [],
   categories,
-  canManage,
+  canManage = false,
   viewMode,
   onViewModeChange,
-  taxRate,
+  taxRate = "0",
   onCreate,
   onEdit,
   onActivate,
@@ -79,36 +81,107 @@ export function ArticlesTable({
   onEditCombo,
   onManageCategories,
   onImportCsv,
+  mode = "manage",
+  selectedItemIds,
+  onSelectedItemIdsChange,
+  groupNames,
+  groupByItemId,
+  onGroupChange,
+  disabled = false,
 }: {
   articles: ArticleListItem[]
   /** Recetas completas, para calcular costo, margen e ingredientes. */
-  recipes: Recipe[]
+  recipes?: Recipe[]
   categories: Category[]
-  canManage: boolean
+  canManage?: boolean
   /** Vista compartida con la tab de Recetas. */
   viewMode: DataTableViewMode
   onViewModeChange: (mode: DataTableViewMode) => void
   /** Tasa de IVA por defecto de la organización (fracción). */
-  taxRate: string
-  onCreate: () => void
-  onEdit: (article: ArticleListItem) => void
-  onActivate: (article: ArticleListItem) => Promise<boolean>
-  onDeactivate: (article: ArticleListItem) => Promise<boolean>
-  onDelete: (articles: ArticleListItem[]) => Promise<boolean>
+  taxRate?: string
+  onCreate?: () => void
+  onEdit?: (article: ArticleListItem) => void
+  onActivate?: (article: ArticleListItem) => Promise<boolean>
+  onDeactivate?: (article: ArticleListItem) => Promise<boolean>
+  onDelete?: (articles: ArticleListItem[]) => Promise<boolean>
   /** Abre el combo indicado para editarlo. */
-  onEditCombo: (comboId: string) => void
-  onManageCategories: () => void
-  onImportCsv: () => void
+  onEditCombo?: (comboId: string) => void
+  onManageCategories?: () => void
+  onImportCsv?: () => void
+  /**
+   * `"select"` convierte la tabla en un selector de artículos para un menú:
+   * sin acciones, con columnas mínimas y selección controlada por ids.
+   */
+  mode?: "manage" | "select"
+  /** Modo `select`: ids incluidos, en el orden del menú. */
+  selectedItemIds?: string[]
+  onSelectedItemIdsChange?: (ids: string[]) => void
+  /** Modo `select`: secciones del menú y grupo asignado por artículo. */
+  groupNames?: string[]
+  groupByItemId?: Record<string, string | null>
+  onGroupChange?: (itemId: string, group: string | null) => void
+  /** Modo `select`: bloquea la selección mientras se guarda. */
+  disabled?: boolean
 }) {
+  const isSelectMode = mode === "select"
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] =
     React.useState<string>(DATA_TABLE_ALL)
   const [recipeFilter, setRecipeFilter] = React.useState<string>(DATA_TABLE_ALL)
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  const [priceRange, setPriceRange] = React.useState<PriceRange | null>(null)
+  const [rowSelectionState, setRowSelectionState] =
+    React.useState<RowSelectionState>({})
   const [pendingAction, setPendingAction] = React.useState<PendingAction | null>(
     null
   )
   const [busy, setBusy] = React.useState(false)
+
+  const rowSelection = React.useMemo<RowSelectionState>(
+    () =>
+      isSelectMode
+        ? Object.fromEntries(
+            (selectedItemIds ?? []).map((id) => [id, true] as const)
+          )
+        : rowSelectionState,
+    [isSelectMode, selectedItemIds, rowSelectionState]
+  )
+
+  /**
+   * En Catálogo la selección vive aquí; en el selector de menú se traduce a la
+   * lista de ids conservando el orden existente y agregando los nuevos al final.
+   */
+  const updateSelection = React.useCallback(
+    (next: RowSelectionState) => {
+      if (!isSelectMode) {
+        setRowSelectionState(next)
+        return
+      }
+
+      const checked = new Set(
+        Object.keys(next).filter((id) => Boolean(next[id]))
+      )
+      const current = selectedItemIds ?? []
+      const kept = current.filter((id) => checked.has(id))
+      const added = [...checked].filter((id) => !current.includes(id))
+
+      onSelectedItemIdsChange?.([...kept, ...added])
+    },
+    [isSelectMode, selectedItemIds, onSelectedItemIdsChange]
+  )
+
+  /** Precio más bajo y más alto de los artículos existentes, para el slider. */
+  const priceBounds = React.useMemo(() => {
+    const prices = articles
+      .map((article) => Number(article.price))
+      .filter((price) => Number.isFinite(price))
+
+    if (prices.length === 0) return null
+
+    const min = Math.floor(Math.min(...prices))
+    const max = Math.ceil(Math.max(...prices))
+
+    return max > min ? { min, max } : null
+  }, [articles])
 
   const filtered = React.useMemo(() => {
     const term = globalFilter.trim().toLowerCase()
@@ -129,15 +202,22 @@ export function ArticlesTable({
         (article.recipes?.length ?? article._count.recipes) > 0
       if (recipeFilter === "yes" && !hasRecipe) return false
       if (recipeFilter === "no" && hasRecipe) return false
+      if (priceRange) {
+        const price = Number(article.price)
+        if (price < priceRange[0] || price > priceRange[1]) return false
+      }
       return true
     })
-  }, [articles, globalFilter, categoryFilter, recipeFilter])
+  }, [articles, globalFilter, categoryFilter, recipeFilter, priceRange])
 
   const selectedArticles = React.useMemo(
     () => filtered.filter((article) => rowSelection[article.id]),
     [filtered, rowSelection]
   )
-  const selectedCount = selectedArticles.length
+  // En el selector de menú interesa el total incluido, no solo lo filtrado.
+  const selectedCount = isSelectMode
+    ? (selectedItemIds?.length ?? 0)
+    : selectedArticles.length
 
   // Selección masiva sobre lo filtrado (no solo la página visible).
   const allSelected =
@@ -147,16 +227,19 @@ export function ArticlesTable({
 
   const toggleAllSelected = React.useCallback(
     (selected: boolean) => {
-      setRowSelection((prev) => {
-        const next = { ...prev }
-        for (const article of filtered) {
-          if (selected) next[article.id] = true
-          else delete next[article.id]
-        }
-        return next
-      })
+      const next = { ...rowSelection }
+
+      for (const article of filtered) {
+        // Los inactivos no asignados al menú no se pueden agregar.
+        if (isSelectMode && selected && !article.isActive) continue
+
+        if (selected) next[article.id] = true
+        else delete next[article.id]
+      }
+
+      updateSelection(next)
     },
-    [filtered]
+    [filtered, isSelectMode, rowSelection, updateSelection]
   )
 
   const filters: DataTableFilter[] = []
@@ -196,12 +279,14 @@ export function ArticlesTable({
   const activeFilterCount =
     (globalFilter.trim() ? 1 : 0) +
     (categoryFilter !== DATA_TABLE_ALL ? 1 : 0) +
-    (recipeFilter !== DATA_TABLE_ALL ? 1 : 0)
+    (recipeFilter !== DATA_TABLE_ALL ? 1 : 0) +
+    (priceRange ? 1 : 0)
 
   const clearFilters = React.useCallback(() => {
     setGlobalFilter("")
     setCategoryFilter(DATA_TABLE_ALL)
     setRecipeFilter(DATA_TABLE_ALL)
+    setPriceRange(null)
   }, [])
 
   const requestDeactivate = React.useCallback((article: ArticleListItem) => {
@@ -214,23 +299,27 @@ export function ArticlesTable({
 
   const setCardSelected = React.useCallback(
     (id: string, selected: boolean) => {
-      setRowSelection((prev) => {
-        const next = { ...prev }
-        if (selected) next[id] = true
-        else delete next[id]
-        return next
-      })
+      // En el selector del menú los inactivos no se pueden agregar.
+      if (isSelectMode && selected) {
+        const article = articles.find((candidate) => candidate.id === id)
+        if (article && !article.isActive) return
+      }
+
+      const next = { ...rowSelection }
+      if (selected) next[id] = true
+      else delete next[id]
+      updateSelection(next)
     },
-    []
+    [articles, isSelectMode, rowSelection, updateSelection]
   )
 
   const actions = React.useMemo<ArticleRowActions>(
     () => ({
-      onEdit,
-      onActivate,
+      onEdit: onEdit ?? (() => {}),
+      onActivate: onActivate ?? (async () => false),
       onDeactivate: requestDeactivate,
       onDelete: requestDelete,
-      onEditCombo,
+      onEditCombo: onEditCombo ?? (() => {}),
       canManage,
       isPending: () => busy,
     }),
@@ -248,11 +337,36 @@ export function ArticlesTable({
   const columns = React.useMemo(
     () =>
       createArticleColumns(actions, {
-        selectable: canManage,
+        selectable: canManage || isSelectMode,
         recipes,
         taxRate,
+        variant: isSelectMode ? "selection" : "full",
+        renderGroup: isSelectMode
+          ? (article) => (
+              <ArticleGroupSelect
+                groups={groupNames ?? []}
+                value={groupByItemId?.[article.id] ?? null}
+                disabled={
+                  disabled || !onGroupChange || !rowSelection[article.id]
+                }
+                ariaLabel={`Grupo de ${article.name}`}
+                onChange={(group) => onGroupChange?.(article.id, group)}
+              />
+            )
+          : undefined,
       }),
-    [actions, canManage, recipes, taxRate]
+    [
+      actions,
+      canManage,
+      isSelectMode,
+      recipes,
+      taxRate,
+      groupNames,
+      groupByItemId,
+      onGroupChange,
+      disabled,
+      rowSelection,
+    ]
   )
 
   async function confirmPendingAction() {
@@ -261,13 +375,13 @@ export function ArticlesTable({
     setBusy(true)
     const ok =
       pendingAction.kind === "deactivate"
-        ? await onDeactivate(pendingAction.articles[0])
-        : await onDelete(pendingAction.articles)
+        ? await onDeactivate?.(pendingAction.articles[0])
+        : await onDelete?.(pendingAction.articles)
     setBusy(false)
 
     if (ok) {
       setPendingAction(null)
-      setRowSelection({})
+      updateSelection({})
     }
   }
 
@@ -284,13 +398,29 @@ export function ArticlesTable({
         data={filtered}
         columns={columns}
         getRowId={(article) => article.id}
-        pageResetKey={`${globalFilter}|${categoryFilter}|${recipeFilter}`}
+        pageResetKey={`${globalFilter}|${categoryFilter}|${recipeFilter}|${priceRange?.join("-") ?? ""}`}
         rowSelection={rowSelection}
-        onRowSelectionChange={setRowSelection}
-        enableRowSelection={canManage}
+        onRowSelectionChange={updateSelection}
+        enableRowSelection={
+          isSelectMode
+            ? disabled
+              ? false
+              : (article) => article.isActive || Boolean(rowSelection[article.id])
+            : canManage
+        }
         tableClassName="[&_td]:py-1.5"
         initialSorting={[{ id: "name", desc: false }]}
         layout="sidebar"
+        filtersHeader={
+          priceBounds ? (
+            <ArticlePriceFilter
+              min={priceBounds.min}
+              max={priceBounds.max}
+              value={priceRange}
+              onChange={setPriceRange}
+            />
+          ) : null
+        }
         search={{
           label: "Buscar artículo",
           placeholder: "Buscar por nombre",
@@ -298,7 +428,7 @@ export function ArticlesTable({
           onValueChange: setGlobalFilter,
         }}
         selectionToggle={
-          canManage ? (
+          canManage || isSelectMode ? (
             <div
               className={cn(
                 "flex h-9 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 shadow-xs dark:bg-input/30",
@@ -309,7 +439,7 @@ export function ArticlesTable({
                 id="articles-select-all"
                 checked={allSelected}
                 indeterminate={someSelected}
-                disabled={filtered.length === 0}
+                disabled={filtered.length === 0 || disabled}
                 onCheckedChange={(value) => toggleAllSelected(!!value)}
                 aria-label="Seleccionar todos"
               />
@@ -330,7 +460,7 @@ export function ArticlesTable({
         filters={filters}
         activeFilterCount={activeFilterCount}
         onClearFilters={clearFilters}
-        showColumnToggle={canManage}
+        showColumnToggle={isSelectMode || canManage}
         columnLabels={ARTICLE_COLUMN_LABELS}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
@@ -339,13 +469,23 @@ export function ArticlesTable({
           <ArticleCards
             articles={rows}
             actions={actions}
-            canSelect={canManage}
+            showActions={!isSelectMode}
+            canSelect={canManage || isSelectMode}
             selectedIds={rowSelection}
             onSelectedChange={setCardSelected}
+            groups={groupNames}
+            groupByItemId={groupByItemId}
+            onGroupChange={disabled ? undefined : onGroupChange}
+            isSelectable={
+              isSelectMode
+                ? (article) =>
+                    article.isActive || Boolean(rowSelection[article.id])
+                : undefined
+            }
           />
         )}
         selectionActions={
-          canManage && selectedCount > 0 ? (
+          !isSelectMode && canManage && selectedCount > 0 ? (
             <Button
               variant="destructive"
               onClick={() =>
@@ -362,9 +502,9 @@ export function ArticlesTable({
           ) : null
         }
         actions={
-          canManage ? (
+          !isSelectMode && canManage ? (
             <ButtonGroup className="w-full">
-              <Button onClick={onCreate} className="min-w-0 flex-1">
+              <Button onClick={() => onCreate?.()} className="min-w-0 flex-1">
                 <PlusIcon className="size-4 shrink-0" />
                 <span className="truncate">Nuevo producto</span>
               </Button>
@@ -378,14 +518,14 @@ export function ArticlesTable({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    onClick={onManageCategories}
+                    onClick={() => onManageCategories?.()}
                     className="flex items-center gap-2"
                   >
                     <TagsIcon className="size-4" />
                     Categorías
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={onImportCsv}
+                    onClick={() => onImportCsv?.()}
                     className="flex items-center gap-2"
                   >
                     <UploadIcon className="size-4" />
@@ -396,56 +536,61 @@ export function ArticlesTable({
             </ButtonGroup>
           ) : null
         }
-        rowContextMenu={(article) => (
-          <ContextMenuContent align="end">
-            <ContextMenuGroup>
-              <ContextMenuGroupLabel>Acciones</ContextMenuGroupLabel>
-              <ContextMenuItem onClick={() => onEdit(article)}>
-                <PencilIcon />
-                Editar artículo
-              </ContextMenuItem>
-              {canManage ? (
-                article.isActive ? (
-                  <ContextMenuItem
-                    className="text-amber-600 focus:bg-amber-500/10 focus:text-amber-600 dark:text-amber-400 dark:focus:text-amber-400"
-                    onClick={() => requestDeactivate(article)}
-                  >
-                    <PowerIcon />
-                    Desactivar
-                  </ContextMenuItem>
-                ) : (
-                  <ContextMenuItem
-                    className="text-emerald-600 focus:bg-emerald-500/10 focus:text-emerald-600 dark:text-emerald-400 dark:focus:text-emerald-400"
-                    onClick={() => onActivate(article)}
-                  >
-                    <PowerIcon />
-                    Activar
-                  </ContextMenuItem>
-                )
-              ) : null}
-            </ContextMenuGroup>
-            {canManage ? (
-              <>
-                <ContextMenuSeparator />
-                <ContextMenuGroup>
-                  <ContextMenuItem
-                    variant="destructive"
-                    onClick={() => requestDelete(article)}
-                  >
-                    <Trash2Icon />
-                    Eliminar
-                  </ContextMenuItem>
-                </ContextMenuGroup>
-              </>
-            ) : null}
-          </ContextMenuContent>
-        )}
+        rowContextMenu={
+          isSelectMode
+            ? undefined
+            : (article) => (
+                <ContextMenuContent align="end">
+                  <ContextMenuGroup>
+                    <ContextMenuGroupLabel>Acciones</ContextMenuGroupLabel>
+                    <ContextMenuItem onClick={() => onEdit?.(article)}>
+                      <PencilIcon />
+                      Editar artículo
+                    </ContextMenuItem>
+                    {canManage ? (
+                      article.isActive ? (
+                        <ContextMenuItem
+                          className="text-amber-600 focus:bg-amber-500/10 focus:text-amber-600 dark:text-amber-400 dark:focus:text-amber-400"
+                          onClick={() => requestDeactivate(article)}
+                        >
+                          <PowerIcon />
+                          Desactivar
+                        </ContextMenuItem>
+                      ) : (
+                        <ContextMenuItem
+                          className="text-emerald-600 focus:bg-emerald-500/10 focus:text-emerald-600 dark:text-emerald-400 dark:focus:text-emerald-400"
+                          onClick={() => onActivate?.(article)}
+                        >
+                          <PowerIcon />
+                          Activar
+                        </ContextMenuItem>
+                      )
+                    ) : null}
+                  </ContextMenuGroup>
+                  {canManage ? (
+                    <>
+                      <ContextMenuSeparator />
+                      <ContextMenuGroup>
+                        <ContextMenuItem
+                          variant="destructive"
+                          onClick={() => requestDelete(article)}
+                        >
+                          <Trash2Icon />
+                          Eliminar
+                        </ContextMenuItem>
+                      </ContextMenuGroup>
+                    </>
+                  ) : null}
+                </ContextMenuContent>
+              )
+        }
         emptyState={
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <SoupIcon className="size-6" />
             <p>
-              Todavía no hay artículos. Crea uno o publica una receta como
-              artículo.
+              {isSelectMode
+                ? "No hay artículos disponibles para agregar al menú."
+                : "Todavía no hay artículos. Crea uno o publica una receta como artículo."}
             </p>
           </div>
         }
@@ -462,10 +607,15 @@ export function ArticlesTable({
         summary={
           <>
             {filtered.length} artículo{filtered.length === 1 ? "" : "s"}
-            {selectedCount > 0 ? ` · ${selectedCount} seleccionado(s)` : ""}
+            {selectedCount > 0
+              ? isSelectMode
+                ? ` · ${selectedCount} en el menú`
+                : ` · ${selectedCount} seleccionado(s)`
+              : ""}
             {activeFilterCount > 0 ? " (filtrados)" : ""}.
           </>
         }
+        isFiltered={isSelectMode ? activeFilterCount > 0 : undefined}
       />
 
       <AlertDialog

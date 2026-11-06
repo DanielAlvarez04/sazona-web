@@ -2,6 +2,8 @@ export interface MenuItemEntry {
   id: string
   itemId: string
   sortOrder: number
+  /** Sección del menú; `null` = «Sin grupo». */
+  group: string | null
   item: {
     id: string
     name: string
@@ -26,6 +28,8 @@ export interface Menu {
   endsAt: string | null
   /** Calculado por la API con la hora del servidor. */
   isAvailableNow: boolean
+  /** Secciones del menú, en el orden en que se muestran. */
+  groups: string[]
   items: MenuItemEntry[]
 }
 

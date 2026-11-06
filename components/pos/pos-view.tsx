@@ -423,6 +423,74 @@ export function PosView({
 
   const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
+  /**
+   * Secciones del menú elegido (solo si tiene grupos). Los artículos sin
+   * grupo se muestran al final; el orden lo define `menu.groups`.
+   */
+  const menuSections = React.useMemo(() => {
+    if (!selectedMenu || selectedMenu.groups.length === 0) return null
+
+    const groupByItemId = new Map(
+      selectedMenu.items.map((entry) => [entry.itemId, entry.group])
+    )
+
+    const sections = selectedMenu.groups.map((name) => ({
+      name,
+      products: [] as ItemListItem[],
+    }))
+    const ungrouped: ItemListItem[] = []
+
+    for (const product of filtered) {
+      const group = groupByItemId.get(product.id) ?? null
+      const section = group
+        ? sections.find((candidate) => candidate.name === group)
+        : undefined
+
+      if (section) section.products.push(product)
+      else ungrouped.push(product)
+    }
+
+    return [
+      ...sections.filter((section) => section.products.length > 0),
+      ...(ungrouped.length > 0 ? [{ name: null, products: ungrouped }] : []),
+    ]
+  }, [selectedMenu, filtered])
+
+  const renderProductCard = (product: ItemListItem) => (
+    <button
+      key={product.id}
+      type="button"
+      onClick={() => setSelectedProduct(product)}
+      className="flex flex-col items-start gap-1 rounded-xl border border-border/70 p-3 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      <span className="line-clamp-2 text-sm font-medium">{product.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {product.category?.name ?? "Sin categoría"}
+      </span>
+      <span className="mt-1 text-sm font-semibold tabular-nums">
+        {formatMoney(product.price)}
+      </span>
+      {product.isCombo ? (
+        <div className="flex flex-wrap gap-1">
+          <Badge variant="secondary">Combo</Badge>
+          {product.promotions?.find((promotion) => promotion.isActive) ? (
+            <Badge
+              variant="outline"
+              className="border-sky-500/50 bg-sky-500/10 text-sky-700 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-400"
+            >
+              {
+                PROMOTION_TYPE_LABELS[
+                  product.promotions.find((promotion) => promotion.isActive)!
+                    .type
+                ]
+              }
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
+    </button>
+  )
+
   const addLine = (line: Omit<CartLine, "key">) => {
     const nextLine = { ...line, key: newCartKey() }
     const nextCart = [...cart, nextLine]
@@ -755,47 +823,28 @@ export function PosView({
               <SoupIcon className="size-8" />
               No hay artículos que coincidan con el filtro.
             </div>
+          ) : menuSections ? (
+            <div className="flex flex-col gap-5">
+              {menuSections.map((section) => (
+                <section
+                  key={section.name ?? "__none"}
+                  className="flex flex-col gap-2"
+                >
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+                    {section.name ?? "Sin grupo"}
+                    <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                      {section.products.length}
+                    </span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                    {section.products.map(renderProductCard)}
+                  </div>
+                </section>
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-              {filtered.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => setSelectedProduct(product)}
-                  className="flex flex-col items-start gap-1 rounded-xl border border-border/70 p-3 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                  <span className="line-clamp-2 text-sm font-medium">
-                    {product.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {product.category?.name ?? "Sin categoría"}
-                  </span>
-                  <span className="mt-1 text-sm font-semibold tabular-nums">
-                    {formatMoney(product.price)}
-                  </span>
-                  {product.isCombo ? (
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary">Combo</Badge>
-                      {product.promotions?.find((promotion) => promotion.isActive)
-                        ? (
-                            <Badge
-                              variant="outline"
-                              className="border-sky-500/50 bg-sky-500/10 text-sky-700 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-400"
-                            >
-                              {
-                                PROMOTION_TYPE_LABELS[
-                                  product.promotions.find(
-                                    (promotion) => promotion.isActive
-                                  )!.type
-                                ]
-                              }
-                            </Badge>
-                          )
-                        : null}
-                    </div>
-                  ) : null}
-                </button>
-              ))}
+              {filtered.map(renderProductCard)}
             </div>
           )}
         </div>

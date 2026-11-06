@@ -106,6 +106,11 @@ export interface DataTableProps<TData extends RowData> {
    * buscador, dentro del grupo de filtros.
    */
   selectionToggle?: React.ReactNode
+  /**
+   * Filtro que no es un `Select` (p. ej. un rango con slider). Se pinta al
+   * inicio del grupo de filtros, antes del control de selección y la búsqueda.
+   */
+  filtersHeader?: React.ReactNode
   filters?: DataTableFilter[]
   /** Nº de filtros activos; muestra "Limpiar" cuando es mayor que 0. */
   activeFilterCount?: number
@@ -192,6 +197,7 @@ export function DataTable<TData extends RowData>({
   idPrefix = "data-table",
   search,
   selectionToggle,
+  filtersHeader,
   filters = [],
   activeFilterCount = 0,
   onClearFilters,
@@ -316,6 +322,8 @@ export function DataTable<TData extends RowData>({
           : "flex-1 flex-wrap items-center gap-2"
       )}
     >
+      {filtersHeader}
+
       {selectionToggle}
 
       {search ? (

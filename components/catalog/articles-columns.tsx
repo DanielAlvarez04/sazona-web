@@ -354,11 +354,23 @@ function articleRecipeCost(recipe: Recipe | null | undefined): number | null {
  */
 export function createArticleColumns(
   actions: ArticleRowActions,
-  options: { selectable: boolean; recipes: Recipe[]; taxRate: string }
+  options: {
+    selectable: boolean
+    recipes: Recipe[]
+    taxRate: string
+    /**
+     * `"selection"` deja solo las columnas para elegir artículos de un menú
+     * (Artículo, Precio, Categoría y Grupo), sin acciones de fila.
+     */
+    variant?: "full" | "selection"
+    /** Selector de grupo por fila; solo se usa en la variante `selection`. */
+    renderGroup?: (article: ArticleListItem) => ReactNode
+  }
 ) {
   const recipeByItemId = buildRecipeMap(options.recipes)
+  const isSelection = options.variant === "selection"
 
-  return columnHelper.columns([
+  const columns = columnHelper.columns([
     ...(options.selectable
       ? [
           columnHelper.display({
@@ -446,14 +458,27 @@ export function createArticleColumns(
       id: "price",
       header: ({ column }) => (
         <ArticleColumnHeader
-          title="Precio/Sugerido"
+          title={isSelection ? "Precio" : "Precio/Sugerido"}
           column={column}
           align="right"
-          hint="Precio final del artículo y el sugerido a partir del costo, con margen bruto del 65 % e IVA incluido."
+          hint={
+            isSelection
+              ? "Precio final del artículo."
+              : "Precio final del artículo y el sugerido a partir del costo, con margen bruto del 65 % e IVA incluido."
+          }
         />
       ),
       cell: ({ row }) => {
         const price = Number(row.original.price)
+
+        if (isSelection) {
+          return (
+            <span className="block text-right font-medium whitespace-nowrap tabular-nums">
+              {formatMoney(price)}
+            </span>
+          )
+        }
+
         const recipe = recipeByItemId.get(row.original.id)
         const suggested = suggestedPriceFromCost(
           articleRecipeCost(recipe),
@@ -643,22 +668,47 @@ export function createArticleColumns(
       enableSorting: false,
     }),
 
-    columnHelper.display({
-      id: "actions",
-      header: () => <span className="sr-only">Acciones</span>,
-      cell: ({ row }) => (
-        <div
-          className="flex items-center justify-center"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <ArticleActionsMenu article={row.original} actions={actions} />
-        </div>
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      enableGlobalFilter: false,
-    }),
+    ...(options.renderGroup
+      ? [
+          columnHelper.display({
+            id: "group",
+            header: () => (
+              <span className="px-1 text-sm font-medium">Grupo</span>
+            ),
+            cell: ({ row }) => options.renderGroup!(row.original),
+            enableSorting: false,
+          }),
+        ]
+      : []),
+
+    ...(isSelection
+      ? []
+      : [
+          columnHelper.display({
+            id: "actions",
+            header: () => <span className="sr-only">Acciones</span>,
+            cell: ({ row }) => (
+              <div
+                className="flex items-center justify-center"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ArticleActionsMenu article={row.original} actions={actions} />
+              </div>
+            ),
+            enableSorting: false,
+            enableHiding: false,
+            enableGlobalFilter: false,
+          }),
+        ]),
   ])
+
+  if (!isSelection) return columns
+
+  // Solo lo necesario para elegir artículos: sin costo, margen ni acciones.
+  return columns.filter((column) => {
+    const id = String(column.id)
+    return ["select", "name", "price", "category", "group"].includes(id)
+  })
 }
 
 export const ARTICLE_COLUMN_LABELS: Record<string, string> = {
@@ -668,6 +718,7 @@ export const ARTICLE_COLUMN_LABELS: Record<string, string> = {
   cost: "Costo ($/%)",
   margin: "Margen ($/%)",
   category: "Categoría",
+  group: "Grupo",
   ingredients: "Ingredientes",
   menu: "Menú",
 }

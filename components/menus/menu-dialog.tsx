@@ -6,8 +6,8 @@ import { Loader2Icon, SaveIcon } from "lucide-react"
 import { toast } from "sonner"
 import type { DateRange } from "react-day-picker"
 
+import { MenuArticlesBuilder } from "@/components/menus/menu-articles-builder"
 import { MenuDateRangePicker } from "@/components/menus/menu-date-range-picker"
-import { MenuItemsPicker } from "@/components/menus/menu-items-picker"
 import { MenuTimePicker } from "@/components/menus/menu-time-picker"
 import { InfoHint } from "@/components/info-hint"
 import {
@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
-import type { ArticleListItem, Category } from "@/lib/catalog"
+import type { ArticleListItem } from "@/lib/catalog"
 import { jalapenoChipClass } from "@/lib/chips"
 import { diffFields, isEmptyPatch, sameStringSet, sameText } from "@/lib/diff"
 import {
@@ -78,12 +78,10 @@ function initialDays(menu: Menu | null): number[] {
 export function MenuDialog({
   menu,
   items,
-  categories,
   onClose,
 }: {
   menu: Menu | null
   items: ArticleListItem[]
-  categories: Category[]
   onClose: () => void
 }) {
   const router = useRouter()
@@ -105,8 +103,10 @@ export function MenuDialog({
     (menu?.items ?? []).map((row, index) => ({
       itemId: row.itemId,
       sortOrder: row.sortOrder ?? index,
+      group: row.group ?? null,
     }))
   )
+  const [groups, setGroups] = useState<string[]>(() => menu?.groups ?? [])
 
   const startsAtIso = toIso(range?.from, false)
   const endsAtIso = toIso(range?.to, true)
@@ -161,6 +161,7 @@ export function MenuDialog({
     const items = selected.map((row, index) => ({
       itemId: row.itemId,
       sortOrder: index,
+      group: row.group ?? null,
     }))
 
     const next: MenuInput = {
@@ -174,6 +175,7 @@ export function MenuDialog({
       endTime: endTime || null,
       startsAt: startsAtIso,
       endsAt: endsAtIso,
+      groups,
       items,
     }
 
@@ -185,6 +187,7 @@ export function MenuDialog({
     const currentItems = (menu.items ?? []).map((row, index) => ({
       itemId: row.itemId,
       sortOrder: row.sortOrder ?? index,
+      group: row.group ?? null,
     }))
 
     const itemsChanged =
@@ -192,7 +195,8 @@ export function MenuDialog({
       currentItems.some(
         (row, index) =>
           row.itemId !== items[index].itemId ||
-          row.sortOrder !== items[index].sortOrder
+          row.sortOrder !== items[index].sortOrder ||
+          row.group !== items[index].group
       )
 
     const changes = {
@@ -205,6 +209,7 @@ export function MenuDialog({
           endTime: menu.endTime,
           startsAt: menu.startsAt,
           endsAt: menu.endsAt,
+          groups: menu.groups ?? [],
         },
         {
           name: next.name,
@@ -214,6 +219,7 @@ export function MenuDialog({
           endTime: next.endTime,
           startsAt: next.startsAt,
           endsAt: next.endsAt,
+          groups: next.groups,
         },
         {
           name: (left, right) =>
@@ -225,6 +231,8 @@ export function MenuDialog({
               (left as number[]).map(String),
               (right as number[]).map(String)
             ),
+          groups: (left, right) =>
+            JSON.stringify(left) === JSON.stringify(right),
         }
       ),
       ...(itemsChanged ? { items } : {}),
@@ -240,10 +248,14 @@ export function MenuDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-5xl">
-        <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
-          <div className="grid gap-6">
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(open) => !open && onClose()}
+    >
+      <DialogContent className="flex h-[calc(100dvh-2rem)] flex-col gap-0 p-0! sm:max-w-[calc(100%-2rem)]">
+        <div className="scroll-fade-y no-scrollbar min-h-0 flex-1 overflow-y-auto">
+          <div className="grid gap-6 p-6">
             <DialogHeader>
               <DialogTitle>{menu ? "Editar menú" : "Nuevo menú"}</DialogTitle>
               <DialogDescription>
@@ -254,7 +266,7 @@ export function MenuDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-6 md:grid-cols-[2fr_1px_3fr]">
+            <div className="grid gap-6 md:grid-cols-[minmax(0,22rem)_1px_minmax(0,40rem)]">
               <section className="flex min-w-0 flex-col gap-3">
                 <Field>
                   <FieldLabel htmlFor="menu-name">
@@ -377,53 +389,39 @@ export function MenuDialog({
               </section>
             </div>
 
-            <Separator />
+            <Separator className="-mx-6" />
 
-            <section className="flex flex-col gap-2">
-              <div>
-                <Label className="text-sm font-medium">
-                  Artículos del menú
-                  <span className="ml-1 text-muted-foreground tabular-nums">
-                    ({selected.length})
-                  </span>{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Puedes incluir artículos y combos. El orden se usa para
-                  mostrarlos en el POS.
-                </p>
-              </div>
-              <MenuItemsPicker
-                items={items}
-                categories={categories}
-                value={selected}
-                onChange={setSelected}
-                disabled={form.pending}
-              />
-            </section>
+            <MenuArticlesBuilder
+              articles={items}
+              groups={groups}
+              selected={selected}
+              onGroupsChange={setGroups}
+              onSelectedChange={setSelected}
+              disabled={form.pending}
+            />
 
             {form.error ? <FieldError>{form.error}</FieldError> : null}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={form.pending}
-              >
-                Cancelar
-              </Button>
-              <Button type="button" onClick={save} disabled={form.pending}>
-                {form.pending ? (
-                  <Loader2Icon className="animate-spin" />
-                ) : (
-                  <SaveIcon />
-                )}
-                {menu ? "Guardar menú" : "Crear menú"}
-              </Button>
-            </DialogFooter>
           </div>
         </div>
+
+        <DialogFooter className="mx-0 mb-0 rounded-none px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={form.pending}
+          >
+            Cancelar
+          </Button>
+          <Button type="button" onClick={save} disabled={form.pending}>
+            {form.pending ? (
+              <Loader2Icon className="animate-spin" />
+            ) : (
+              <SaveIcon />
+            )}
+            {menu ? "Guardar menú" : "Crear menú"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

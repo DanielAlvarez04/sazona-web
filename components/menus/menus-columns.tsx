@@ -279,6 +279,12 @@ export function createMenuColumns(
               {row.original.items.length} artículo
               {row.original.items.length === 1 ? "" : "s"}
             </span>
+            {row.original.groups.length > 0 ? (
+              <Badge variant="outline" className="ml-1">
+                {row.original.groups.length} grupo
+                {row.original.groups.length === 1 ? "" : "s"}
+              </Badge>
+            ) : null}
             {combos > 0 ? (
               <Badge variant="outline" className="ml-1">
                 {combos} combo{combos === 1 ? "" : "s"}
