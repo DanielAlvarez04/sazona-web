@@ -87,7 +87,11 @@ export function MenuThumbnail({
   )
 }
 
-/** Collage 2×2 con las imágenes de los primeros artículos del menú. */
+/**
+ * Collage de imágenes del menú según cuántas haya:
+ * 1 → completa, 2 → diagonal, 3 → tres columnas, 4+ → 2×2 con «+N» en la
+ * cuarta celda cuando sobran imágenes.
+ */
 export function MenuCover({
   menu,
   imageById,
@@ -100,7 +104,6 @@ export function MenuCover({
   const images = menu.items
     .map((row) => imageById.get(row.itemId) ?? null)
     .filter((url): url is string => Boolean(url))
-    .slice(0, 4)
 
   if (images.length === 0) {
     return (
@@ -115,38 +118,71 @@ export function MenuCover({
     )
   }
 
-  const single = images.length === 1
+  const imageClassName = cn(
+    "size-full object-cover",
+    !menu.isActive && "opacity-70 grayscale"
+  )
+  const count = images.length
+  const visible = images.slice(0, 4)
+  const extras = Math.max(0, count - 4)
 
   return (
-    <div
-      className={cn(
-        "grid size-full bg-muted",
-        single ? "grid-cols-1 grid-rows-1" : "grid-cols-2 grid-rows-2",
-        className
-      )}
-    >
-      {images.map((url, index) => (
+    <div className={cn("relative size-full overflow-hidden bg-muted", className)}>
+      {count === 1 ? (
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          key={`${url}-${index}`}
-          src={url}
-          alt=""
-          className={cn(
-            "size-full object-cover",
-            !menu.isActive && "opacity-70 grayscale"
-          )}
-        />
-      ))}
-      {!single
-        ? Array.from({ length: Math.max(0, 4 - images.length) }).map(
-            (_, index) => (
-              <div
-                key={`filler-${index}`}
-                className="bg-linear-to-br from-chart-4/15 via-muted to-background"
-              />
-            )
-          )
-        : null}
+        <img src={images[0]} alt="" className={imageClassName} />
+      ) : null}
+
+      {count === 2 ? (
+        <>
+          {images.map((url, index) => (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              key={`${url}-${index}`}
+              src={url}
+              alt=""
+              className={cn("absolute inset-0", imageClassName)}
+              style={{
+                clipPath:
+                  index === 0
+                    ? "polygon(0 0, 100% 0, 0 100%)"
+                    : "polygon(100% 0, 100% 100%, 0 100%)",
+              }}
+            />
+          ))}
+        </>
+      ) : null}
+
+      {count === 3 ? (
+        <div className="grid size-full grid-cols-3">
+          {images.map((url, index) => (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              key={`${url}-${index}`}
+              src={url}
+              alt=""
+              className={imageClassName}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {count >= 4 ? (
+        <div className="grid size-full grid-cols-2 grid-rows-2">
+          {visible.map((url, index) => (
+            <div key={`${url}-${index}`} className="relative overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className={imageClassName} />
+
+              {index === 3 && extras > 0 ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-semibold text-white backdrop-blur-[1px]">
+                  +{extras}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
