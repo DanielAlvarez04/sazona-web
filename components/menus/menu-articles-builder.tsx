@@ -70,11 +70,11 @@ import { CARD_IMAGE_SIZES } from "@/lib/images"
 
 import {
   MENU_WHEEL_DEAD_ZONE,
-  MenuRadialGroups,
+  MenuWheelGroups,
   buildMenuWheelLayout,
   menuWheelTargetAt,
   menuWheelTargetCenter,
-} from "./menu-radial-groups"
+} from "./menu-wheel-groups"
 
 /** Clave local para el contenedor de artículos sin grupo. */
 const UNGROUPED = "__none__"
@@ -1477,7 +1477,7 @@ export function MenuArticlesBuilder({
       </div>
 
       {wheelOrigin ? (
-        <MenuRadialGroups
+        <MenuWheelGroups
           origin={wheelOrigin}
           groups={groups}
           target={wheelTarget}
