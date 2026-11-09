@@ -81,7 +81,13 @@ export function MenusClient({
   }, [])
 
   const imageById = useMemo(
-    () => new Map(items.map((item) => [item.id, item.imageUrl])),
+    () =>
+      new Map(
+        items.map((item) => [
+          item.id,
+          { url: item.imageUrl, assets: item.imageVariants },
+        ])
+      ),
     [items]
   )
 

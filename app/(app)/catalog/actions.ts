@@ -472,7 +472,6 @@ export interface PresignImageInput {
 
 export interface PresignedImage {
   key: string
-  url: string
   /** URL firmada a la que el navegador hace el PUT. */
   uploadUrl: string
   method: "PUT"
@@ -482,12 +481,26 @@ export interface PresignedImage {
   maxBytes: number
 }
 
+/** Resultado de optimizar el temporal: clave base + variantes públicas. */
+export interface FinalizedImage {
+  key: string
+  url: string
+  width: number
+  height: number
+  variants: Array<{
+    width: number
+    height: number
+    avif: string
+    jpg: string
+  }>
+}
+
 /**
- * Firma una subida directa del navegador a R2.
+ * Firma una subida temporal del navegador a R2.
  *
- * La imagen va a la carpeta del artículo (`{org}/catalog/{itemId}/`), así que
- * el artículo debe existir: el diálogo lo guarda primero y luego sube la
- * imagen. No hay área temporal ni objetos huérfanos.
+ * El archivo va a `{org}/tmp/` y se procesa con `finalize*`: la API genera
+ * AVIF/JPEG, guarda solo las variantes y borra el original. El artículo debe
+ * existir porque el diálogo lo guarda primero y luego sube la imagen.
  */
 export async function presignItemImage(
   itemId: string,
@@ -497,6 +510,18 @@ export async function presignItemImage(
     `/uploads/catalog/items/${itemId}`,
     "POST",
     input
+  )
+}
+
+/** Optimiza el temporal recién subido para un artículo o receta. */
+export async function finalizeItemImage(
+  itemId: string,
+  key: string
+): Promise<ActionResult<FinalizedImage>> {
+  return mutateApi<FinalizedImage>(
+    `/uploads/catalog/items/${itemId}/finalize`,
+    "POST",
+    { key }
   )
 }
 
@@ -511,6 +536,17 @@ export async function presignRecipeImage(
   )
 }
 
+export async function finalizeRecipeImage(
+  recipeId: string,
+  key: string
+): Promise<ActionResult<FinalizedImage>> {
+  return mutateApi<FinalizedImage>(
+    `/uploads/catalog/recipes/${recipeId}/finalize`,
+    "POST",
+    { key }
+  )
+}
+
 export async function presignVariantImage(
   itemId: string,
   variantId: string,
@@ -520,6 +556,18 @@ export async function presignVariantImage(
     `/uploads/catalog/items/${itemId}/variants/${variantId}`,
     "POST",
     input
+  )
+}
+
+export async function finalizeVariantImage(
+  itemId: string,
+  variantId: string,
+  key: string
+): Promise<ActionResult<FinalizedImage>> {
+  return mutateApi<FinalizedImage>(
+    `/uploads/catalog/items/${itemId}/variants/${variantId}/finalize`,
+    "POST",
+    { key }
   )
 }
 

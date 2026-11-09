@@ -37,7 +37,7 @@ import {
 } from "@/lib/menus"
 import { cn } from "@/lib/utils"
 
-import { MenuThumbnail } from "./menu-visuals"
+import { MenuThumbnail, type MenuImageMap } from "./menu-visuals"
 
 const columnHelper = createColumnHelper<DataTableFeatures, Menu>()
 
@@ -177,7 +177,7 @@ function statusVariant(kind: MenuStatusKind) {
 
 export function createMenuColumns(
   actions: MenuRowActions,
-  imageById: Map<string, string | null>
+  imageById: MenuImageMap
 ) {
   return columnHelper.columns([
     columnHelper.accessor("name", {

@@ -15,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { EntityImage } from "@/components/ui/entity-image"
 import { formatMoney, type ArticleListItem } from "@/lib/catalog"
 import { cn } from "@/lib/utils"
 
@@ -189,10 +190,11 @@ function ItemThumb({ item }: { item: ArticleListItem }) {
       )}
     >
       {showImage ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={item.imageUrl ?? undefined}
+        <EntityImage
+          src={item.imageUrl}
+          assets={item.imageVariants}
           alt=""
+          sizes="36px"
           className="size-full object-cover"
           onError={() => setFailed(true)}
         />

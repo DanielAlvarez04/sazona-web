@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { EntityImage } from "@/components/ui/entity-image"
 import {
   PROMOTION_TYPE_LABELS,
   formatMoney,
   type ArticleListItem,
 } from "@/lib/catalog"
+import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
 import { ComboActionsMenu, type ComboRowActions } from "./combos-columns"
@@ -23,6 +25,7 @@ function useComboImage(combo: ArticleListItem) {
 
   return {
     src,
+    assets: combo.imageVariants,
     showFallback: !src || failedSrc === src,
     handleError: () => setFailedSrc(src),
   }
@@ -41,7 +44,7 @@ function FullComboCard({
   selected: boolean
   onSelectedChange: (id: string, selected: boolean) => void
 }) {
-  const { src, showFallback, handleError } = useComboImage(combo)
+  const { src, assets, showFallback, handleError } = useComboImage(combo)
   const { normal, effective, promotion } = comboPricing(combo)
 
   return (
@@ -61,10 +64,11 @@ function FullComboCard({
                 <span className="sr-only">Sin imagen</span>
               </div>
             ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={src ?? undefined}
+              <EntityImage
+                src={src}
+                assets={assets}
                 alt={combo.name}
+                sizes={CARD_IMAGE_SIZES}
                 className={cn(
                   "size-full object-cover",
                   !combo.isActive && "grayscale"

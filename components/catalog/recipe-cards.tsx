@@ -12,7 +12,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { EntityImage } from "@/components/ui/entity-image"
 import { formatMoney, type Recipe } from "@/lib/catalog"
+import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
 import { PresentationPreview } from "./articles-columns"
@@ -31,9 +33,15 @@ function useRecipeImage(recipe: Recipe) {
   )
   const src =
     variant?.imageUrl ?? recipe.imageUrl ?? recipe.item?.imageUrl ?? null
+  const assets =
+    variant?.imageVariants ??
+    recipe.imageVariants ??
+    recipe.item?.imageVariants ??
+    null
 
   return {
     src,
+    assets,
     showFallback: !src || failedSrc === src,
     handleError: () => setFailedSrc(src),
   }
@@ -56,7 +64,7 @@ function FullRecipeCard({
   selected: boolean
   onSelectedChange: (id: string, selected: boolean) => void
 }) {
-  const { src, showFallback, handleError } = useRecipeImage(recipe)
+  const { src, assets, showFallback, handleError } = useRecipeImage(recipe)
   const item = recipe.item
 
   return (
@@ -76,10 +84,11 @@ function FullRecipeCard({
                 <span className="sr-only">Sin imagen</span>
               </div>
             ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={src ?? undefined}
+              <EntityImage
+                src={src}
+                assets={assets}
                 alt={recipe.name}
+                sizes={CARD_IMAGE_SIZES}
                 className={cn(
                   "size-full object-cover",
                   !recipe.isActive && "grayscale"

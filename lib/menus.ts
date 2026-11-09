@@ -20,6 +20,8 @@ export interface Menu {
   name: string
   description: string | null
   isActive: boolean
+  /** Menú de referencia con todo el catálogo (creado automáticamente). */
+  isGlobal: boolean
   sortOrder: number
   daysOfWeek: number[]
   startTime: string | null
@@ -217,8 +219,26 @@ export function formatMenuDayCount(menu: Pick<MenuSchedule, "daysOfWeek">) {
     return "Todos los días"
   }
 
-  const days = [...menu.daysOfWeek].sort((left, right) => left - right)
+  const days = sortMenuDays(menu.daysOfWeek)
   return days.map((day) => MENU_DAY_LABELS[day]).join(", ")
+}
+
+/**
+ * Ordena los días como se leen en la semana: lunes primero y domingo al final.
+ *
+ * En la API `0` es domingo (igual que `Date.getDay()`), pero la interfaz
+ * siempre muestra la semana empezando en lunes.
+ */
+export function sortMenuDays(days: readonly number[]): number[] {
+  const order = new Map<number, number>(
+    MENU_WEEK_DAYS.map((day, index) => [day, index])
+  )
+
+  return [...days].sort(
+    (left, right) =>
+      (order.get(left) ?? MENU_WEEK_DAYS.length) -
+      (order.get(right) ?? MENU_WEEK_DAYS.length)
+  )
 }
 
 /** "Siempre disponible", "Lun–Vie · 18:00–23:00", etc. */
@@ -234,7 +254,7 @@ export function formatMenuSchedule(menu: {
   if (menu.daysOfWeek.length === 0 || menu.daysOfWeek.length === 7) {
     parts.push("Todos los días")
   } else {
-    const days = [...menu.daysOfWeek].sort((left, right) => left - right)
+    const days = sortMenuDays(menu.daysOfWeek)
     const isWorkweek =
       days.length === 5 && days.every((day, index) => day === index + 1)
 

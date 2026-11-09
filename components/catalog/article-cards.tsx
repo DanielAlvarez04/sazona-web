@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { EntityImage } from "@/components/ui/entity-image"
 import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
 import {
@@ -85,10 +87,11 @@ function FullArticleCard({
                 <span className="sr-only">Sin imagen</span>
               </div>
             ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={article.imageUrl ?? undefined}
+              <EntityImage
+                src={article.imageUrl}
+                assets={article.imageVariants}
                 alt={article.name}
+                sizes={CARD_IMAGE_SIZES}
                 className={cn(
                   "size-full object-cover",
                   !article.isActive && "grayscale"

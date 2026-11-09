@@ -32,6 +32,7 @@ import {
   type RecipeInput,
 } from "@/app/(app)/catalog/actions"
 import { ImageDropzone } from "@/components/catalog/image-dropzone"
+import type { ImageAssets } from "@/lib/images"
 import {
   ComboComponentsPicker,
   type ComboComponentRow,
@@ -133,12 +134,13 @@ import {
 
 /** Imagen del diálogo: la guardada en R2 o un archivo local sin subir. */
 type DialogImage =
-  | { kind: "existing"; key: string; url: string }
+  | {
+      kind: "existing"
+      key: string
+      url: string
+      assets: ImageAssets | null
+    }
   | { kind: "pending"; file: File; url: string }
-
-function isFile(value: DialogImage | File): value is File {
-  return typeof File !== "undefined" && value instanceof File
-}
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100
@@ -225,7 +227,7 @@ function initialRows(article: ArticleListItem | null): PresentationRow[] {
       variantId: variant.id,
       imageKey: variant.imageKey,
       imageUrl: variant.imageUrl,
-      imageInheritedUrl: null,
+      imageVariants: variant.imageVariants,
       imageFile: null,
       imagePreviewUrl: null,
     }
@@ -456,8 +458,9 @@ export function ProductDialog({
   const [image, setImage] = useState<DialogImage | null>(() => {
     const key = article?.imageKey ?? recipe?.imageKey
     const url = article?.imageUrl ?? recipe?.imageUrl
+    const assets = article?.imageVariants ?? recipe?.imageVariants ?? null
 
-    return key && url ? { kind: "existing", key, url } : null
+    return key && url ? { kind: "existing", key, url, assets } : null
   })
   const [multiple, setMultiple] = useState(
     () => (article?.variants.filter((variant) => variant.isActive).length ?? 0) > 0
@@ -621,85 +624,18 @@ export function ProductDialog({
     )
   }
 
-  /**
-   * Asigna a la presentación principal una imagen base.
-   *
-   * Si es un archivo nuevo, la principal guarda su propia copia al subir. Si
-   * ya estaba guardada, se muestra como heredada y el servidor hace la copia
-   * real al guardar. En ambos casos el preview aparece de inmediato.
-   */
-  function withPrimaryBaseImage(
-    sourceRows: PresentationRow[],
-    image: DialogImage | File | null
-  ): PresentationRow[] {
-    if (sourceRows.length === 0 || !image) return sourceRows
-
-    const base =
-      isFile(image)
-        ? { kind: "pending" as const, file: image }
-        : image.kind === "existing"
-          ? { kind: "existing" as const, url: image.url }
-          : { kind: "pending" as const, file: image.file }
-
-    const index = Math.max(
-      sourceRows.findIndex((row) => row.isPrimary),
-      0
-    )
-    const primary = sourceRows[index]
-
-    if (
-      !primary ||
-      primary.imageFile ||
-      primary.imageUrl ||
-      primary.imageInheritedUrl
-    ) {
-      return sourceRows
-    }
-
-    return sourceRows.map((row, rowIndex) => {
-      if (rowIndex !== index) return row
-
-      if (base.kind === "pending") {
-        return {
-          ...row,
-          imageFile: base.file,
-          imagePreviewUrl: URL.createObjectURL(base.file),
-        }
-      }
-
-      // Imagen ya guardada: se muestra como herencia; el servidor la copia
-      // cuando la base cambie o se quite.
-      return { ...row, imageInheritedUrl: base.url }
-    })
-  }
-
   function handleSelectImage(file: File) {
-    const previous = image
-
     setImage((current) => {
       if (current?.kind === "pending") URL.revokeObjectURL(current.url)
       return { kind: "pending", file, url: URL.createObjectURL(file) }
     })
-
-    if (!multiple) return
-
-    // Si la base anterior existía, la principal la conserva. Si era la
-    // primera imagen, la principal toma la nueva (con su propia copia).
-    setRows((current) => withPrimaryBaseImage(current, previous ?? file))
   }
 
   function handleRemoveImage() {
-    const previous = image
-
     setImage((current) => {
       if (current?.kind === "pending") URL.revokeObjectURL(current.url)
       return null
     })
-
-    if (!multiple) return
-
-    // Quitar la base no borra la imagen de la principal: se conserva la anterior.
-    setRows((current) => withPrimaryBaseImage(current, previous))
   }
 
   /** Aplica el cambio del interruptor de presentaciones. */
@@ -711,7 +647,7 @@ export function ProductDialog({
     }
 
     if (next && rows.length === 0) {
-      setRows(withPrimaryBaseImage(defaultPresentationRows(name), image))
+      setRows(defaultPresentationRows(name))
       setPresentationMode("variant")
       presentationDrafts.current = { size: null, variant: null }
     }
@@ -2194,6 +2130,7 @@ export function ProductDialog({
           <div className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
             <ImageDropzone
               url={image?.url ?? null}
+              assets={image?.kind === "existing" ? image.assets : null}
               onSelect={handleSelectImage}
               onRemove={handleRemoveImage}
               disabled={form.pending}

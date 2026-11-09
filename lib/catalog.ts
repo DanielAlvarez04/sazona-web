@@ -1,4 +1,6 @@
-﻿export type UnitDimension = "MASS" | "VOLUME" | "COUNT"
+﻿import type { ImageAssets } from "./images"
+
+export type UnitDimension = "MASS" | "VOLUME" | "COUNT"
 
 /** Estrategia para resolver insumos repetidos al importar un CSV. */
 export type ImportIngredientsMode = "exclude" | "duplicate" | "overwrite"
@@ -158,6 +160,8 @@ export interface Variant {
   /** Imagen propia; si es null se usa la imagen base del artículo. */
   imageKey: string | null
   imageUrl: string | null
+  /** Variantes optimizadas (AVIF + JPEG) de la imagen propia. */
+  imageVariants: ImageAssets | null
   imageName: string | null
   isActive: boolean
   sortOrder: number
@@ -365,6 +369,8 @@ export interface ItemListItem {
   imageKey: string | null
   /** URL pública de la imagen en R2. */
   imageUrl: string | null
+  /** Variantes optimizadas (AVIF + JPEG) con sus URLs públicas. */
+  imageVariants: ImageAssets | null
   /**
    * Nombre legible de la imagen (`snap` + nombre normalizado + fecha). En R2
    * el objeto va hasheado; esto es solo referencia para la futura galería.
@@ -466,6 +472,8 @@ export interface Recipe {
   /** Imagen propia de la receta (también visible en el tab Recetas). */
   imageKey: string | null
   imageUrl: string | null
+  /** Variantes optimizadas (AVIF + JPEG) con sus URLs públicas. */
+  imageVariants: ImageAssets | null
   imageName: string | null
   isActive: boolean
   itemId: string | null
@@ -481,6 +489,7 @@ export interface Recipe {
     isActive: boolean
     imageKey: string | null
     imageUrl: string | null
+    imageVariants: ImageAssets | null
     isCombo: boolean
     /** Categoría del artículo (independiente de la de la receta). */
     category: { id: string; name: string } | null

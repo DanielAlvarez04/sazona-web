@@ -172,3 +172,43 @@ input[type=number] {
     display: none;
   }
 }
+
+/*
+ * Shake de inclinación mientras la card está seleccionada.
+ * Rota 0.5°/-0.5° a 180 ms por ciclo.
+ * La duración debe coincidir con SHAKE_DURATION_MS del constructor.
+ */
+@keyframes tilt-shaking {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(0.5deg);
+  }
+  50% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(-0.5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.np-menu-card-shake {
+  animation: tilt-shaking 180ms ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .np-menu-card-shake {
+    animation: none;
+  }
+}
+
+/* Mantiene el cursor de agarre durante cualquier drag. */
+.np-dragging,
+.np-dragging * {
+  cursor: grabbing !important;
+}

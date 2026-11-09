@@ -141,6 +141,25 @@ interface RefreshResult {
   rotatedElsewhere: boolean
 }
 
+/**
+ * Un JWT puede seguir sin expirar aunque su sesión ya no exista (logout,
+ * revocación o limpieza de sesiones). Si el middleware redirige a /dashboard
+ * solo por la fecha `exp`, el layout vuelve a /login y se produce un bucle
+ * ERR_TOO_MANY_REDIRECTS. Se valida contra la API.
+ */
+async function accessTokenIsValid(accessToken: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { cookie: `${ACCESS_TOKEN_COOKIE}=${accessToken}` },
+      cache: "no-store",
+    })
+
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 async function refreshSession(refreshToken: string): Promise<RefreshResult> {
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: "POST",
@@ -178,18 +197,22 @@ export async function proxy(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value
 
-  // Si estamos en una ruta pública y ya hay sesión válida, ir al dashboard
-  if (
-    PUBLIC_PATHS.includes(pathname) &&
-    accessToken &&
-    !isJwtExpired(accessToken)
-  ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
-  }
-
-  // Rutas públicas sin sesión: dejar pasar (formulario de login/registro)
+  // Rutas públicas: si hay una sesión válida se entra directo al dashboard;
+  // si el token está vigente pero la sesión ya no existe, se limpian las
+  // cookies y se deja ver el formulario (evita el bucle de redirecciones).
   if (PUBLIC_PATHS.includes(pathname)) {
-    return NextResponse.next()
+    if (!accessToken || isJwtExpired(accessToken)) {
+      return NextResponse.next()
+    }
+
+    if (await accessTokenIsValid(accessToken)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+
+    const response = NextResponse.next()
+    response.cookies.delete(ACCESS_TOKEN_COOKIE)
+    response.cookies.delete(REFRESH_TOKEN_COOKIE)
+    return response
   }
 
   if (!accessToken && !refreshToken) {

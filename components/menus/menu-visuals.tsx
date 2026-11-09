@@ -3,8 +3,18 @@
 import { NotebookTextIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { EntityImage } from "@/components/ui/entity-image"
+import { CARD_IMAGE_SIZES, type ImageAssets } from "@/lib/images"
 import type { Menu, MenuStatusKind } from "@/lib/menus"
 import { cn } from "@/lib/utils"
+
+/** Imagen de un artículo del menú: URL de respaldo + variantes optimizadas. */
+export interface MenuImage {
+  url: string | null
+  assets: ImageAssets | null
+}
+
+export type MenuImageMap = Map<string, MenuImage | null>
 
 export function MenuStatusBadge({
   kind,
@@ -24,9 +34,9 @@ export function MenuStatusBadge({
     <Badge
       variant={variant}
       className={cn(
-        "gap-1.5 border border-transparent bg-background/90 backdrop-blur-sm",
+        "gap-1.5 border border-transparent bg-background",
         kind === "inactive" && "text-muted-foreground",
-        kind === "outside" && "border-border bg-background/90",
+        kind === "outside" && "border-border bg-background",
         className
       )}
     >
@@ -58,10 +68,10 @@ export function MenuThumbnail({
   className,
 }: {
   menu: Menu
-  imageById: Map<string, string | null>
+  imageById: MenuImageMap
   className?: string
 }) {
-  const imageUrl = firstImageUrl(menu, imageById)
+  const image = firstImage(menu, imageById)
 
   return (
     <div
@@ -70,11 +80,12 @@ export function MenuThumbnail({
         className
       )}
     >
-      {imageUrl ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={imageUrl}
+      {image ? (
+        <EntityImage
+          src={image.url}
+          assets={image.assets}
           alt=""
+          sizes="36px"
           className={cn(
             "size-full object-cover",
             !menu.isActive && "opacity-60 grayscale"
@@ -98,12 +109,12 @@ export function MenuCover({
   className,
 }: {
   menu: Menu
-  imageById: Map<string, string | null>
+  imageById: MenuImageMap
   className?: string
 }) {
   const images = menu.items
     .map((row) => imageById.get(row.itemId) ?? null)
-    .filter((url): url is string => Boolean(url))
+    .filter((image): image is MenuImage => Boolean(image?.url))
 
   if (images.length === 0) {
     return (
@@ -129,18 +140,24 @@ export function MenuCover({
   return (
     <div className={cn("relative size-full overflow-hidden bg-muted", className)}>
       {count === 1 ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={images[0]} alt="" className={imageClassName} />
+        <EntityImage
+          src={images[0].url}
+          assets={images[0].assets}
+          alt=""
+          sizes={CARD_IMAGE_SIZES}
+          className={imageClassName}
+        />
       ) : null}
 
       {count === 2 ? (
         <>
-          {images.map((url, index) => (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              key={`${url}-${index}`}
-              src={url}
+          {images.map((image, index) => (
+            <EntityImage
+              key={`${image.url}-${index}`}
+              src={image.url}
+              assets={image.assets}
               alt=""
+              sizes={CARD_IMAGE_SIZES}
               className={cn("absolute inset-0", imageClassName)}
               style={{
                 clipPath:
@@ -155,12 +172,13 @@ export function MenuCover({
 
       {count === 3 ? (
         <div className="grid size-full grid-cols-3">
-          {images.map((url, index) => (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              key={`${url}-${index}`}
-              src={url}
+          {images.map((image, index) => (
+            <EntityImage
+              key={`${image.url}-${index}`}
+              src={image.url}
+              assets={image.assets}
               alt=""
+              sizes={CARD_IMAGE_SIZES}
               className={imageClassName}
             />
           ))}
@@ -169,10 +187,15 @@ export function MenuCover({
 
       {count >= 4 ? (
         <div className="grid size-full grid-cols-2 grid-rows-2">
-          {visible.map((url, index) => (
-            <div key={`${url}-${index}`} className="relative overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className={imageClassName} />
+          {visible.map((image, index) => (
+            <div key={`${image.url}-${index}`} className="relative overflow-hidden">
+              <EntityImage
+                src={image.url}
+                assets={image.assets}
+                alt=""
+                sizes={CARD_IMAGE_SIZES}
+                className={imageClassName}
+              />
 
               {index === 3 && extras > 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-semibold text-white backdrop-blur-[1px]">
@@ -187,13 +210,13 @@ export function MenuCover({
   )
 }
 
-function firstImageUrl(
+function firstImage(
   menu: Menu,
-  imageById: Map<string, string | null>
-): string | null {
+  imageById: MenuImageMap
+): MenuImage | null {
   for (const row of menu.items) {
-    const url = imageById.get(row.itemId)
-    if (url) return url
+    const image = imageById.get(row.itemId)
+    if (image?.url) return image
   }
 
   return null

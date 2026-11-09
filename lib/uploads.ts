@@ -1,6 +1,9 @@
 "use client"
 
 import {
+  finalizeItemImage,
+  finalizeRecipeImage,
+  finalizeVariantImage,
   presignItemImage,
   presignRecipeImage,
   presignVariantImage,
@@ -37,10 +40,19 @@ interface PresignResult {
   message?: string
   data?: {
     key: string
-    url: string
     uploadUrl: string
     method: "PUT"
     headers: Record<string, string>
+  }
+}
+
+/** Respuesta de la API al optimizar el temporal. */
+interface FinalizeResult {
+  ok: boolean
+  message?: string
+  data?: {
+    key: string
+    url: string
   }
 }
 
@@ -49,15 +61,20 @@ type Presign = (input: {
   size: number
 }) => Promise<PresignResult>
 
+type Finalize = (key: string) => Promise<FinalizeResult>
+
 /**
- * Sube una imagen directo a R2: pide la URL firmada a la API y hace el PUT.
+ * Sube una imagen directo a R2 y deja que la API la optimice.
  *
- * El archivo nunca pasa por la API. Al guardar la clave, la API valida el
- * objeto y borra la imagen anterior para que solo quede una por entidad.
+ * 1. La API firma una URL para subir el original a `{org}/tmp/`.
+ * 2. El navegador hace el PUT (el archivo no pasa por nuestros servidores).
+ * 3. `finalize` descarga el temporal, genera AVIF/JPEG, guarda las variantes y
+ *    borra el original. La clave que se guarda en la base es la optimizada.
  */
 async function uploadImage(
   file: File,
-  presign: Presign
+  presign: Presign,
+  finalize: Finalize
 ): Promise<{ ok: boolean; message?: string; key?: string; url?: string }> {
   const problem = validateImageFile(file)
 
@@ -77,7 +94,7 @@ async function uploadImage(
     }
   }
 
-  const { key, url, uploadUrl, method, headers } = presigned.data
+  const { key, uploadUrl, method, headers } = presigned.data
 
   try {
     const response = await fetch(uploadUrl, { method, headers, body: file })
@@ -95,12 +112,27 @@ async function uploadImage(
     }
   }
 
-  return { ok: true, key, url }
+  const finalized = await finalize(key)
+
+  if (!finalized.ok || !finalized.data) {
+    return {
+      ok: false,
+      message:
+        finalized.message ??
+        "No se pudo optimizar la imagen. Inténtalo de nuevo.",
+    }
+  }
+
+  return { ok: true, key: finalized.data.key, url: finalized.data.url }
 }
 
 /** Sube la imagen de un artículo ya guardado. */
 export function uploadItemImage(itemId: string, file: File) {
-  return uploadImage(file, (input) => presignItemImage(itemId, input))
+  return uploadImage(
+    file,
+    (input) => presignItemImage(itemId, input),
+    (key) => finalizeItemImage(itemId, key)
+  )
 }
 
 /** Sube la imagen propia de una presentación ya guardada. */
@@ -109,12 +141,18 @@ export function uploadVariantImage(
   variantId: string,
   file: File
 ) {
-  return uploadImage(file, (input) =>
-    presignVariantImage(itemId, variantId, input)
+  return uploadImage(
+    file,
+    (input) => presignVariantImage(itemId, variantId, input),
+    (key) => finalizeVariantImage(itemId, variantId, key)
   )
 }
 
 /** Sube la imagen propia de una receta ya guardada. */
 export function uploadRecipeImage(recipeId: string, file: File) {
-  return uploadImage(file, (input) => presignRecipeImage(recipeId, input))
+  return uploadImage(
+    file,
+    (input) => presignRecipeImage(recipeId, input),
+    (key) => finalizeRecipeImage(recipeId, key)
+  )
 }

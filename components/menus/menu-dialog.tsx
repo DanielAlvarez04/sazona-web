@@ -1,15 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2Icon, SaveIcon } from "lucide-react"
 import { toast } from "sonner"
 import type { DateRange } from "react-day-picker"
 
 import { MenuArticlesBuilder } from "@/components/menus/menu-articles-builder"
-import { MenuDateRangePicker } from "@/components/menus/menu-date-range-picker"
-import { MenuTimePicker } from "@/components/menus/menu-time-picker"
-import { InfoHint } from "@/components/info-hint"
+import { MenuDetailsForm } from "@/components/menus/menu-details-form"
+import {
+  MenuDetailsPanel,
+  type MenuDetailsMode,
+} from "@/components/menus/menu-details-panel"
 import {
   createMenu,
   updateMenu,
@@ -25,21 +27,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { FieldError } from "@/components/ui/field"
 import { Separator } from "@/components/ui/separator"
-import { Textarea } from "@/components/ui/textarea"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { ArticleListItem } from "@/lib/catalog"
-import { jalapenoChipClass } from "@/lib/chips"
 import { diffFields, isEmptyPatch, sameStringSet, sameText } from "@/lib/diff"
 import {
   formatMenuSchedule,
-  MENU_DAY_LABELS,
-  MENU_WEEK_DAYS,
+  sortMenuDays,
   type Menu,
 } from "@/lib/menus"
+import { cn } from "@/lib/utils"
 
 function toLocalDate(value: string | null): Date | undefined {
   if (!value) return undefined
@@ -69,6 +67,19 @@ function rangeFromMenu(menu: Menu | null): DateRange | undefined {
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
 /** Viernes, sábado y domingo. */
 const WEEKEND_DAYS = [5, 6, 0]
+
+/**
+ * Reversión rápida del diseño del diálogo.
+ *
+ * - `DETAILS_MODE = "always"` deja el formulario de detalles siempre visible,
+ *   como la estructura anterior.
+ * - `BUILDER_LAYOUT = "single-scroll"` vuelve al scroll único del diálogo.
+ *
+ * No hay que tocar nada más para comparar ambos diseños.
+ */
+const DETAILS_MODE: MenuDetailsMode = "collapsible"
+const BUILDER_LAYOUT: "split-scroll" | "single-scroll" = "split-scroll"
+const SPLIT_LAYOUT = BUILDER_LAYOUT === "split-scroll"
 
 function initialDays(menu: Menu | null): number[] {
   if (!menu) return ALL_DAYS
@@ -107,6 +118,8 @@ export function MenuDialog({
     }))
   )
   const [groups, setGroups] = useState<string[]>(() => menu?.groups ?? [])
+  const [detailsOpen, setDetailsOpen] = useState(!menu)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   const startsAtIso = toIso(range?.from, false)
   const endsAtIso = toIso(range?.to, true)
@@ -123,7 +136,7 @@ export function MenuDialog({
     setDays((current) =>
       current.includes(day)
         ? current.filter((value) => value !== day)
-        : [...current, day].sort((left, right) => left - right)
+        : sortMenuDays([...current, day])
     )
   }
 
@@ -144,7 +157,9 @@ export function MenuDialog({
     const trimmedName = name.trim()
 
     if (!trimmedName) {
+      setDetailsOpen(true)
       form.setError("El nombre del menú es obligatorio")
+      requestAnimationFrame(() => nameInputRef.current?.focus())
       return
     }
 
@@ -170,7 +185,9 @@ export function MenuDialog({
       // La API interpreta `[]` como «todos los días»: sin días marcados
       // el menú aplica siempre y no hay restricción que guardar.
       daysOfWeek:
-        days.length === ALL_DAYS.length || days.length === 0 ? [] : days,
+        days.length === ALL_DAYS.length || days.length === 0
+          ? []
+          : sortMenuDays(days),
       startTime: startTime || null,
       endTime: endTime || null,
       startsAt: startsAtIso,
@@ -253,154 +270,75 @@ export function MenuDialog({
       disablePointerDismissal
       onOpenChange={(open) => !open && onClose()}
     >
-      <DialogContent className="flex h-[calc(100dvh-2rem)] flex-col gap-0 p-0! sm:max-w-[calc(100%-2rem)]">
-        <div className="scroll-fade-y no-scrollbar min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-6 p-6">
-            <DialogHeader>
+      <DialogContent className="flex h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0! sm:max-w-[calc(100%-2rem)]">
+        <div
+          className={cn(
+            "scroll-fade-y no-scrollbar min-h-0 flex-1",
+            SPLIT_LAYOUT
+              ? "overflow-y-auto lg:overflow-hidden"
+              : "overflow-y-auto"
+          )}
+        >
+          <div
+            className={cn(
+              "flex min-h-full flex-col",
+              SPLIT_LAYOUT && "lg:h-full"
+            )}
+          >
+            <DialogHeader className="shrink-0 px-6 pt-6">
               <DialogTitle>{menu ? "Editar menú" : "Nuevo menú"}</DialogTitle>
               <DialogDescription>
-                Un menú agrupa artículos para filtrarlos en el punto de venta.
-                Aparecerá solo los días, en el horario y durante las fechas que
-                definas: sin horario aplica todo el día y sin vigencia no
-                caduca. No cambia precios ni inventario.
+                Agrupa artículos y define cuándo está disponible. No cambia
+                precios ni inventario.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-6 md:grid-cols-[minmax(0,22rem)_1px_minmax(0,40rem)]">
-              <section className="flex min-w-0 flex-col gap-3">
-                <Field>
-                  <FieldLabel htmlFor="menu-name">
-                    Nombre <span className="text-destructive">*</span>
-                  </FieldLabel>
-                  <Input
-                    id="menu-name"
-                    value={name}
-                    maxLength={80}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Ej. Menú infantil"
-                  />
-                </Field>
+            <MenuDetailsPanel
+              mode={DETAILS_MODE}
+              open={detailsOpen}
+              onOpenChange={setDetailsOpen}
+              name={name}
+              schedule={schedulePreview}
+            >
+              <MenuDetailsForm
+                name={name}
+                onNameChange={setName}
+                nameInputRef={nameInputRef}
+                description={description}
+                onDescriptionChange={setDescription}
+                days={days}
+                isDaily={isDaily}
+                isWeekend={isWeekend}
+                onToggleDaily={toggleDaily}
+                onToggleWeekend={toggleWeekend}
+                onToggleDay={toggleDay}
+                range={range}
+                onRangeChange={setRange}
+                startTime={startTime}
+                onStartTimeChange={setStartTime}
+                endTime={endTime}
+                onEndTimeChange={setEndTime}
+                schedulePreview={schedulePreview}
+              />
+            </MenuDetailsPanel>
 
-                <Field className="h-full">
-                  <FieldLabel htmlFor="menu-description">Descripción</FieldLabel>
-                  <Textarea
-                    id="menu-description"
-                    value={description}
-                    maxLength={300}
-                    rows={4}
-                    className="h-[-webkit-fill-available] resize-none"
-                    onChange={(event) => setDescription(event.target.value)}
-                    placeholder="Para quién o cuándo aplica este menú"
-                  />
-                </Field>
-              </section>
+            <div className="flex min-h-0 flex-1 flex-col pt-6">
+              <Separator />
 
-              <Separator orientation="vertical" className="hidden md:block" />
-              <Separator className="md:hidden" />
+              <MenuArticlesBuilder
+                articles={items}
+                groups={groups}
+                selected={selected}
+                onGroupsChange={setGroups}
+                onSelectedChange={setSelected}
+                disabled={form.pending}
+                layout={BUILDER_LAYOUT}
+              />
 
-              <section className="flex min-w-0 flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1">
-                    <Label className="text-sm font-medium">Días</Label>
-                    <InfoHint
-                      text="Sin días marcados el menú aplica a todos los días."
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      aria-pressed={isDaily}
-                      className={jalapenoChipClass(isDaily)}
-                      onClick={toggleDaily}
-                    >
-                      Diario
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      aria-pressed={isWeekend}
-                      className={jalapenoChipClass(isWeekend)}
-                      onClick={toggleWeekend}
-                    >
-                      Finde
-                    </Button>
-
-                    <span
-                      aria-hidden
-                      className="mx-0.5 h-5 w-px self-center bg-border"
-                    />
-
-                    {MENU_WEEK_DAYS.map((day) => {
-                      const selected = days.includes(day)
-
-                      return (
-                        <Button
-                          key={day}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          aria-pressed={selected}
-                          className={jalapenoChipClass(selected)}
-                          onClick={() => toggleDay(day)}
-                        >
-                          {MENU_DAY_LABELS[day]}
-                        </Button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                  <Field>
-                    <FieldLabel htmlFor="menu-date-range">Vigencia</FieldLabel>
-                    <MenuDateRangePicker
-                      id="menu-date-range"
-                      value={range}
-                      onChange={setRange}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="menu-start-time">
-                      Hora inicio
-                    </FieldLabel>
-                    <MenuTimePicker
-                      id="menu-start-time"
-                      value={startTime}
-                      onChange={setStartTime}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="menu-end-time">Hora fin</FieldLabel>
-                    <MenuTimePicker
-                      id="menu-end-time"
-                      value={endTime}
-                      onChange={setEndTime}
-                    />
-                  </Field>
-                </div>
-
-                <p className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Resumen: </span>
-                  {schedulePreview}
-                </p>
-              </section>
+              {form.error ? (
+                <FieldError className="px-6 pb-6">{form.error}</FieldError>
+              ) : null}
             </div>
-
-            <Separator className="-mx-6" />
-
-            <MenuArticlesBuilder
-              articles={items}
-              groups={groups}
-              selected={selected}
-              onGroupsChange={setGroups}
-              onSelectedChange={setSelected}
-              disabled={form.pending}
-            />
-
-            {form.error ? <FieldError>{form.error}</FieldError> : null}
           </div>
         </div>
 

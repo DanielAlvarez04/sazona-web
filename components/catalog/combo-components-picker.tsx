@@ -15,7 +15,9 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox"
+import { EntityImage } from "@/components/ui/entity-image"
 import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { CARD_IMAGE_SIZES, type ImageAssets } from "@/lib/images"
 import { cn } from "cn"
 
 export type ComboComponentRow = {
@@ -34,6 +36,8 @@ type Presentation = {
   price: number
   /** Imagen propia de la presentación o, si falta, la del artículo. */
   imageUrl: string | null
+  /** Variantes optimizadas que corresponden a `imageUrl`. */
+  imageAssets: ImageAssets | null
 }
 
 function comboKey(itemId: string, variantId?: string | null) {
@@ -54,6 +58,7 @@ function flattenPresentations(products: ArticleListItem[]): Presentation[] {
           name: item.name,
           price: Number(item.price),
           imageUrl: item.imageUrl,
+          imageAssets: item.imageVariants,
         },
       ]
     }
@@ -66,6 +71,7 @@ function flattenPresentations(products: ArticleListItem[]): Presentation[] {
       name: `${item.name} · ${variant.name}`,
       price: Number(item.price) + Number(variant.priceAdjust),
       imageUrl: variant.imageUrl ?? item.imageUrl,
+      imageAssets: variant.imageVariants ?? item.imageVariants,
     }))
   })
 }
@@ -241,10 +247,11 @@ export function ComboComponentsPicker({
                   >
                     <div className="absolute inset-0 bg-muted">
                       {presentation.imageUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
+                        <EntityImage
                           src={presentation.imageUrl}
+                          assets={presentation.imageAssets}
                           alt={presentation.name}
+                          sizes={CARD_IMAGE_SIZES}
                           className="size-full object-cover"
                         />
                       ) : (

@@ -4,6 +4,8 @@ import * as React from "react"
 import { ImageIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { EntityImage } from "@/components/ui/entity-image"
+import type { ImageAssets } from "@/lib/images"
 import { IMAGE_ACCEPT, validateImageFile } from "@/lib/uploads"
 import { cn } from "cn"
 
@@ -17,12 +19,15 @@ import { cn } from "cn"
  */
 export function ImageDropzone({
   url,
+  assets = null,
   onSelect,
   onRemove,
   disabled = false,
 }: {
   /** Vista previa: URL pública de la imagen guardada u objeto local. */
   url: string | null
+  /** Variantes optimizadas, solo cuando la imagen ya está guardada. */
+  assets?: ImageAssets | null
   onSelect: (file: File) => void
   onRemove: () => void
   disabled?: boolean
@@ -78,10 +83,11 @@ export function ImageDropzone({
                 `overflow-hidden` del padre no siempre recorta bien al hijo con
                 `backdrop-filter` (dejaba las esquinas rectas en el fondo). */}
             <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <EntityImage
                 src={url}
+                assets={assets}
                 alt="Imagen del artículo"
+                sizes="256px"
                 className="size-full rounded-[inherit] object-cover"
               />
             </div>

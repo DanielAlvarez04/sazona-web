@@ -23,6 +23,7 @@ import {
   createMenuColumns,
   type MenuRowActions,
 } from "./menus-columns"
+import type { MenuImageMap } from "./menu-visuals"
 
 const DAY_OPTIONS = [
   ...([1, 2, 3, 4, 5, 6, 0] as const).map((day) => ({
@@ -42,7 +43,7 @@ export function MenusTable({
   onCreate,
 }: {
   menus: Menu[]
-  imageById: Map<string, string | null>
+  imageById: MenuImageMap
   actions: MenuRowActions
   canManage: boolean
   viewMode: DataTableViewMode
