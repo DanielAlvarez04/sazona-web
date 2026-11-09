@@ -738,10 +738,7 @@ export function MenuArticlesBuilder({
     const target = resolveTarget(String(over.id), itemId)
     if (!target) return
 
-    // Al pasar sobre un grupo colapsado se expande para poder soltar ahí.
-    if (target.group && !isGroupOpen(target.group)) {
-      setGroupOpen(target.group, true)
-    }
+    // El grupo conserva su estado (colapsado/expandido) durante todo el drag.
 
     // El reordenamiento en vivo es exclusivo del constructor: lo que viene del
     // catálogo se agrega/mueve una sola vez al soltar.
@@ -1124,7 +1121,7 @@ export function MenuArticlesBuilder({
     >
       <div
         className={cn(
-          "flex flex-1 flex-col gap-6 lg:flex-row lg:items-stretch",
+          "flex flex-1 flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0",
           layout === "split-scroll" && "lg:h-full lg:min-h-0"
         )}
       >
@@ -1192,7 +1189,7 @@ export function MenuArticlesBuilder({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-1">
+            <div className="flex flex-wrap items-center justify-start gap-1">
               <Select
                 items={destinationItems}
                 value={activeDestination ?? UNGROUPED}
@@ -1304,22 +1301,17 @@ export function MenuArticlesBuilder({
                         }}
                       >
                         {category.articles.map((article) => {
-                          const selectedAt = pending[article.id]
+                          const isPending =
+                            pending[article.id] !== undefined
 
                           return (
                             <CatalogCard
                               key={article.id}
                               article={article}
                               selected={
-                                selectedIds.has(article.id) ||
-                                selectedAt !== undefined
+                                selectedIds.has(article.id) || isPending
                               }
-                              pending={selectedAt !== undefined}
-                              shakeDelay={
-                                selectedAt !== undefined
-                                  ? `-${selectedAt % SHAKE_DURATION_MS}ms`
-                                  : undefined
-                              }
+                              pending={isPending}
                               groupLabel={
                                 selectedGroupById.has(article.id)
                                   ? (selectedGroupById.get(article.id) ??
@@ -1399,7 +1391,7 @@ export function MenuArticlesBuilder({
                     variant="secondary"
                     title={`${selected.length} artículos y combos en el menú`}
                   >
-                    Total {selected.length}
+                    {selected.length} Total
                   </Badge>
                 ) : null}
               </div>
@@ -1553,7 +1545,6 @@ function CatalogCard({
   article,
   selected,
   pending = false,
-  shakeDelay,
   groupLabel,
   disabled,
   onToggle,
@@ -1562,8 +1553,6 @@ function CatalogCard({
   selected: boolean
   /** Marcada para asignar/mover; dispara el shake. */
   pending?: boolean
-  /** Desfase negativo para sincronizar todas las cards al mismo reloj. */
-  shakeDelay?: string
   /** Grupo donde está el artículo, para mostrarlo sobre la card. */
   groupLabel?: string | null
   disabled: boolean
@@ -1573,14 +1562,46 @@ function CatalogCard({
     id: catalogDragId(article.id),
     disabled,
   })
+  const nodeRef = React.useRef<HTMLDivElement | null>(null)
+
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      nodeRef.current = node
+      setNodeRef(node)
+    },
+    [setNodeRef]
+  )
+
+  /**
+   * Sincroniza el shake al reloj global de animaciones.
+   *
+   * El desfase se calcula con el tiempo real del documento al montar la
+   * animación, no con el instante del clic. Así todas las cards seleccionadas
+   * quedan en la misma fase, incluso si se eligieron en momentos distintos.
+   */
+  React.useLayoutEffect(() => {
+    const node = nodeRef.current
+    if (!node) return
+
+    if (!pending) {
+      node.style.animationDelay = ""
+      return
+    }
+
+    const timeline =
+      typeof document !== "undefined"
+        ? Number(document.timeline?.currentTime ?? performance.now())
+        : 0
+
+    node.style.animationDelay = `-${timeline % SHAKE_DURATION_MS}ms`
+  }, [pending])
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       {...attributes}
       {...listeners}
       onClick={onToggle}
-      style={shakeDelay ? { animationDelay: shakeDelay } : undefined}
       className={cn(
         disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         pending && "np-menu-card-shake"
@@ -1945,14 +1966,10 @@ function GroupSection({
   ).length
   const articleCount = rows.length - comboCount
 
-  // Al arrastrar la cabecera el grupo se contrae; al soltar recupera su estado.
-  const draggingThisGroup = activeGroupSortId === groupSortId(title)
-  const effectiveOpen = draggingThisGroup ? false : open
-
   return (
     <Collapsible
       ref={setNodeRef}
-      open={effectiveOpen}
+      open={open}
       onOpenChange={onOpenChange}
       style={{
         transform: CSS.Transform.toString(sortable.transform),
@@ -2034,7 +2051,7 @@ function GroupSection({
         <CollapsibleTrigger
           type="button"
           className="min-w-0 flex-1 self-stretch rounded-md p-1"
-          aria-label={`${effectiveOpen ? "Contraer" : "Expandir"} ${title}`}
+          aria-label={`${open ? "Contraer" : "Expandir"} ${title}`}
         />
 
         <div className="flex shrink-0 items-center gap-1.5">

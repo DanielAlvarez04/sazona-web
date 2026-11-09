@@ -2,16 +2,12 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2Icon, SaveIcon } from "lucide-react"
+import { Loader2Icon, SaveIcon, Settings2Icon } from "lucide-react"
 import { toast } from "sonner"
 import type { DateRange } from "react-day-picker"
 
 import { MenuArticlesBuilder } from "@/components/menus/menu-articles-builder"
 import { MenuDetailsForm } from "@/components/menus/menu-details-form"
-import {
-  MenuDetailsPanel,
-  type MenuDetailsMode,
-} from "@/components/menus/menu-details-panel"
 import {
   createMenu,
   updateMenu,
@@ -68,6 +64,8 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
 /** Viernes, sábado y domingo. */
 const WEEKEND_DAYS = [5, 6, 0]
 
+type MenuDetailsMode = "collapsible" | "always"
+
 /**
  * Reversión rápida del diseño del diálogo.
  *
@@ -118,7 +116,7 @@ export function MenuDialog({
     }))
   )
   const [groups, setGroups] = useState<string[]>(() => menu?.groups ?? [])
-  const [detailsOpen, setDetailsOpen] = useState(!menu)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const startsAtIso = toIso(range?.from, false)
@@ -157,7 +155,6 @@ export function MenuDialog({
     const trimmedName = name.trim()
 
     if (!trimmedName) {
-      setDetailsOpen(true)
       form.setError("El nombre del menú es obligatorio")
       requestAnimationFrame(() => nameInputRef.current?.focus())
       return
@@ -264,6 +261,27 @@ export function MenuDialog({
     form.run(() => updateMenu(menu.id, changes))
   }
 
+  const detailsFormProps = {
+    name,
+    onNameChange: setName,
+    nameInputRef,
+    description,
+    onDescriptionChange: setDescription,
+    days,
+    isDaily,
+    isWeekend,
+    onToggleDaily: toggleDaily,
+    onToggleWeekend: toggleWeekend,
+    onToggleDay: toggleDay,
+    range,
+    onRangeChange: setRange,
+    startTime,
+    onStartTimeChange: setStartTime,
+    endTime,
+    onEndTimeChange: setEndTime,
+    schedulePreview,
+  }
+
   return (
     <Dialog
       open
@@ -293,34 +311,39 @@ export function MenuDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <MenuDetailsPanel
-              mode={DETAILS_MODE}
-              open={detailsOpen}
-              onOpenChange={setDetailsOpen}
-              name={name}
-              schedule={schedulePreview}
-            >
-              <MenuDetailsForm
-                name={name}
-                onNameChange={setName}
-                nameInputRef={nameInputRef}
-                description={description}
-                onDescriptionChange={setDescription}
-                days={days}
-                isDaily={isDaily}
-                isWeekend={isWeekend}
-                onToggleDaily={toggleDaily}
-                onToggleWeekend={toggleWeekend}
-                onToggleDay={toggleDay}
-                range={range}
-                onRangeChange={setRange}
-                startTime={startTime}
-                onStartTimeChange={setStartTime}
-                endTime={endTime}
-                onEndTimeChange={setEndTime}
-                schedulePreview={schedulePreview}
-              />
-            </MenuDetailsPanel>
+            {DETAILS_MODE === "always" ? (
+              <div className="px-6 pt-4">
+                <MenuDetailsForm variant="full" {...detailsFormProps} />
+              </div>
+            ) : (
+              <div className="px-6 pt-4">
+                <MenuDetailsForm
+                  variant="header"
+                  action={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-expanded={detailsOpen}
+                      onClick={() => setDetailsOpen((open) => !open)}
+                    >
+                      <Settings2Icon className="size-4" />
+                      {detailsOpen ? "Ocultar detalles" : "Agregar más detalles"}
+                    </Button>
+                  }
+                  {...detailsFormProps}
+                />
+
+                {detailsOpen ? (
+                  <div className="pt-3">
+                    <MenuDetailsForm
+                      variant="body"
+                      {...detailsFormProps}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             <div className="flex min-h-0 flex-1 flex-col pt-6">
               <Separator />

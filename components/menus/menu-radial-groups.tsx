@@ -22,18 +22,24 @@ export interface MenuWheelLayout {
 
 /** Debajo de esta distancia al centro no se elige ningún grupo. */
 export const MENU_WHEEL_DEAD_ZONE = 26
-/** Más allá del radio exterior + esto también se cancela la asignación. */
-const MAX_OVERSHOOT = 64
+/** Chips que caben en un anillo con el radio máximo. */
+const CHIPS_PER_RING = 12
 /** A partir de este número de chips se usan dos anillos. */
-const TWO_RING_THRESHOLD = 8
+const TWO_RING_THRESHOLD = CHIPS_PER_RING
 
 /** Ancho máximo de un chip; se usa para calcular la separación mínima. */
 const CHIP_WIDTH = 128
 const CHIP_GAP = 8
 const MIN_RADIUS = 96
-const MAX_SINGLE_RADIUS = 175
-const MAX_INNER_RADIUS = 148
-const MAX_OUTER_RADIUS = 214
+/** Separación mínima entre el anillo interior y el exterior. */
+const RING_GAP = 64
+/**
+ * Radios máximos: el mayor de cada anillo se calcula para que quepan
+ * `CHIPS_PER_RING` chips sin encimarse.
+ */
+const MAX_INNER_RADIUS = neededRadius(CHIPS_PER_RING)
+const MAX_SINGLE_RADIUS = MAX_INNER_RADIUS
+const MAX_OUTER_RADIUS = MAX_INNER_RADIUS + RING_GAP
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -56,8 +62,8 @@ function clampAxis(value: number, size: number, margin: number) {
  * Posición y radios de la rueda radial.
  *
  * La rueda se ancla al punto donde empezó el arrastre (no persigue al cursor)
- * y se recorta para que quepa en la ventana. Si hay más de 8 chips se
- * reparten en dos anillos concéntricos.
+ * y se recorta para que quepa en la ventana. Si hay más de 12 chips se
+ * reparten en dos anillos concéntricos, con capacidad para 12 en cada uno.
  */
 export function buildMenuWheelLayout(
   origin: { x: number; y: number },
@@ -82,8 +88,8 @@ export function buildMenuWheelLayout(
       MAX_INNER_RADIUS
     )
     const outerRadius = clamp(
-      Math.max(neededRadius(outerChips.length), innerRadius + 64),
-      innerRadius + 64,
+      Math.max(neededRadius(outerChips.length), innerRadius + RING_GAP),
+      innerRadius + RING_GAP,
       MAX_OUTER_RADIUS
     )
 
@@ -141,7 +147,8 @@ export function menuWheelTargetAt(
   if (distance < MENU_WHEEL_DEAD_ZONE) return undefined
 
   const outerRadius = Math.max(...layout.rings.map((ring) => ring.radius))
-  if (distance > outerRadius + MAX_OVERSHOOT) return undefined
+  // El margen para cancelar fuera del radio mide lo mismo que el radio.
+  if (distance > outerRadius * 2) return undefined
 
   const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360
   const ring =
@@ -150,9 +157,11 @@ export function menuWheelTargetAt(
       ? layout.rings[1]
       : layout.rings[0]
 
-  // El grupo se selecciona a mitad del trayecto entre el borde del círculo de
+  // El grupo se selecciona a 1/4 del trayecto entre el borde del círculo de
   // cancelar y el centro del chip; antes de eso sigue activo «cancelar».
-  const snapThreshold = (MENU_WHEEL_DEAD_ZONE + ring.radius) / 2
+  const snapThreshold =
+    MENU_WHEEL_DEAD_ZONE +
+    (ring.radius - MENU_WHEEL_DEAD_ZONE) / 4
   if (distance < snapThreshold) return undefined
 
   let best: MenuWheelChip | null = null
@@ -264,7 +273,7 @@ export function MenuRadialGroups({
                     "absolute max-w-32 -translate-x-1/2 -translate-y-1/2 truncate rounded-xl border px-3 py-1.5 text-xs font-medium backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.25),0_14px_30px_-8px_rgba(0,0,0,0.55)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.45),0_16px_34px_-8px_rgba(0,0,0,0.75)]",
                     active
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-popover/95 text-foreground"
+                      : "border-foreground bg-foreground text-background"
                   )}
                   style={{ left: x, top: y }}
                 >
