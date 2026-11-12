@@ -31,6 +31,9 @@ function r2RemotePatterns(): NonNullable<NextConfig["images"]>["remotePatterns"]
 const nextConfig: NextConfig = {
   // Enable React Strict Mode
   reactStrictMode: true,
+  // Genera `.next/standalone`: un servidor Node autocontenido que solo
+  // necesita `public/` y `.next/static/`. Es lo que copia el Dockerfile.
+  output: "standalone",
   images: {
     remotePatterns: r2RemotePatterns(),
   },
