@@ -66,6 +66,7 @@ export function BranchesCard({
   const [name, setName] = useState("")
   const [address, setAddress] = useState("")
   const [phone, setPhone] = useState("")
+  const [tipPercent, setTipPercent] = useState("0")
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const activeCount = branches.filter((branch) => branch.isActive).length
@@ -78,6 +79,7 @@ export function BranchesCard({
     setName("")
     setAddress("")
     setPhone("")
+    setTipPercent("0")
   }
 
   function startEditing(branch: Branch) {
@@ -85,6 +87,7 @@ export function BranchesCard({
     setName(branch.name)
     setAddress(branch.address ?? "")
     setPhone(branch.phone ?? "")
+    setTipPercent(String(branch.defaultTipPercent ?? 0))
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -97,6 +100,9 @@ export function BranchesCard({
           ? {}
           : { address: address.trim() }),
         ...(sameText(editing.phone, phone) ? {} : { phone: phone.trim() }),
+        ...(Number(tipPercent) === (editing.defaultTipPercent ?? 0)
+          ? {}
+          : { defaultTipPercent: Number(tipPercent) }),
       }
 
       if (isEmptyPatch(changes)) {
@@ -113,6 +119,7 @@ export function BranchesCard({
     formData.append("name", name)
     formData.append("address", address)
     formData.append("phone", phone)
+    formData.append("defaultTipPercent", tipPercent)
 
     form.run(() => createBranch(formData))
   }
@@ -296,6 +303,26 @@ export function BranchesCard({
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                 />
+              </Field>
+
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="branch-tip">
+                  Propina sugerida (%)
+                </FieldLabel>
+                <Input
+                  id="branch-tip"
+                  name="defaultTipPercent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={tipPercent}
+                  onChange={(event) => setTipPercent(event.target.value)}
+                />
+                <FieldDescription>
+                  Se usa para prellenar la propina en el cobro del POS. 0 = sin
+                  sugerencia.
+                </FieldDescription>
               </Field>
             </div>
 

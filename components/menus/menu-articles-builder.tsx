@@ -45,10 +45,10 @@ import {
 } from "lucide-react"
 
 import type { MenuItemInput } from "@/app/(app)/menus/actions"
+import { ArticleCardVisual } from "@/components/catalog/article-card-visual"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { EntityImage } from "@/components/ui/entity-image"
 import {
   Collapsible,
   CollapsibleContent,
@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -66,7 +67,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { formatMoney, type ArticleListItem } from "@/lib/catalog"
 import { jalapenoChipClass } from "@/lib/chips"
-import { CARD_IMAGE_SIZES } from "@/lib/images"
+import { useShake } from "@/hooks/use-shake"
 
 import {
   MENU_WHEEL_DEAD_ZONE,
@@ -75,6 +76,13 @@ import {
   menuWheelTargetAt,
   menuWheelTargetCenter,
 } from "./menu-wheel-groups"
+
+/** Identificadores de las dos columnas que pueden tener selección. */
+type SelectionSource = "catalog" | "builder"
+
+/** Selección vacía estable (misma referencia) para la columna inactiva. */
+const EMPTY_SELECTION: Record<string, number> = {}
+const EMPTY_SELECTION_SET: ReadonlySet<string> = new Set<string>()
 
 /** Clave local para el contenedor de artículos sin grupo. */
 const UNGROUPED = "__none__"
@@ -92,13 +100,6 @@ export type MenuBuilderLayout = "split-scroll" | "single-scroll"
 /** Tamaño fijo de las cards del catálogo: 4 por fila. */
 const CARD_COLUMNS = 4
 const CARD_GAP = 8
-/**
- * Duración del shake. Debe coincidir con `np-menu-card-shake` de globals.css.
- * Con el timestamp de selección se calcula un `animation-delay` negativo para
- * que todas las cards queden sincronizadas al mismo reloj.
- */
-const SHAKE_DURATION_MS = 180
-
 export type GroupSortMode =
   | "manual"
   | "name-asc"
@@ -228,6 +229,12 @@ export function MenuArticlesBuilder({
   )
   /** Artículos marcados para asignar/mover, con el instante de selección. */
   const [pending, setPending] = React.useState<Record<string, number>>({})
+  /**
+   * Columna dueña de la selección. Catálogo y constructor no se mezclan: al
+   * seleccionar en una, la selección de la otra se descarta.
+   */
+  const [selectionSource, setSelectionSource] =
+    React.useState<SelectionSource | null>(null)
   const [wheelOrigin, setWheelOrigin] = React.useState<{
     x: number
     y: number
@@ -236,7 +243,8 @@ export function MenuArticlesBuilder({
   const [wheelTarget, setWheelTarget] = React.useState<
     string | null | undefined
   >(undefined)
-  const [activeItemId, setActiveItemId] = React.useState<string | null>(null)
+  /** Ids que viajan en el arrastre actual (selección múltiple). */
+  const [dragItemIds, setDragItemIds] = React.useState<string[]>([])
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null)
   const [wheelDragging, setWheelDragging] = React.useState(false)
   const [activeGroupSortId, setActiveGroupSortId] = React.useState<
@@ -352,6 +360,12 @@ export function MenuArticlesBuilder({
   const selectedIds = new Set(selected.map((row) => row.itemId))
   const pendingIds = React.useMemo(() => Object.keys(pending), [pending])
   const pendingSet = React.useMemo(() => new Set(pendingIds), [pendingIds])
+  const draggedIds = React.useMemo(() => new Set(dragItemIds), [dragItemIds])
+  // Cada columna solo pinta la selección cuando es suya.
+  const catalogPendingSet =
+    selectionSource === "catalog" ? pendingSet : EMPTY_SELECTION_SET
+  const builderPending =
+    selectionSource === "builder" ? pending : EMPTY_SELECTION
   const pendingCount = pendingIds.length
   const catalogDragActive = Boolean(
     activeDragId?.startsWith(CATALOG_PREFIX)
@@ -463,6 +477,56 @@ export function MenuArticlesBuilder({
     onSelectedChange(renumber(next))
   }
 
+  /**
+   * Mueve un bloque de artículos al grupo destino, antes de `beforeItemId`.
+   *
+   * Conserva el orden relativo que tienen en el menú y descarta como ancla
+   * cualquier id que forme parte del propio bloque.
+   */
+  function moveItems(
+    itemIds: string[],
+    group: string | null,
+    beforeItemId: string | null
+  ) {
+    if (disabled || itemIds.length === 0) return
+
+    const moving = new Set(itemIds)
+    const anchor =
+      beforeItemId && !moving.has(beforeItemId) ? beforeItemId : null
+    const base = selected.filter((row) => !moving.has(row.itemId))
+    const block = selected
+      .filter((row) => moving.has(row.itemId))
+      .map((row) => ({ ...row, group }))
+    const sourceGroups = new Set<string | null>()
+
+    for (const row of selected) {
+      if (moving.has(row.itemId)) sourceGroups.add(row.group ?? null)
+    }
+
+    const next: MenuItemInput[] = []
+
+    for (const container of [...groups, null] as Array<string | null>) {
+      const rows = base
+        .filter((row) => (row.group ?? null) === container)
+        .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+
+      if (container === group) {
+        const index = anchor
+          ? rows.findIndex((row) => row.itemId === anchor)
+          : rows.length
+        rows.splice(index < 0 ? rows.length : index, 0, ...block)
+      }
+
+      next.push(...rows)
+    }
+
+    if (sameOrder(next, selected)) return
+
+    for (const container of sourceGroups) markManual(container)
+    markManual(group)
+    onSelectedChange(renumber(next))
+  }
+
   /** Toast de asignación en lote: restaura menú y selección pendiente. */
   function showAssignmentUndo(
     selectedSnapshot: MenuItemInput[],
@@ -490,18 +554,65 @@ export function MenuArticlesBuilder({
     if (!selectedIds.has(article.id) && !article.isActive) return
 
     setPending((current) => {
-      if (current[article.id] !== undefined) {
-        const next = { ...current }
+      // Seleccionar en el catálogo descarta una selección del constructor.
+      const base: Record<string, number> =
+        selectionSource === "catalog" ? current : {}
+
+      if (base[article.id] !== undefined) {
+        const next = { ...base }
         delete next[article.id]
         return next
       }
 
-      return { ...current, [article.id]: Date.now() }
+      return { ...base, [article.id]: Date.now() }
     })
+
+    setSelectionSource("catalog")
   }
 
   function clearPending() {
     setPending({})
+  }
+
+  /** Quita de la selección los ids que ya se movieron. */
+  function clearPendingIds(ids: string[]) {
+    setPending((current) => {
+      let changed = false
+      const next = { ...current }
+
+      for (const id of ids) {
+        if (next[id] !== undefined) {
+          delete next[id]
+          changed = true
+        }
+      }
+
+      return changed ? next : current
+    })
+  }
+
+  /**
+   * Clic en una card del constructor: marca/desmarca para moverla en lote.
+   * No exige que el artículo esté activo porque ya forma parte del menú.
+   */
+  function toggleSelected(itemId: string) {
+    if (disabled || suppressClick.current) return
+
+    setPending((current) => {
+      // Seleccionar en el constructor descarta una selección del catálogo.
+      const base: Record<string, number> =
+        selectionSource === "builder" ? current : {}
+
+      if (base[itemId] !== undefined) {
+        const next = { ...base }
+        delete next[itemId]
+        return next
+      }
+
+      return { ...base, [itemId]: Date.now() }
+    })
+
+    setSelectionSource("builder")
   }
 
   /**
@@ -588,19 +699,25 @@ export function MenuArticlesBuilder({
     const ids = new Set(selectable.map((article) => article.id))
 
     setPending((current) => {
+      // Seleccionar en el catálogo descarta una selección del constructor.
+      const base: Record<string, number> =
+        selectionSource === "catalog" ? current : {}
+
       if (!selectAll) {
-        const next = { ...current }
+        const next = { ...base }
         for (const id of ids) delete next[id]
         return next
       }
 
       const now = Date.now()
-      const next = { ...current }
+      const next = { ...base }
       for (const id of ids) {
         if (next[id] === undefined) next[id] = now
       }
       return next
     })
+
+    setSelectionSource("catalog")
   }
 
   function removeItem(itemId: string) {
@@ -631,6 +748,7 @@ export function MenuArticlesBuilder({
       wheelActiveRef.current = false
       setWheelDragging(false)
       snapCenterRef.current = null
+      setDragItemIds([])
       return
     }
 
@@ -647,9 +765,25 @@ export function MenuArticlesBuilder({
 
     snapCenterRef.current = null
 
-    // Arrastrar una card no seleccionada reemplaza la selección por esa card.
-    if (isCatalog && pending[itemId] === undefined) {
+    // Arrastrar una card no seleccionada (o desde la otra columna) reemplaza
+    // la selección por esa card.
+    const source: SelectionSource = isCatalog ? "catalog" : "builder"
+    const sameSource = selectionSource === source
+
+    if (pending[itemId] === undefined || !sameSource) {
       setPending({ [itemId]: Date.now() })
+      setDragItemIds([itemId])
+      setSelectionSource(source)
+    } else if (isCatalog) {
+      setDragItemIds([itemId, ...pendingIds.filter((id) => id !== itemId)])
+    } else {
+      // Desde el constructor solo viajan los seleccionados que ya están en el menú.
+      setDragItemIds([
+        itemId,
+        ...pendingIds.filter(
+          (id) => id !== itemId && selectedIds.has(id)
+        ),
+      ])
     }
 
     wheelActiveRef.current = isCatalog && pointerDrag
@@ -666,7 +800,6 @@ export function MenuArticlesBuilder({
 
     beforeDrag.current = selected
     setActiveDragId(dragId)
-    setActiveItemId(itemId)
     setOverId(null)
   }
 
@@ -732,6 +865,9 @@ export function MenuArticlesBuilder({
     const nextOverId = String(over.id)
     setOverId((current) => (current === nextOverId ? current : nextOverId))
 
+    // El arrastre múltiple se resuelve de una vez al soltar, sin preview en vivo.
+    if (dragItemIds.length > 1) return
+
     const itemId = parseItemId(activeId)
     if (!itemId) return
 
@@ -778,6 +914,7 @@ export function MenuArticlesBuilder({
     const usedWheel = isCatalog && wheelActiveRef.current
     const origin = wheelOrigin
     const snapshot = beforeDrag.current
+    const movingIds = dragItemIds
 
     // Destino final calculado con la posición exacta del pointerup.
     let finalWheelTarget: string | null | undefined = usedWheel
@@ -800,7 +937,6 @@ export function MenuArticlesBuilder({
     }
 
     releaseClickSoon()
-    setActiveItemId(null)
     setActiveDragId(null)
     setOverId(null)
     setWheelOrigin(null)
@@ -809,6 +945,7 @@ export function MenuArticlesBuilder({
     setWheelDragging(false)
     snapCenterRef.current = null
     beforeDrag.current = null
+    setDragItemIds([])
 
     const itemId = parseItemId(activeId)
     if (!itemId) return
@@ -838,6 +975,18 @@ export function MenuArticlesBuilder({
       return
     }
 
+    if (movingIds.length > 1) {
+      // Nunca se usa como ancla una card que también se está moviendo.
+      const beforeItemId =
+        target.beforeItemId && !movingIds.includes(target.beforeItemId)
+          ? target.beforeItemId
+          : null
+
+      moveItems(movingIds, target.group, beforeItemId)
+      clearPendingIds(movingIds)
+      return
+    }
+
     const current = snapshot?.find((row) => row.itemId === itemId)
 
     // Si viene del mismo grupo, se aplica el orden final con `arrayMove`.
@@ -847,10 +996,11 @@ export function MenuArticlesBuilder({
       } else {
         moveToEnd(itemId, target.group)
       }
-      return
+    } else {
+      moveItem(itemId, target.group, target.beforeItemId)
     }
 
-    moveItem(itemId, target.group, target.beforeItemId)
+    clearPendingIds([itemId])
   }
 
   /** Reemplaza el orden de las filas de un contenedor sin tocar los demás. */
@@ -894,7 +1044,6 @@ export function MenuArticlesBuilder({
     const snapshot = beforeDrag.current
 
     releaseClickSoon()
-    setActiveItemId(null)
     setActiveDragId(null)
     setActiveGroupSortId(null)
     setOverId(null)
@@ -904,6 +1053,7 @@ export function MenuArticlesBuilder({
     setWheelDragging(false)
     snapCenterRef.current = null
     beforeDrag.current = null
+    setDragItemIds([])
 
     if (snapshot) onSelectedChange(renumber(snapshot))
   }
@@ -1061,25 +1211,13 @@ export function MenuArticlesBuilder({
 
     const local = new Map(articles.map((article) => [article.id, article]))
 
-    if (!activeDragId.startsWith(CATALOG_PREFIX)) {
-      const article = activeItemId ? local.get(activeItemId) : null
-      return article ? [article] : []
-    }
-
-    const active = parseItemId(activeDragId)
-    const ids = active
-      ? [active, ...pendingIds.filter((id) => id !== active)]
-      : pendingIds
-
-    return ids
+    return dragItemIds
       .slice(0, 3)
       .map((id) => local.get(id))
       .filter((article): article is ArticleListItem => Boolean(article))
-  }, [activeDragId, activeItemId, pendingIds, articles])
+  }, [activeDragId, dragItemIds, articles])
 
-  const stackCount = activeDragId?.startsWith(CATALOG_PREFIX)
-    ? Math.max(pendingIds.length, stackArticles.length)
-    : stackArticles.length
+  const stackCount = Math.max(dragItemIds.length, stackArticles.length)
   const inMenuCount = selected.length
   const selectedGroupById = React.useMemo(
     () => new Map(selected.map((row) => [row.itemId, row.group ?? null])),
@@ -1249,15 +1387,14 @@ export function MenuArticlesBuilder({
             </div>
           </div>
 
-          <div
-            ref={catalogRef}
+          <ScrollArea
             data-slot="cards-articulos"
             className={cn(
-              "flex flex-col gap-4 px-6 pb-6",
-              layout === "split-scroll" && "min-h-0 flex-1 lg:overflow-y-auto",
+              layout === "split-scroll" && "min-h-0 flex-1",
               catalogDragActive && "pointer-events-none"
             )}
           >
+            <div ref={catalogRef} className="flex flex-col gap-4 px-6 pb-6">
             {categories.length === 0 ? (
               <p className="shrink-0 rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
                 {emptyMessage}
@@ -1269,10 +1406,10 @@ export function MenuArticlesBuilder({
                 )
                 const allSelected =
                   selectable.length > 0 &&
-                  selectable.every((article) => pendingSet.has(article.id))
+                  selectable.every((article) => catalogPendingSet.has(article.id))
                 const someSelected =
                   !allSelected &&
-                  selectable.some((article) => pendingSet.has(article.id))
+                  selectable.some((article) => catalogPendingSet.has(article.id))
 
                 return (
                   <React.Fragment key={category.id}>
@@ -1302,6 +1439,7 @@ export function MenuArticlesBuilder({
                       >
                         {category.articles.map((article) => {
                           const isPending =
+                            selectionSource === "catalog" &&
                             pending[article.id] !== undefined
 
                           return (
@@ -1333,7 +1471,8 @@ export function MenuArticlesBuilder({
                 )
               })
             )}
-          </div>
+            </div>
+          </ScrollArea>
         </section>
 
         <Separator
@@ -1425,12 +1564,10 @@ export function MenuArticlesBuilder({
             </div>
           </div>
 
-          <div
-            className={cn(
-              "flex flex-col gap-3 px-6 pb-6",
-              layout === "split-scroll" && "min-h-0 flex-1 lg:overflow-y-auto"
-            )}
+          <ScrollArea
+            className={cn(layout === "split-scroll" && "min-h-0 flex-1")}
           >
+            <div className="flex flex-col gap-3 px-6 pb-6">
             <SortableContext
               items={groups.map((group) => groupSortId(group))}
               strategy={verticalListSortingStrategy}
@@ -1449,11 +1586,14 @@ export function MenuArticlesBuilder({
                   overId={overId}
                   activeDragId={activeDragId}
                   activeGroupSortId={activeGroupSortId}
+                  draggedIds={draggedIds}
+                  pending={builderPending}
                   open={isGroupOpen(group)}
                   onOpenChange={(open) => setGroupOpen(group, open)}
                   onSort={(next) => sortGroup(group, next)}
                   onRename={(next) => renameGroup(group, next)}
                   onRemove={() => removeGroup(group)}
+                  onToggleItem={toggleSelected}
                   onRemoveItem={removeItem}
                 />
               ))}
@@ -1468,11 +1608,15 @@ export function MenuArticlesBuilder({
                 disabled={disabled}
                 overId={overId}
                 activeDragId={activeDragId}
+                draggedIds={draggedIds}
+                pending={builderPending}
                 onSort={(next) => sortGroup(null, next)}
+                onToggleItem={toggleSelected}
                 onRemoveItem={removeItem}
               />
             </div>
-          </div>
+            </div>
+          </ScrollArea>
         </section>
       </div>
 
@@ -1485,8 +1629,8 @@ export function MenuArticlesBuilder({
       ) : null}
 
       {/*
-       * El overlay es el clon que sigue al cursor. Desde el catálogo muestra
-       * un stack de hasta 3 cards seleccionadas; desde el constructor, una.
+       * El overlay es el clon que sigue al cursor. En ambas columnas muestra
+       * un stack de hasta 3 cards del lote seleccionado.
        * Va al body porque el diálogo usa `transform`, que desancla los `fixed`.
        */}
       {stackArticles.length > 0 && typeof document !== "undefined"
@@ -1521,7 +1665,13 @@ export function MenuArticlesBuilder({
                           pointerEvents: "none",
                         }}
                       >
-                        <ArticleCardVisual article={article} />
+                        <ArticleCardVisual
+                          name={article.name}
+                          price={formatMoney(article.price)}
+                          imageUrl={article.imageUrl}
+                          imageVariants={article.imageVariants}
+                          isActive={article.isActive}
+                        />
                       </div>
                     )
                   })}
@@ -1579,22 +1729,7 @@ function CatalogCard({
    * animación, no con el instante del clic. Así todas las cards seleccionadas
    * quedan en la misma fase, incluso si se eligieron en momentos distintos.
    */
-  React.useLayoutEffect(() => {
-    const node = nodeRef.current
-    if (!node) return
-
-    if (!pending) {
-      node.style.animationDelay = ""
-      return
-    }
-
-    const timeline =
-      typeof document !== "undefined"
-        ? Number(document.timeline?.currentTime ?? performance.now())
-        : 0
-
-    node.style.animationDelay = `-${timeline % SHAKE_DURATION_MS}ms`
-  }, [pending])
+  useShake(nodeRef, pending)
 
   return (
     <div
@@ -1608,7 +1743,11 @@ function CatalogCard({
       )}
     >
       <ArticleCardVisual
-        article={article}
+        name={article.name}
+        price={formatMoney(article.price)}
+        imageUrl={article.imageUrl}
+        imageVariants={article.imageVariants}
+        isActive={article.isActive}
         selected={selected}
         groupLabel={groupLabel}
       />
@@ -1616,13 +1755,15 @@ function CatalogCard({
   )
 }
 
-/** Card dentro de un grupo: se reordena en vivo y se quita con la ✕. */
+/** Card dentro de un grupo: se selecciona, se reordena y se quita con la ✕. */
 function SortableMenuCard({
   article,
   disabled,
   groupId,
   active = false,
   highlighted = false,
+  pending = false,
+  onToggle,
   onRemove,
 }: {
   article: ArticleListItem
@@ -1632,6 +1773,9 @@ function SortableMenuCard({
   /** La card se está arrastrando: se oculta y el `DragOverlay` hace de ghost. */
   active?: boolean
   highlighted?: boolean
+  /** Marcada para mover en lote; dispara el shake. */
+  pending?: boolean
+  onToggle: () => void
   onRemove: () => void
 }) {
   const sortableData = React.useMemo(() => ({ group: groupId }), [groupId])
@@ -1641,6 +1785,9 @@ function SortableMenuCard({
       disabled,
       data: sortableData,
     })
+  const shakeRef = React.useRef<HTMLDivElement | null>(null)
+
+  useShake(shakeRef, pending)
 
   return (
     <div
@@ -1653,112 +1800,25 @@ function SortableMenuCard({
       )}
     >
       <div
+        ref={shakeRef}
         {...attributes}
         {...listeners}
-        className={cn(!disabled && "cursor-grab active:cursor-grabbing")}
+        onClick={onToggle}
+        className={cn(
+          !disabled && "cursor-grab active:cursor-grabbing",
+          pending && "np-menu-card-shake"
+        )}
       >
         <ArticleCardVisual
-          article={article}
+          name={article.name}
+          price={formatMoney(article.price)}
+          imageUrl={article.imageUrl}
+          imageVariants={article.imageVariants}
+          isActive={article.isActive}
+          selected={pending}
           onRemove={onRemove}
           disabled={disabled}
         />
-      </div>
-    </div>
-  )
-}
-
-/** Imagen, precio y nombre; opcionalmente la ✕ para quitarla del menú. */
-function ArticleCardVisual({
-  article,
-  selected = false,
-  groupLabel = null,
-  disabled = false,
-  onRemove,
-}: {
-  article: ArticleListItem
-  selected?: boolean
-  /** Grupo donde vive el artículo (solo en cards del catálogo). */
-  groupLabel?: string | null
-  disabled?: boolean
-  onRemove?: () => void
-}) {
-  const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
-  const showFallback = !article.imageUrl || failedSrc === article.imageUrl
-
-  return (
-    <div
-      className={cn(
-        "relative aspect-square w-full overflow-hidden rounded-xl border bg-muted text-left select-none",
-        selected && "ring-2 ring-primary",
-        !article.isActive && "opacity-80"
-      )}
-    >
-      <div className="absolute inset-0 bg-muted">
-        {showFallback ? (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <SoupIcon className="size-8" aria-hidden />
-            <span className="sr-only">Sin imagen</span>
-          </div>
-        ) : (
-          <EntityImage
-            src={article.imageUrl}
-            assets={article.imageVariants}
-            alt={article.name}
-            sizes={CARD_IMAGE_SIZES}
-            draggable={false}
-            className={cn(
-              "size-full object-cover",
-              !article.isActive && "grayscale"
-            )}
-            onError={() => setFailedSrc(article.imageUrl ?? null)}
-          />
-        )}
-      </div>
-
-      {/* Mismo degradado que las tarjetas de Catálogo. */}
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/85 via-black/30 to-black/10" />
-
-      <div className="relative flex size-full flex-col p-1.5 text-white">
-        {selected && groupLabel ? (
-          <Badge
-            variant="outline"
-            title={groupLabel}
-            className="max-w-[calc(100%-1.5rem)] truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
-          >
-            {groupLabel}
-          </Badge>
-        ) : null}
-
-        {onRemove ? (
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon-xs"
-            aria-label={`Quitar ${article.name} del menú`}
-            title="Quitar del menú"
-            disabled={disabled}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation()
-              onRemove()
-            }}
-            className="ml-auto bg-destructive text-white shadow-sm hover:bg-destructive/90 dark:bg-destructive dark:text-white dark:hover:bg-destructive/90"
-          >
-            <XIcon />
-          </Button>
-        ) : null}
-
-        <div className="mt-auto flex min-w-0 flex-col gap-0.5">
-          <span className="text-sm leading-none font-normal text-white tabular-nums drop-shadow-sm">
-            {formatMoney(article.price)}
-          </span>
-          <p
-            className="line-clamp-2 text-pretty text-[13px] leading-tight font-semibold text-white drop-shadow-sm"
-            title={article.name}
-          >
-            {article.name}
-          </p>
-        </div>
       </div>
     </div>
   )
@@ -1819,6 +1879,9 @@ function GroupCards({
   disabled,
   overId,
   activeDragId,
+  draggedIds,
+  pending,
+  onToggleItem,
   onRemoveItem,
 }: {
   group: string | null
@@ -1828,6 +1891,10 @@ function GroupCards({
   disabled: boolean
   overId: string | null
   activeDragId: string | null
+  /** Ids que se están arrastrando (selección múltiple). */
+  draggedIds: Set<string>
+  pending: Record<string, number>
+  onToggleItem: (itemId: string) => void
   onRemoveItem: (itemId: string) => void
 }) {
   // Referencia estable para que dnd-kit conserve las transiciones.
@@ -1851,14 +1918,22 @@ function GroupCards({
             const article = byId.get(row.itemId)
             if (!article) return null
 
+            // Solo se ocultan las cards cuando el arrastre nace del constructor.
+            const builderDrag = Boolean(activeDragId?.startsWith(ITEM_PREFIX))
+
             return (
               <SortableMenuCard
                 key={row.itemId}
                 article={article}
                 disabled={disabled}
                 groupId={groupKey(group)}
-                active={activeDragId === itemDragId(row.itemId)}
+                active={
+                  activeDragId === itemDragId(row.itemId) ||
+                  (builderDrag && draggedIds.has(row.itemId))
+                }
                 highlighted={overId === itemDragId(row.itemId)}
+                pending={pending[row.itemId] !== undefined}
+                onToggle={() => onToggleItem(row.itemId)}
                 onRemove={() => onRemoveItem(row.itemId)}
               />
             )
@@ -1887,9 +1962,10 @@ function GroupSortSelect({
     >
       <SelectTrigger
         size="sm"
-        className="h-8 w-36 shrink-0"
-        aria-label={`Orden de ${title}`}
+        className="h-8 w-48 shrink-0"
+        aria-label={`Ordenar ${title}`}
       >
+        <span className="shrink-0 text-muted-foreground">Ordenar:</span>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -1919,11 +1995,14 @@ function GroupSection({
   overId,
   activeDragId,
   activeGroupSortId,
+  draggedIds,
+  pending,
   open,
   onOpenChange,
   onSort,
   onRename,
   onRemove,
+  onToggleItem,
   onRemoveItem,
 }: {
   group: string
@@ -1937,11 +2016,14 @@ function GroupSection({
   overId: string | null
   activeDragId: string | null
   activeGroupSortId: string | null
+  draggedIds: Set<string>
+  pending: Record<string, number>
   open: boolean
   onOpenChange: (open: boolean) => void
   onSort: (mode: GroupSortMode) => void
   onRename: (next: string) => boolean
   onRemove: () => void
+  onToggleItem: (itemId: string) => void
   onRemoveItem: (itemId: string) => void
 }) {
   const sortable = useSortable({
@@ -2018,34 +2100,6 @@ function GroupSection({
           </Button>
         </div>
 
-        {comboCount > 0 || articleCount > 0 ? (
-          <div className="flex shrink-0 items-center gap-1">
-            {comboCount > 0 ? (
-              <Badge
-                variant="outline"
-                aria-label={`${comboCount} combos`}
-                title={`${comboCount} combo${comboCount === 1 ? "" : "s"}`}
-                className="border-sky-700 bg-sky-500/10 tabular-nums text-sky-700 dark:border-sky-400 dark:bg-sky-400/10 dark:text-sky-400"
-              >
-                <GroupIcon data-icon="inline-start" />
-                {comboCount}
-              </Badge>
-            ) : null}
-
-            {articleCount > 0 ? (
-              <Badge
-                variant="outline"
-                aria-label={`${articleCount} artículos`}
-                title={`${articleCount} artículo${articleCount === 1 ? "" : "s"}`}
-                className="h-5 border-primary/90 bg-primary/5 px-2 py-0.5 tabular-nums text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
-              >
-                <SoupIcon data-icon="inline-start" />
-                {articleCount}
-              </Badge>
-            ) : null}
-          </div>
-        ) : null}
-
         <GroupNameInput value={title} disabled={disabled} onCommit={onRename} />
 
         <CollapsibleTrigger
@@ -2055,6 +2109,34 @@ function GroupSection({
         />
 
         <div className="flex shrink-0 items-center gap-1.5">
+          {comboCount > 0 || articleCount > 0 ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {comboCount > 0 ? (
+                <Badge
+                  variant="outline"
+                  aria-label={`${comboCount} combos`}
+                  title={`${comboCount} combo${comboCount === 1 ? "" : "s"}`}
+                  className="border-sky-700 bg-sky-500/10 tabular-nums text-sky-700 dark:border-sky-400 dark:bg-sky-400/10 dark:text-sky-400"
+                >
+                  <GroupIcon data-icon="inline-start" />
+                  {comboCount}
+                </Badge>
+              ) : null}
+
+              {articleCount > 0 ? (
+                <Badge
+                  variant="outline"
+                  aria-label={`${articleCount} artículos`}
+                  title={`${articleCount} artículo${articleCount === 1 ? "" : "s"}`}
+                  className="h-5 border-primary/90 bg-primary/5 px-2 py-0.5 tabular-nums text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
+                >
+                  <SoupIcon data-icon="inline-start" />
+                  {articleCount}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
+
           <GroupSortSelect mode={mode} title={title} onSort={onSort} />
 
           <Button
@@ -2079,6 +2161,9 @@ function GroupSection({
           disabled={disabled}
           overId={overId}
           activeDragId={activeDragId}
+          draggedIds={draggedIds}
+          pending={pending}
+          onToggleItem={onToggleItem}
           onRemoveItem={onRemoveItem}
         />
       </CollapsibleContent>
@@ -2095,7 +2180,10 @@ function UngroupedSection({
   disabled,
   overId,
   activeDragId,
+  draggedIds,
+  pending,
   onSort,
+  onToggleItem,
   onRemoveItem,
 }: {
   rows: MenuItemInput[]
@@ -2105,7 +2193,10 @@ function UngroupedSection({
   disabled: boolean
   overId: string | null
   activeDragId: string | null
+  draggedIds: Set<string>
+  pending: Record<string, number>
   onSort: (mode: GroupSortMode) => void
+  onToggleItem: (itemId: string) => void
   onRemoveItem: (itemId: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: groupDropId(null) })
@@ -2137,6 +2228,9 @@ function UngroupedSection({
         disabled={disabled}
         overId={overId}
         activeDragId={activeDragId}
+        draggedIds={draggedIds}
+        pending={pending}
+        onToggleItem={onToggleItem}
         onRemoveItem={onRemoveItem}
       />
     </div>

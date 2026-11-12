@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2Icon, SaveIcon, Settings2Icon } from "lucide-react"
+import { InfoIcon, Loader2Icon, SaveIcon, Settings2Icon } from "lucide-react"
 import { toast } from "sonner"
 import type { DateRange } from "react-day-picker"
 
@@ -100,6 +100,8 @@ export function MenuDialog({
     onClose()
   })
 
+  const isGlobal = menu?.isGlobal ?? false
+
   const [name, setName] = useState(menu?.name ?? "")
   const [description, setDescription] = useState(menu?.description ?? "")
   const [days, setDays] = useState<number[]>(() => initialDays(menu))
@@ -116,7 +118,7 @@ export function MenuDialog({
     }))
   )
   const [groups, setGroups] = useState<string[]>(() => menu?.groups ?? [])
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(isGlobal)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const startsAtIso = toIso(range?.from, false)
@@ -160,7 +162,7 @@ export function MenuDialog({
       return
     }
 
-    if (selected.length === 0) {
+    if (!isGlobal && selected.length === 0) {
       form.setError("Selecciona al menos un artículo")
       return
     }
@@ -189,7 +191,7 @@ export function MenuDialog({
       endTime: endTime || null,
       startsAt: startsAtIso,
       endsAt: endsAtIso,
-      groups,
+      groups: isGlobal ? (menu?.groups ?? []) : groups,
       items,
     }
 
@@ -249,7 +251,7 @@ export function MenuDialog({
             JSON.stringify(left) === JSON.stringify(right),
         }
       ),
-      ...(itemsChanged ? { items } : {}),
+      ...(isGlobal || !itemsChanged ? {} : { items }),
     }
 
     if (isEmptyPatch(changes)) {
@@ -306,8 +308,9 @@ export function MenuDialog({
             <DialogHeader className="shrink-0 px-6 pt-6">
               <DialogTitle>{menu ? "Editar menú" : "Nuevo menú"}</DialogTitle>
               <DialogDescription>
-                Agrupa artículos y define cuándo está disponible. No cambia
-                precios ni inventario.
+                {isGlobal
+                  ? "El menú global incluye todo el catálogo. Solo puedes cambiar su nombre, descripción y disponibilidad."
+                  : "Agrupa artículos y define cuándo está disponible. No cambia precios ni inventario."}
               </DialogDescription>
             </DialogHeader>
 
@@ -348,15 +351,31 @@ export function MenuDialog({
             <div className="flex min-h-0 flex-1 flex-col pt-6">
               <Separator />
 
-              <MenuArticlesBuilder
-                articles={items}
-                groups={groups}
-                selected={selected}
-                onGroupsChange={setGroups}
-                onSelectedChange={setSelected}
-                disabled={form.pending}
-                layout={BUILDER_LAYOUT}
-              />
+              {isGlobal ? (
+                <div className="flex items-start gap-3 px-6 py-6">
+                  <InfoIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-medium">
+                      Artículos y grupos automáticos
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      El menú global incluye todos los artículos y combos del
+                      catálogo. Su contenido no se edita aquí: solo el nombre,
+                      la descripción y la disponibilidad.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <MenuArticlesBuilder
+                  articles={items}
+                  groups={groups}
+                  selected={selected}
+                  onGroupsChange={setGroups}
+                  onSelectedChange={setSelected}
+                  disabled={form.pending}
+                  layout={BUILDER_LAYOUT}
+                />
+              )}
 
               {form.error ? (
                 <FieldError className="px-6 pb-6">{form.error}</FieldError>

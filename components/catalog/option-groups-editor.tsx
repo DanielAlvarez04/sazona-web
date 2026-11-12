@@ -84,6 +84,8 @@ export interface OptionGroupDraftValue {
   scaleFactor: string
   /** Disponible para el mesero al tomar la comanda. */
   isActive: boolean
+  /** La opción de la biblioteca está desactivada a nivel negocio. */
+  libraryInactive: boolean
   isDefault: boolean
   effects: OptionEffect[]
 }
@@ -109,25 +111,24 @@ export function optionGroupDrafts(
     selection: group.selection,
     minSelect: group.minSelect,
     maxSelect: group.maxSelect,
-    values: group.values
-      .filter((value) => !value.value || value.value.isActive)
-      .map((value) => ({
-        key: value.id,
-        valueId: value.valueId,
-        customName: value.customName,
-        name: value.customName ?? value.value?.name ?? "",
-        kitchenLabel: value.customName
-          ? null
-          : (value.value?.kitchenLabel ?? null),
-        priceDelta:
-          Number(value.priceDelta) === 0
-            ? ""
-            : String(Number(value.priceDelta)),
-        scaleFactor: String(Number(value.scaleFactor) || 1),
-        isActive: value.isActive,
-        isDefault: value.isDefault,
-        effects: value.effects ?? [],
-      })),
+    values: group.values.map((value) => ({
+      key: value.id,
+      valueId: value.valueId,
+      customName: value.customName,
+      name: value.customName ?? value.value?.name ?? "",
+      kitchenLabel: value.customName
+        ? null
+        : (value.value?.kitchenLabel ?? null),
+      priceDelta:
+        Number(value.priceDelta) === 0
+          ? ""
+          : String(Number(value.priceDelta)),
+      scaleFactor: String(Number(value.scaleFactor) || 1),
+      isActive: value.isActive,
+      libraryInactive: Boolean(value.value && !value.value.isActive),
+      isDefault: value.isDefault,
+      effects: value.effects ?? [],
+    })),
   }))
 }
 
@@ -136,6 +137,10 @@ export function optionGroupPayload(
   drafts: OptionGroupDraft[]
 ): NonNullable<ArticleInput["optionGroups"]> {
   return drafts.map<OptionGroupAssignmentInput>((group) => {
+    const activeCount = group.values.filter(
+      (value) => value.isActive && !value.libraryInactive
+    ).length
+
     const values = group.values.map((value) => ({
       ...(value.valueId
         ? { valueId: value.valueId }
@@ -171,28 +176,135 @@ export function optionGroupPayload(
         })),
     }))
 
-    // El POS necesita una opción preseleccionada en los grupos de una sola
-    // elección. Se prefiere la primera disponible; el checkbox no la expone.
     if (group.selection === "SINGLE" && values.length > 0) {
-      const preferred = values.findIndex((value) => value.isActive)
-      const defaultIndex = preferred >= 0 ? preferred : 0
+      if (group.isRequired) {
+        // Un grupo obligatorio siempre necesita una opción por defecto.
+        const preferred = group.values.findIndex(
+          (value) => value.isActive && !value.libraryInactive
+        )
+        const fallback = group.values.findIndex((value) => value.isActive)
+        const defaultIndex =
+          preferred >= 0 ? preferred : fallback >= 0 ? fallback : 0
+
+        values.forEach((value, index) => {
+          value.isDefault = index === defaultIndex
+        })
+      } else {
+        // En un grupo opcional puede no haber ninguna; si hay varias, solo
+        // se conserva una.
+        const defaults = values
+          .map((value, index) => ({ value, index }))
+          .filter((entry) => entry.value.isDefault)
+
+        if (defaults.length > 1) {
+          const keep =
+            defaults.find((entry) => entry.value.isActive)?.index ??
+            defaults[0].index
+
+          values.forEach((value, index) => {
+            value.isDefault = index === keep
+          })
+        }
+      }
+    }
+
+    if (group.selection === "MULTIPLE") {
+      // Los defaults se recortan al máximo configurado, que puede ser menor
+      // que el total de opciones disponibles.
+      const max = Math.max(
+        1,
+        Math.min(group.maxSelect ?? activeCount, Math.max(1, activeCount))
+      )
+      let kept = 0
+
       values.forEach((value, index) => {
-        value.isDefault = index === defaultIndex
+        if (!value.isDefault) return
+
+        const libraryInactive = group.values[index]?.libraryInactive ?? false
+
+        if (!value.isActive || libraryInactive || kept >= max) {
+          value.isDefault = false
+          return
+        }
+
+        kept += 1
       })
     }
+
+    const available = Math.max(1, activeCount)
+    const minSelect =
+      group.selection === "SINGLE"
+        ? group.isRequired
+          ? 1
+          : 0
+        : Math.min(
+            group.isRequired
+              ? Math.max(1, group.minSelect)
+              : Math.max(0, group.minSelect),
+            Math.max(1, group.maxSelect ?? available)
+          )
+    const maxSelect =
+      group.selection === "SINGLE"
+        ? 1
+        : Math.max(
+            Math.max(1, minSelect),
+            Math.min(group.maxSelect ?? available, available)
+          )
 
     return {
       groupId: group.groupId,
       isRequired: group.isRequired,
       selection: group.selection,
-      minSelect: group.isRequired ? Math.max(1, group.minSelect) : 0,
-      maxSelect:
-        group.selection === "SINGLE"
-          ? 1
-          : (group.maxSelect ?? Math.max(1, group.values.length)),
+      minSelect,
+      maxSelect,
       values,
     }
   })
+}
+
+/** Cantidad de opciones visibles en comanda. */
+function availableOptionCount(values: OptionGroupDraftValue[]) {
+  return values.filter((value) => value.isActive && !value.libraryInactive)
+    .length
+}
+
+/** Ajusta mínimo y máximo a las opciones realmente disponibles. */
+function normalizeGroupBounds(
+  group: OptionGroupDraft,
+  previousAvailable?: number
+): OptionGroupDraft {
+  const activeCount = availableOptionCount(group.values)
+  const available = Math.max(1, activeCount)
+
+  if (group.selection === "SINGLE") {
+    return {
+      ...group,
+      minSelect: group.isRequired ? 1 : 0,
+      maxSelect: 1,
+    }
+  }
+
+  const minSelect = Math.min(
+    group.isRequired ? Math.max(1, group.minSelect) : Math.max(0, group.minSelect),
+    available
+  )
+
+  // Si el máximo estaba en el tope anterior (o era automático), sigue al
+  // número de opciones disponibles. Si era un máximo personalizado menor,
+  // se conserva.
+  const followsAvailability =
+    previousAvailable !== undefined &&
+    (group.maxSelect ?? previousAvailable) >= previousAvailable
+  const rawMax = followsAvailability
+    ? available
+    : (group.maxSelect ?? available)
+
+  const maxSelect = Math.max(
+    Math.max(1, minSelect),
+    Math.min(rawMax, available)
+  )
+
+  return { ...group, minSelect, maxSelect }
 }
 
 /** Compara dos configuraciones de opciones sin importar el orden de claves. */
@@ -205,20 +317,19 @@ function libraryToDraft(
   selection?: OptionSelection
 ): OptionGroupDraft {
   const nextSelection = selection ?? "SINGLE"
-  const values = group.values
-    .filter((value) => value.isActive)
-    .map((value, index) => ({
-      key: value.id,
-      valueId: value.id,
-      customName: null,
-      name: value.name,
-      kitchenLabel: value.kitchenLabel,
-      priceDelta: "",
-      scaleFactor: "1",
-      isActive: true,
-      isDefault: nextSelection === "SINGLE" && index === 0,
-      effects: [] as OptionEffect[],
-    }))
+  const values = group.values.map((value) => ({
+    key: value.id,
+    valueId: value.id,
+    customName: null,
+    name: value.name,
+    kitchenLabel: value.kitchenLabel,
+    priceDelta: "",
+    scaleFactor: "1",
+    isActive: true,
+    libraryInactive: !value.isActive,
+    isDefault: false,
+    effects: [] as OptionEffect[],
+  }))
 
   return {
     groupId: group.id,
@@ -345,9 +456,19 @@ export function OptionGroupsEditor({
 
   function updateGroup(groupId: string, changes: Partial<OptionGroupDraft>) {
     onChange((current) =>
-      current.map((group) =>
-        group.groupId === groupId ? { ...group, ...changes } : group
-      )
+      current.map((group) => {
+        if (group.groupId !== groupId) return group
+
+        const previousAvailable =
+          changes.values !== undefined
+            ? availableOptionCount(group.values)
+            : undefined
+
+        return normalizeGroupBounds(
+          { ...group, ...changes },
+          previousAvailable
+        )
+      })
     )
   }
 
@@ -357,16 +478,22 @@ export function OptionGroupsEditor({
     changes: Partial<OptionGroupDraftValue>
   ) {
     onChange((current) =>
-      current.map((group) =>
-        group.groupId === groupId
-          ? {
-              ...group,
-              values: group.values.map((item) =>
-                item.key === valueKey ? { ...item, ...changes } : item
-              ),
-            }
-          : group
-      )
+      current.map((group) => {
+        if (group.groupId !== groupId) return group
+
+        const previousAvailable =
+          changes.isActive !== undefined
+            ? availableOptionCount(group.values)
+            : undefined
+        const values = group.values.map((item) =>
+          item.key === valueKey ? { ...item, ...changes } : item
+        )
+        const next = { ...group, values }
+
+        return previousAvailable !== undefined
+          ? normalizeGroupBounds(next, previousAvailable)
+          : next
+      })
     )
   }
 
@@ -562,30 +689,33 @@ export function OptionGroupsEditor({
       current.map((candidate) => {
         if (candidate.groupId !== groupId) return candidate
 
-        // El POS necesita una opción por defecto en los grupos de una sola
-        // elección; la primera que se añade ocupa ese lugar.
+        // Solo los grupos obligatorios necesitan una opción por defecto.
         const firstDefault =
+          candidate.isRequired &&
           candidate.selection === "SINGLE" &&
           !candidate.values.some((option) => option.isDefault)
 
-        return {
-          ...candidate,
-          values: [
-            ...candidate.values,
-            {
-              key: created.id,
-              valueId: created.id,
-              customName: null,
-              name: created.name,
-              kitchenLabel: created.kitchenLabel,
-              priceDelta: "",
-              scaleFactor: "1",
-              isActive: true,
-              isDefault: firstDefault,
-              effects: [],
-            },
-          ],
-        }
+        const values = [
+          ...candidate.values,
+          {
+            key: created.id,
+            valueId: created.id,
+            customName: null,
+            name: created.name,
+            kitchenLabel: created.kitchenLabel,
+            priceDelta: "",
+            scaleFactor: "1",
+            isActive: true,
+            libraryInactive: false,
+            isDefault: firstDefault,
+            effects: [],
+          },
+        ]
+
+        return normalizeGroupBounds(
+          { ...candidate, values },
+          availableOptionCount(candidate.values)
+        )
       })
     )
 
@@ -602,18 +732,41 @@ export function OptionGroupsEditor({
           (item) => item.key !== valueKey
         )
 
-        // En selección única se mantiene una opción por defecto coherente.
-        let defaultAssigned = false
-        const normalized =
-          group.selection === "SINGLE"
-            ? nextValues.map((item) => {
-                const isDefault = !defaultAssigned && item.isActive
-                if (isDefault) defaultAssigned = true
-                return { ...item, isDefault }
-              })
-            : nextValues
+        const previousAvailable = availableOptionCount(group.values)
 
-        return { ...group, values: normalized }
+        let normalized = nextValues
+
+        if (group.selection === "SINGLE") {
+          if (group.isRequired && !nextValues.some((item) => item.isDefault)) {
+            const preferred = nextValues.findIndex(
+              (item) => item.isActive && !item.libraryInactive
+            )
+            const fallback = nextValues.findIndex((item) => item.isActive)
+            const defaultIndex =
+              preferred >= 0 ? preferred : fallback >= 0 ? fallback : 0
+
+            normalized = nextValues.map((item, index) => ({
+              ...item,
+              isDefault: index === defaultIndex,
+            }))
+          } else if (!group.isRequired) {
+            const defaults = nextValues.filter((item) => item.isDefault)
+
+            if (defaults.length > 1) {
+              const keep = defaults.find((item) => item.isActive) ?? defaults[0]
+
+              normalized = nextValues.map((item) => ({
+                ...item,
+                isDefault: item.key === keep.key,
+              }))
+            }
+          }
+        }
+
+        return normalizeGroupBounds(
+          { ...group, values: normalized },
+          previousAvailable
+        )
       })
     )
   }
@@ -891,6 +1044,75 @@ function OptionValueComposer({
   )
 }
 
+/** Input numérico con borrador local; ajusta al salir o con Enter. */
+function GroupLimitInput({
+  value,
+  min,
+  max,
+  fallback,
+  disabled,
+  title,
+  onCommit,
+}: {
+  value: number
+  min: number
+  max: number
+  fallback: number
+  disabled?: boolean
+  title?: string
+  onCommit: (value: number) => void
+}) {
+  const [draft, setDraft] = React.useState(String(value))
+  const focused = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!focused.current) setDraft(String(value))
+  }, [value])
+
+  const commit = () => {
+    focused.current = false
+
+    const parsed = Number(draft)
+    const clamp = (candidate: number) =>
+      Math.min(max, Math.max(min, Math.trunc(candidate)))
+    const next =
+      draft.trim() === "" || !Number.isFinite(parsed)
+        ? clamp(fallback)
+        : clamp(parsed)
+
+    setDraft(String(next))
+    onCommit(next)
+  }
+
+  return (
+    <Input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      value={draft}
+      disabled={disabled}
+      title={title}
+      className="w-20"
+      onFocus={() => {
+        focused.current = true
+      }}
+      onChange={(event) => {
+        const raw = event.target.value
+
+        if (raw === "" || /^\d+$/.test(raw)) setDraft(raw)
+      }}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
 function SortableGroupCard({
   group,
   index,
@@ -940,10 +1162,14 @@ function SortableGroupCard({
     transition,
   }
 
+  const selectableValues = group.values.filter(
+    (item) => !item.libraryInactive
+  )
   const allActive =
-    group.values.length > 0 &&
-    group.values.every((item) => item.isActive)
-  const anyActive = group.values.some((item) => item.isActive)
+    selectableValues.length > 0 &&
+    selectableValues.every((item) => item.isActive)
+  const anyActive = selectableValues.some((item) => item.isActive)
+  const activeCount = selectableValues.filter((item) => item.isActive).length
 
   function handleValueDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -1014,12 +1240,37 @@ function SortableGroupCard({
           <Switch
             checked={group.isRequired}
             disabled={disabled}
-            onCheckedChange={(checked) =>
-              onUpdate({
+            onCheckedChange={(checked) => {
+              const changes: Partial<OptionGroupDraft> = {
                 isRequired: checked,
-                ...(checked && group.minSelect < 1 ? { minSelect: 1 } : {}),
-              })
-            }
+                minSelect: checked ? Math.max(1, group.minSelect) : 0,
+              }
+
+              if (group.selection === "SINGLE") {
+                if (checked) {
+                  const preferred = group.values.findIndex(
+                    (value) => value.isActive && !value.libraryInactive
+                  )
+                  const fallback = group.values.findIndex(
+                    (value) => value.isActive
+                  )
+                  const defaultIndex =
+                    preferred >= 0 ? preferred : fallback >= 0 ? fallback : 0
+
+                  changes.values = group.values.map((value, index) => ({
+                    ...value,
+                    isDefault: index === defaultIndex,
+                  }))
+                } else {
+                  changes.values = group.values.map((value) => ({
+                    ...value,
+                    isDefault: false,
+                  }))
+                }
+              }
+
+              onUpdate(changes)
+            }}
           />
         </label>
 
@@ -1043,13 +1294,14 @@ function SortableGroupCard({
                 <Checkbox
                   checked={allActive}
                   indeterminate={anyActive && !allActive}
-                  disabled={disabled || group.values.length === 0}
+                  disabled={disabled || selectableValues.length === 0}
                   onCheckedChange={(checked) =>
                     onUpdate({
-                      values: group.values.map((item) => ({
-                        ...item,
-                        isActive: Boolean(checked),
-                      })),
+                      values: group.values.map((item) =>
+                        item.libraryInactive
+                          ? item
+                          : { ...item, isActive: Boolean(checked) }
+                      ),
                     })
                   }
                   aria-label="Disponible en comanda"
@@ -1065,28 +1317,40 @@ function SortableGroupCard({
                   disabled={disabled}
                   aria-label="Múltiples opciones"
                   onCheckedChange={(checked) => {
-                    const selection: OptionSelection = checked
-                      ? "MULTIPLE"
-                      : "SINGLE"
-                    const firstActive = group.values.findIndex(
-                      (item) => item.isActive
-                    )
-                    const defaultIndex = firstActive >= 0 ? firstActive : 0
+                    if (checked) {
+                      onUpdate({
+                        selection: "MULTIPLE",
+                        maxSelect: Math.max(1, activeCount),
+                      })
+                      return
+                    }
 
-                    onUpdate({
-                      selection,
-                      maxSelect: checked
-                        ? Math.max(1, group.values.length)
-                        : 1,
-                      ...(checked
-                        ? {}
-                        : {
-                            values: group.values.map((item, valueIndex) => ({
-                              ...item,
-                              isDefault: valueIndex === defaultIndex,
-                            })),
-                          }),
-                    })
+                    const changes: Partial<OptionGroupDraft> = {
+                      selection: "SINGLE",
+                    }
+
+                    if (group.isRequired) {
+                      const preferred = group.values.findIndex(
+                        (item) => item.isActive && !item.libraryInactive
+                      )
+                      const fallback = group.values.findIndex(
+                        (item) => item.isActive
+                      )
+                      const defaultIndex =
+                        preferred >= 0 ? preferred : fallback >= 0 ? fallback : 0
+
+                      changes.values = group.values.map((item, index) => ({
+                        ...item,
+                        isDefault: index === defaultIndex,
+                      }))
+                    } else {
+                      changes.values = group.values.map((item) => ({
+                        ...item,
+                        isDefault: false,
+                      }))
+                    }
+
+                    onUpdate(changes)
                   }}
                 />
                 <span>Múltiples opciones</span>
@@ -1098,38 +1362,43 @@ function SortableGroupCard({
               <div className="flex items-end gap-2">
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs">Mínimo</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={group.values.length}
-                    value={group.isRequired ? Math.max(1, group.minSelect) : 0}
-                    disabled
-                    className="w-20"
+                  <GroupLimitInput
+                    value={
+                      group.isRequired
+                        ? Math.max(1, group.minSelect)
+                        : Math.max(0, group.minSelect)
+                    }
+                    min={group.isRequired ? 1 : 0}
+                    max={Math.max(
+                      group.isRequired ? 1 : 0,
+                      Math.max(1, group.maxSelect ?? activeCount)
+                    )}
+                    fallback={group.isRequired ? 1 : 0}
+                    disabled={disabled}
+                    onCommit={(minSelect) =>
+                      onUpdate({
+                        minSelect,
+                        maxSelect: Math.max(
+                          Math.max(1, group.maxSelect ?? activeCount),
+                          minSelect
+                        ),
+                      })
+                    }
                   />
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs">Máximo</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={Math.max(1, group.values.length)}
-                    value={Math.max(1, group.maxSelect ?? group.values.length)}
+                  <GroupLimitInput
+                    value={Math.max(1, group.maxSelect ?? activeCount)}
+                    min={Math.max(
+                      1,
+                      group.isRequired ? 1 : group.minSelect
+                    )}
+                    max={Math.max(1, activeCount)}
+                    fallback={Math.max(1, activeCount)}
                     disabled={disabled}
-                    className="w-20"
-                    onChange={(event) => {
-                      const next = Number(event.target.value)
-                      onUpdate({
-                        maxSelect: Number.isFinite(next)
-                          ? Math.max(
-                              1,
-                              Math.min(
-                                group.values.length,
-                                Math.max(1, Math.trunc(next))
-                              )
-                            )
-                          : Math.max(1, group.values.length),
-                      })
-                    }}
+                    title="Puede ser menor que las opciones disponibles en comanda"
+                    onCommit={(maxSelect) => onUpdate({ maxSelect })}
                   />
                 </div>
               </div>
@@ -1246,7 +1515,12 @@ function SortableOptionValue({
 
       <Checkbox
         checked={item.isActive}
-        disabled={disabled}
+        disabled={disabled || item.libraryInactive}
+        title={
+          item.libraryInactive
+            ? "Opción desactivada en la biblioteca del negocio"
+            : undefined
+        }
         onCheckedChange={(checked) =>
           onUpdateValue({ isActive: Boolean(checked) })
         }
@@ -1255,6 +1529,11 @@ function SortableOptionValue({
 
       <span className="min-w-0 flex-1 truncate text-sm" title={item.name}>
         {item.name}
+        {item.libraryInactive ? (
+          <span className="ml-1 text-[10px] text-muted-foreground">
+            (desactivada)
+          </span>
+        ) : null}
       </span>
 
       {noPrice ? null : (

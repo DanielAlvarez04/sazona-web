@@ -2,7 +2,20 @@ import type { PromotionType } from "./catalog"
 
 export type OrderStatus = "OPEN" | "CLOSED" | "CANCELLED"
 
-export type PaymentMethod = "CASH" | "CARD" | "TRANSFER"
+export type OrderChannel = "DINE_IN" | "COUNTER" | "PHONE" | "DELIVERY"
+
+export const ORDER_CHANNEL_LABELS: Record<OrderChannel, string> = {
+  DINE_IN: "Mesa",
+  COUNTER: "Mostrador",
+  PHONE: "Teléfono",
+  DELIVERY: "Domicilio",
+}
+
+export type PaymentMethod =
+  | "CASH"
+  | "CARD"
+  | "TRANSFER"
+  | "MERCADO_PAGO_POINT"
 
 export type PaymentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "REFUNDED"
 
@@ -10,6 +23,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CASH: "Efectivo",
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
+  MERCADO_PAGO_POINT: "Mercado Pago (terminal)",
 }
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
@@ -23,12 +37,27 @@ export interface Payment {
   id: string
   method: PaymentMethod
   amount: string
+  tipAmount?: string
+  tipRecipientId?: string | null
+  cashReceived?: string | null
+  changeGiven?: string | null
+  sessionId?: string | null
   status: PaymentStatus
   paidAt: string | null
   confirmedAt: string | null
   createdAt: string
+  provider?: string | null
+  providerOrderId?: string | null
+  providerStatus?: string | null
+  providerStatusDetail?: string | null
+  terminalId?: string | null
   user: { id: string; name: string | null; username: string | null } | null
   confirmedBy: { id: string; name: string | null; username: string | null } | null
+  tipRecipient?: {
+    id: string
+    name: string | null
+    username: string | null
+  } | null
 }
 
 
@@ -122,6 +151,9 @@ export interface OrderItem {
   promotionId: string | null
   promotionName: string | null
   promotionType: PromotionType | null
+  /** Persona de la cuenta a la que pertenece la línea. */
+  guestId?: string | null
+  guestName?: string | null
   extras: OrderItemExtra[]
   options: OrderItemOption[]
   exclusions: OrderItemExclusion[]
@@ -158,10 +190,58 @@ export interface OrderSummaryRound {
   _count: { items: number }
 }
 
+export interface OrderGuest {
+  id: string
+  name: string
+  title: GuestTitle | null
+  sortOrder: number
+}
+
+export type GuestTitle =
+  | "NINO"
+  | "NINA"
+  | "JOVEN"
+  | "SENORITA"
+  | "SENOR"
+  | "SENORA"
+  | "SENOR_MAYOR"
+  | "SENORA_MAYOR"
+
+export const GUEST_TITLE_LABELS: Record<GuestTitle, string> = {
+  NINO: "Niño",
+  NINA: "Niña",
+  JOVEN: "Joven",
+  SENORITA: "Señorita",
+  SENOR: "Señor",
+  SENORA: "Señora",
+  SENOR_MAYOR: "Señor mayor",
+  SENORA_MAYOR: "Señora mayor",
+}
+
+export const GUEST_TITLES: GuestTitle[] = [
+  "NINO",
+  "NINA",
+  "JOVEN",
+  "SENORITA",
+  "SENOR",
+  "SENORA",
+  "SENOR_MAYOR",
+  "SENORA_MAYOR",
+]
+
 export interface Order {
   id: string
   tableNumber: string | null
+  /** Número de comensales de la mesa. */
+  partySize: number
   isTakeaway: boolean
+  channel?: OrderChannel
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryFee?: string
+  scheduledAt?: string | null
+  ticketNumber?: number | null
   status: OrderStatus
   subtotal: string
   taxTotal: string
@@ -171,6 +251,7 @@ export interface Order {
   branch?: { id: string; name: string } | null
   user: { id: string; name: string | null; username: string | null } | null
   rounds: (OrderRound | OrderSummaryRound)[]
+  guests?: OrderGuest[]
   payments?: Payment[]
   paidTotal?: string
   balance?: string
@@ -181,6 +262,10 @@ export interface KitchenRound extends OrderRound {
     id: string
     tableNumber: string | null
     isTakeaway: boolean
+    channel?: OrderChannel
+    customerName?: string | null
+    customerPhone?: string | null
+    deliveryAddress?: string | null
     status: OrderStatus
     total: string
     createdAt: string
@@ -230,13 +315,24 @@ export function canReadMoney(roles: string[]): boolean {
   return roles.some((role) => ["ADMIN", "CASHIER"].includes(role))
 }
 
-/** "Mesa 4" o "Para llevar". */
+/** Abrir/cerrar la caja y registrar movimientos: ADMIN y CASHIER. */
+export function canManageCash(roles: string[]): boolean {
+  return roles.some((role) => ["ADMIN", "CASHIER"].includes(role))
+}
+
+/** "Mesa 4", "Mostrador", "Teléfono" o "Domicilio". */
 export function orderLabel(order: {
   tableNumber: string | null
   isTakeaway: boolean
+  channel?: OrderChannel
+  customerName?: string | null
 }): string {
+  const channel = order.channel
+  if (channel === "DELIVERY") return "Domicilio"
+  if (channel === "PHONE") return "Teléfono"
+  if (channel === "COUNTER") return "Mostrador"
   if (order.tableNumber) return `Mesa ${order.tableNumber}`
-  return order.isTakeaway ? "Para llevar" : "Sin mesa"
+  return order.isTakeaway ? "Mostrador" : "Sin mesa"
 }
 
 /** Minutos transcurridos desde una fecha ISO. */

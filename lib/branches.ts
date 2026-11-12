@@ -19,6 +19,8 @@ export interface Branch {
   address: string | null
   phone: string | null
   isActive: boolean
+  /** Porcentaje de propina sugerido en el POS (0 = sin sugerencia). */
+  defaultTipPercent?: number
   userCount?: number
   createdAt?: string
 }

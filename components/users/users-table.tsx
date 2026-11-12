@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   ChevronDownIcon,
+  KeyRoundIcon,
   PencilIcon,
   Trash2Icon,
   UserCheckIcon,
@@ -43,9 +44,20 @@ import {
   DATA_TABLE_ALL,
   type DataTableFilter,
 } from "@/components/data-table/data-table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { CreateUserDialog, EditUserDialog } from "@/components/users/user-dialogs"
 import { createUserColumns } from "@/components/users/users-columns"
 import type { Branch } from "@/lib/branches"
+import { setUserPosPin } from "@/lib/pos-device-actions"
 import { ROLE_OPTIONS, type InternalUser } from "@/lib/users"
 import {
   activateInternalUser,
@@ -94,6 +106,8 @@ export function UsersTable({
     null
   )
   const [confirmingPurge, setConfirmingPurge] = React.useState(false)
+  const [pinTarget, setPinTarget] = React.useState<InternalUser | null>(null)
+  const [pinDraft, setPinDraft] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const [pendingIds, setPendingIds] = React.useState<string[]>([])
 
@@ -133,6 +147,37 @@ export function UsersTable({
     }
   }, [])
 
+  const handleSetPin = React.useCallback((user: InternalUser) => {
+    setPinDraft("")
+    setPinTarget(user)
+  }, [])
+
+  const savePin = async () => {
+    if (!pinTarget) return
+
+    if (!/^\d{4,8}$/.test(pinDraft)) {
+      toast.error("El PIN debe tener entre 4 y 8 dígitos")
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      const result = await setUserPosPin(pinTarget.id, pinDraft)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo guardar el PIN")
+        return
+      }
+
+      toast.success(`PIN actualizado para ${userName(pinTarget)}`)
+      setPinTarget(null)
+      setPinDraft("")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const columns = React.useMemo(
     () =>
       createUserColumns({
@@ -140,6 +185,7 @@ export function UsersTable({
         onEdit: handleEdit,
         onRequestDelete: handleRequestDelete,
         onToggleActive: handleToggleActive,
+        onSetPin: handleSetPin,
         isPending,
       }),
     [
@@ -147,6 +193,7 @@ export function UsersTable({
       handleEdit,
       handleRequestDelete,
       handleToggleActive,
+      handleSetPin,
       isPending,
     ]
   )
@@ -406,6 +453,67 @@ export function UsersTable({
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog
+        open={Boolean(pinTarget)}
+        onOpenChange={(next) => {
+          if (!next) {
+            setPinTarget(null)
+            setPinDraft("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>PIN de caja</DialogTitle>
+            <DialogDescription>
+              {pinTarget
+                ? `${userName(pinTarget)} usará este PIN para desbloquear la caja en una terminal vinculada.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="user-pin">PIN (4 a 8 dígitos)</Label>
+            <Input
+              id="user-pin"
+              value={pinDraft}
+              onChange={(event) =>
+                setPinDraft(event.target.value.replace(/\D/g, "").slice(0, 8))
+              }
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              placeholder="••••"
+              className="tabular-nums tracking-[0.4em]"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  void savePin()
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Se guarda cifrado; no se puede consultar después.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPinTarget(null)}
+              disabled={busy}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={savePin} disabled={busy}>
+              <KeyRoundIcon />
+              Guardar PIN
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <DataTable
         idPrefix="users"
         data={filteredUsers}
@@ -485,6 +593,13 @@ export function UsersTable({
                 >
                   <PencilIcon />
                   Editar
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => handleSetPin(user)}
+                  disabled={pending}
+                >
+                  <KeyRoundIcon />
+                  PIN de caja
                 </ContextMenuItem>
                 {user.isActive ? (
                   <ContextMenuItem

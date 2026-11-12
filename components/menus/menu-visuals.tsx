@@ -5,7 +5,11 @@ import { NotebookTextIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { EntityImage } from "@/components/ui/entity-image"
 import { CARD_IMAGE_SIZES, type ImageAssets } from "@/lib/images"
-import type { Menu, MenuStatusKind } from "@/lib/menus"
+import {
+  menuStatusLabel,
+  type Menu,
+  type MenuStatusKind,
+} from "@/lib/menus"
 import { cn } from "@/lib/utils"
 
 /** Imagen de un artículo del menú: URL de respaldo + variantes optimizadas. */
@@ -34,9 +38,11 @@ export function MenuStatusBadge({
     <Badge
       variant={variant}
       className={cn(
-        "gap-1.5 border border-transparent bg-background",
+        // Fondo del tema en ambos modos: el `dark:bg-*` de la variante
+        // success/outline no debe filtrarse solo en modo oscuro.
+        "gap-1.5 border border-transparent bg-background dark:bg-background",
         kind === "inactive" && "text-muted-foreground",
-        kind === "outside" && "border-border bg-background",
+        kind === "outside" && "border-border",
         className
       )}
     >
@@ -45,18 +51,11 @@ export function MenuStatusBadge({
         className={cn(
           "size-1.5 rounded-full",
           kind === "inactive" && "bg-muted-foreground/60",
-          kind === "always" && "bg-emerald-500",
-          kind === "available" && "bg-emerald-500",
+          (kind === "always" || kind === "available") && "bg-emerald-500",
           kind === "outside" && "bg-amber-500"
         )}
       />
-      {kind === "inactive"
-        ? "Inactivo"
-        : kind === "always"
-          ? "Siempre disponible"
-          : kind === "available"
-            ? "En horario"
-            : "Fuera de horario"}
+      {menuStatusLabel(kind)}
     </Badge>
   )
 }

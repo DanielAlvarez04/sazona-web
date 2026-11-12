@@ -8,6 +8,10 @@ const PAYMENT_PATHS = ["/pos", "/dashboard", "/reports"]
 export interface RegisterPaymentInput {
   method: PaymentMethod
   amount: number
+  tipAmount?: number
+  tipRecipientId?: string
+  cashReceived?: number
+  changeGiven?: number
   idempotencyKey?: string
 }
 
@@ -39,7 +43,7 @@ export async function confirmPayment(
 /** Anula un pago pendiente o reembolsa uno confirmado (solo ADMIN). */
 export async function voidPayment(
   paymentId: string,
-  reason?: string
+  reason: string
 ): Promise<ActionResult<Payment>> {
   return mutateApi<Payment>(
     `/payments/${paymentId}/void`,

@@ -8,6 +8,7 @@ import {
   CopyIcon,
   CheckIcon,
   EllipsisVerticalIcon,
+  KeyRoundIcon,
   PencilIcon,
   Trash2Icon,
   UserCheckIcon,
@@ -132,6 +133,8 @@ export interface UserRowActions {
   onEdit: (user: InternalUser) => void
   onRequestDelete: (users: InternalUser[]) => void
   onToggleActive: (user: InternalUser) => void
+  /** Define el PIN con el que el usuario desbloquea la caja. */
+  onSetPin: (user: InternalUser) => void
   /** Hay una mutación en curso para ese usuario (desactiva el menú). */
   isPending: (user: InternalUser) => boolean
 }
@@ -142,6 +145,7 @@ function UserRowActionsMenu({
   onEdit,
   onRequestDelete,
   onToggleActive,
+  onSetPin,
   isPending,
 }: UserRowActions & { user: InternalUser }) {
   const isSelf = user.id === currentUserId
@@ -169,6 +173,10 @@ function UserRowActionsMenu({
           <DropdownMenuItem onClick={() => onEdit(user)}>
             <PencilIcon />
             Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onSetPin(user)}>
+            <KeyRoundIcon />
+            PIN de caja
           </DropdownMenuItem>
           {user.isActive ? (
             <DropdownMenuItem

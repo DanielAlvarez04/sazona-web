@@ -2,7 +2,17 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Loader2Icon, RefreshCwIcon, WifiIcon, WifiOffIcon } from "lucide-react"
+import {
+  BellIcon,
+  BellOffIcon,
+  Loader2Icon,
+  Maximize2Icon,
+  Minimize2Icon,
+  RefreshCwIcon,
+  TimerIcon,
+  WifiIcon,
+  WifiOffIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +44,40 @@ const COLUMN_HINTS: Record<string, string> = {
 
 /** Minutos a partir de los que una comanda se considera retrasada. */
 const DELAY_MINUTES = 15
+
+/** Aviso sonoro de comanda nueva (Web Audio, sin archivos). */
+function playNewOrderSound() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext
+
+    if (!AudioContextClass) return
+
+    const context = new AudioContextClass()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+
+    oscillator.type = "sine"
+    oscillator.frequency.value = 880
+    gain.gain.setValueAtTime(0.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.25, context.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      context.currentTime + 0.45
+    )
+
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.5)
+    oscillator.onended = () => void context.close()
+  } catch {
+    // El navegador puede bloquear el audio hasta que haya interacción; se
+    // ignora en silencio.
+  }
+}
 
 /** Etapas de la comanda, en orden, con la duración hasta la siguiente. */
 function roundSteps(round: KitchenRound) {
@@ -95,6 +139,45 @@ export function KitchenView({
   const [pendingId, setPendingId] = React.useState<string | null>(null)
   const [connected, setConnected] = React.useState(false)
   const [lastEvent, setLastEvent] = React.useState<string | null>(null)
+  const [sound, setSound] = React.useState(true)
+  const [fullscreen, setFullscreen] = React.useState(false)
+  const [onlyDelayed, setOnlyDelayed] = React.useState(false)
+  const knownRounds = React.useRef<Set<string> | null>(null)
+
+  // Aviso sonoro solo cuando entra una comanda nueva al tablero.
+  React.useEffect(() => {
+    const current = new Set(rounds.map((round) => round.id))
+
+    if (knownRounds.current === null) {
+      knownRounds.current = current
+      return
+    }
+
+    const hasNew = rounds.some((round) => !knownRounds.current!.has(round.id))
+    knownRounds.current = current
+
+    if (hasNew && sound) playNewOrderSound()
+  }, [rounds, sound])
+
+  React.useEffect(() => {
+    const onChange = () =>
+      setFullscreen(Boolean(document.fullscreenElement))
+
+    document.addEventListener("fullscreenchange", onChange)
+    return () => document.removeEventListener("fullscreenchange", onChange)
+  }, [])
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen()
+      } else {
+        await document.documentElement.requestFullscreen()
+      }
+    } catch {
+      toast.error("Este navegador no permite pantalla completa")
+    }
+  }
 
   // Los minutos transcurridos se recalculan sin recargar la página.
   const [, setTick] = React.useState(0)
@@ -193,6 +276,38 @@ export function KitchenView({
               )}
               {connected ? "Tiempo real" : "Sondeo cada 15 s"}
             </Badge>
+            <Button
+              variant={onlyDelayed ? "secondary" : "outline"}
+              size="sm"
+              aria-pressed={onlyDelayed}
+              onClick={() => setOnlyDelayed((value) => !value)}
+            >
+              <TimerIcon />
+              Demoradas
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-pressed={sound}
+              onClick={() => setSound((value) => !value)}
+              title={sound ? "Silenciar avisos" : "Activar avisos"}
+            >
+              {sound ? <BellIcon /> : <BellOffIcon />}
+              {sound ? "Sonido" : "Silencio"}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={toggleFullscreen}
+              aria-label={
+                fullscreen ? "Salir de pantalla completa" : "Pantalla completa"
+              }
+              title={
+                fullscreen ? "Salir de pantalla completa" : "Pantalla completa"
+              }
+            >
+              {fullscreen ? <Minimize2Icon /> : <Maximize2Icon />}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => router.refresh()}>
               <RefreshCwIcon />
               Actualizar
@@ -203,7 +318,12 @@ export function KitchenView({
 
       <div className="grid gap-3 lg:grid-cols-3">
         {COLUMNS.map((status) => {
-          const columnRounds = rounds.filter((round) => round.status === status)
+          const columnRounds = rounds.filter(
+            (round) =>
+              round.status === status &&
+              (!onlyDelayed ||
+                (roundTimings(round).stage?.minutes ?? 0) >= DELAY_MINUTES)
+          )
 
           return (
             <section
@@ -252,9 +372,13 @@ export function KitchenView({
                               ) : null}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {round.order.tableNumber
-                                ? formatMoney(round.order.total)
-                                : `Para llevar · ${formatMoney(round.order.total)}`}
+                              {formatMoney(round.order.total)}
+                              {round.order.channel === "DELIVERY" &&
+                              round.order.deliveryAddress
+                                ? ` · ${round.order.deliveryAddress}`
+                                : round.order.customerName
+                                  ? ` · ${round.order.customerName}`
+                                  : ""}
                               {timings.totalMinutes !== null
                                 ? ` · ciclo ${formatDuration(timings.totalMinutes)}`
                                 : ""}
@@ -281,6 +405,11 @@ export function KitchenView({
                                 <span className="text-muted-foreground">
                                   {" "}
                                   · {item.variantName}
+                                </span>
+                              ) : null}
+                              {item.guestName ? (
+                                <span className="ml-1.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                  {item.guestName}
                                 </span>
                               ) : null}
                               {(item.options ?? []).length > 0 ? (

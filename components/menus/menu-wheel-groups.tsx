@@ -47,6 +47,11 @@ const FOCAL_RATIO = 1.5
 /** Separación horizontal entre una parábola y la siguiente. */
 const LAYER_GAP = 150
 /**
+ * Radio menor mínimo (foco → chip más cercano). Si la curva queda más cerca
+ * del foco (pocos chips), se traslada hacia afuera sin tocar el gap.
+ */
+const MIN_SHORT_RADIUS = 150
+/**
  * Fracción del radio menor que hay que recorrer desde el foco antes de que un
  * chip pueda quedar seleccionado. Antes de eso sigue activo «cancelar».
  */
@@ -67,20 +72,20 @@ function wheelChips(groups: string[]): MenuWheelChip[] {
 }
 
 /**
- * Parábolas abiertas hacia la derecha cuya primera curva tiene su **foco** en
- * el botón de cancelar.
+ * Parábolas abiertas hacia la derecha que nacen junto al botón de cancelar.
  *
  * Con el foco en `(0, 0)` la curva es `x = p − y² / 4p`; el vértice queda a
- * `p` del foco y los brazos se acercan a él. Así los chips están siempre a la
- * derecha del puntero, la distancia crece hacia los extremos y el cancelar
- * queda dentro de la curva. El foco se mantiene siempre en el centro vertical
- * del viewport.
+ * `p` del foco y los brazos se acercan a él. Así los chips quedan a la derecha
+ * del puntero y el cancelar dentro de la curva. El conjunto se centra en el
+ * centro vertical del viewport.
  *
  * Hasta 10 chips por parábola. Con más se reparten en capas equilibradas que
  * conservan la misma forma y se trasladan `LAYER_GAP` a la derecha. El alto de
  * cada capa sale de su contenido: `arco = (chips − 1) · CHIP_SPACING`, así que
- * el hueco entre chips es constante en todas las capas. Los chips se ordenan
- * desde el centro vertical de la curva hacia arriba/abajo.
+ * el hueco entre chips es constante desde el segundo chip. Si con pocos chips
+ * la curva queda más cerca del cancelar que `MIN_SHORT_RADIUS`, el conjunto se
+ * traslada hacia afuera sin cambiar el gap. Los chips se ordenan desde el
+ * centro vertical de la curva hacia arriba/abajo.
  */
 function buildParabolas(
   origin: { x: number; y: number },
@@ -119,8 +124,8 @@ function buildParabolas(
 
   /**
    * Alto de una capa a partir de su contenido: el gap es fijo y el alto sale
-   * de cuántos chips lleva. Un chip suelto usa tres pasos para no tocar el
-   * botón de cancelar.
+   * de cuántos chips lleva. Un chip suelto usa tres pasos para no nacer sobre
+   * el botón de cancelar.
    */
   function halfHeightFor(chipCount: number) {
     const steps = chipCount > 1 ? chipCount - 1 : 3
@@ -138,8 +143,37 @@ function buildParabolas(
   // El foco es el botón de cancelar y vive siempre en el centro vertical.
   const center = { x: origin.x, y: viewportHeight / 2 }
 
-  const outermost =
-    FOCAL_RATIO * maxHalfHeight * fit + (layers - 1) * LAYER_GAP
+  // Plan de capas: el desplazamiento se acumula para que la separación entre
+  // vértices sea siempre `LAYER_GAP`, aunque una capa tenga menos chips y su
+  // curva sea más pequeña.
+  const plans: Array<{
+    chips: MenuWheelChip[]
+    halfHeight: number
+    focal: number
+    offset: number
+  }> = []
+  let offset = 0
+
+  for (let layer = 0; layer < layers; layer += 1) {
+    const start = layer * perLayer
+    const layerChips = chips.slice(start, start + perLayer)
+    if (layerChips.length === 0) continue
+
+    const halfHeight = halfHeightFor(layerChips.length) * fit
+    const focal = FOCAL_RATIO * halfHeight
+    const previous = plans[plans.length - 1]
+
+    if (previous) {
+      offset += LAYER_GAP + previous.focal - focal
+    }
+
+    plans.push({ chips: layerChips, halfHeight, focal, offset })
+  }
+
+  const outermost = plans.reduce(
+    (max, plan) => Math.max(max, plan.offset + plan.focal),
+    0
+  )
 
   // Abre a la derecha, salvo que no quepa y haya más espacio a la izquierda.
   const rightSpace = viewportWidth - center.x - CHIP_WIDTH / 2 - 24
@@ -149,18 +183,13 @@ function buildParabolas(
 
   const placements: MenuWheelChipPlacement[] = []
 
-  for (let layer = 0; layer < layers; layer += 1) {
-    const start = layer * perLayer
-    const layerChips = chips.slice(start, start + perLayer)
-    if (layerChips.length === 0) continue
-
-    const offset = layer * LAYER_GAP
-    const halfHeight = halfHeightFor(layerChips.length) * fit
+  for (const plan of plans) {
+    const layerChips = plan.chips
 
     if (layerChips.length === 1) {
       placements.push({
         ...layerChips[0],
-        x: center.x + direction * (FOCAL_RATIO * halfHeight + offset),
+        x: center.x + direction * (plan.focal + plan.offset),
         y: center.y,
       })
       continue
@@ -204,18 +233,42 @@ function buildParabolas(
 
       placements.push({
         ...chip,
-        x: center.x + direction * (slot.x * halfHeight + offset),
-        y: center.y + slot.y * halfHeight,
+        x: center.x + direction * (slot.x * plan.halfHeight + plan.offset),
+        y: center.y + slot.y * plan.halfHeight,
       })
     })
   }
 
-  const radius = placements.reduce(
+  // Con pocos chips la curva puede quedar demasiado cerca del foco. En ese
+  // caso se traslada hacia afuera para respetar el radio menor mínimo sin
+  // tocar el gap entre chips.
+  let shift = 0
+
+  for (const chip of placements) {
+    const dx = Math.abs(chip.x - center.x)
+    const dy = chip.y - center.y
+
+    if (Math.hypot(dx, dy) >= MIN_SHORT_RADIUS) continue
+
+    const required =
+      Math.sqrt(Math.max(0, MIN_SHORT_RADIUS ** 2 - dy ** 2)) - dx
+    shift = Math.max(shift, required)
+  }
+
+  const placed =
+    shift > 0
+      ? placements.map((chip) => ({
+          ...chip,
+          x: chip.x + direction * shift,
+        }))
+      : placements
+
+  const radius = placed.reduce(
     (max, chip) =>
       Math.max(max, Math.hypot(chip.x - center.x, chip.y - center.y)),
     0
   )
-  const shortRadius = placements.reduce(
+  const shortRadius = placed.reduce(
     (min, chip) =>
       Math.min(min, Math.hypot(chip.x - center.x, chip.y - center.y)),
     Number.POSITIVE_INFINITY
@@ -223,7 +276,7 @@ function buildParabolas(
 
   return {
     center,
-    chips: placements,
+    chips: placed,
     radius,
     shortRadius: Number.isFinite(shortRadius) ? shortRadius : 0,
     direction,

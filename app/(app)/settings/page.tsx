@@ -10,6 +10,10 @@ import {
 
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { BranchesCard } from "@/components/settings/branches-card"
+import { PosDevicesCard } from "@/components/settings/pos-devices-card"
+import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
+import { PosPinCard } from "@/components/settings/pos-pin-card"
+import { MercadoPagoCard } from "@/components/settings/mercadopago-card"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
@@ -44,6 +48,9 @@ import {
 } from "@/lib/catalog"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
+import type { MercadoPagoStatus } from "@/lib/mercadopago"
+import type { PosPairedDevice } from "@/lib/pos-device"
+import type { PosDisplayInfo } from "@/lib/pos-display"
 import { cn } from "cn"
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -67,6 +74,88 @@ function DefinitionRow({
   )
 }
 
+function Notice({
+  tone,
+  message,
+}: {
+  tone: "success" | "error"
+  message: string
+}) {
+  return (
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={cn(
+        "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm",
+        tone === "success"
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          : "border-destructive/40 bg-destructive/10 text-destructive"
+      )}
+    >
+      {tone === "success" ? (
+        <CheckCircle2Icon className="mt-0.5 size-4 shrink-0" />
+      ) : (
+        <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
+      )}
+      <p>{message}</p>
+    </div>
+  )
+}
+
+/** Mensajes del callback OAuth de Mercado Pago (`/settings?mp=...`). */
+function mercadoPagoNotice(
+  code: string | undefined
+): { tone: "success" | "error"; message: string } | null {
+  if (!code) return null
+
+  switch (code) {
+    case "connected":
+      return {
+        tone: "success",
+        message:
+          "Mercado Pago conectado. Sincronizamos las terminales de la cuenta.",
+      }
+    case "cancelled":
+      return {
+        tone: "error",
+        message: "Cancelaste la conexión con Mercado Pago.",
+      }
+    case "state":
+      return {
+        tone: "error",
+        message:
+          "La solicitud de conexión expiró o no es válida. Inténtalo de nuevo.",
+      }
+    case "error_session":
+      return {
+        tone: "error",
+        message:
+          "Tu sesión cambió durante la conexión. Vuelve a intentarlo desde Configuración.",
+      }
+    case "error_exchange":
+      return {
+        tone: "error",
+        message:
+          "Mercado Pago rechazó la autorización. Revisa las credenciales de la aplicación.",
+      }
+    case "error_account":
+      return {
+        tone: "error",
+        message:
+          "No se pudo leer la cuenta de Mercado Pago. Inténtalo de nuevo.",
+      }
+    case "error_unexpected":
+      return {
+        tone: "error",
+        message: "No se pudo completar la conexión con Mercado Pago.",
+      }
+    default:
+      return {
+        tone: "error",
+        message: "No se pudo conectar Mercado Pago. Inténtalo de nuevo.",
+      }
+  }
+}
+
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -75,12 +164,31 @@ export default async function SettingsPage({
   const user = await requireUser()
   const params = await searchParams
   const notice = googleLinkNotice(first(params.google))
+  const mp = first(params.mp)
+  const mpNotice = mercadoPagoNotice(mp)
   const admin = isAdmin(user)
 
   const branchesResponse = admin ? await apiFetch("/branches") : null
   const branches: Branch[] = branchesResponse?.ok
     ? ((await branchesResponse.json()) as Branch[])
     : []
+
+  const posDevicesResponse = admin ? await apiFetch("/pos/devices") : null
+  const posDevices: PosPairedDevice[] = posDevicesResponse?.ok
+    ? ((await posDevicesResponse.json()) as PosPairedDevice[])
+    : []
+
+  const posDisplaysResponse = admin ? await apiFetch("/pos/displays") : null
+  const posDisplays: PosDisplayInfo[] = posDisplaysResponse?.ok
+    ? ((await posDisplaysResponse.json()) as PosDisplayInfo[])
+    : []
+
+  const mpStatusResponse = admin
+    ? await apiFetch("/mercadopago/status")
+    : null
+  const mpStatus: MercadoPagoStatus | null = mpStatusResponse?.ok
+    ? ((await mpStatusResponse.json()) as MercadoPagoStatus)
+    : null
 
   // Inventario actual: sirve para marcar los insumos core que ya existen y
   // bloquear los que están en recetas.
@@ -136,26 +244,11 @@ export default async function SettingsPage({
         </p>
       </div>
 
-      {notice ? (
-        <div
-          role={notice.tone === "error" ? "alert" : "status"}
-          className={cn(
-            "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm",
-            notice.tone === "success"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "border-destructive/40 bg-destructive/10 text-destructive"
-          )}
-        >
-          {notice.tone === "success" ? (
-            <CheckCircle2Icon className="mt-0.5 size-4 shrink-0" />
-          ) : (
-            <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
-          )}
-          <p>{notice.message}</p>
-        </div>
-      ) : null}
+      {notice ? <Notice {...notice} /> : null}
+      {mpNotice ? <Notice {...mpNotice} /> : null}
 
       <SettingsTabs
+        initialTab={mp ? "payments" : undefined}
         account={
           <>
             <Card>
@@ -302,6 +395,8 @@ export default async function SettingsPage({
               </CardContent>
             </Card>
 
+            <PosPinCard />
+
             <Card>
               <CardHeader>
                 <CardTitle>Aplicación instalable</CardTitle>
@@ -360,6 +455,79 @@ export default async function SettingsPage({
             </Card>
 
             <BranchesCard branches={branches} canManage={admin} />
+            <PosDevicesCard
+              devices={posDevices}
+              branches={branches}
+              canManage={admin}
+            />
+            <PosDisplaysCard
+              displays={posDisplays}
+              branches={branches}
+              canManage={admin}
+            />
+          </>
+        }
+        payments={
+          <>
+            {admin && !mpStatus ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mercado Pago Point</CardTitle>
+                  <CardDescription>
+                    Cobros en terminal desde el punto de venta.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    No se pudo leer el estado de la integración. Recarga la
+                    página o revisa que la API esté disponible.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <MercadoPagoCard
+                status={
+                  mpStatus ?? {
+                    configured: true,
+                    connected: false,
+                    connection: null,
+                    terminals: [],
+                  }
+                }
+                branches={branches}
+                connectUrl={`${API_BASE_URL}/mercadopago/connect`}
+                canManage={admin}
+              />
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Cómo funciona</CardTitle>
+                <CardDescription>
+                  Lo que debes saber antes de cobrar en terminal.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+                  <li>
+                    El dinero y la comisión de Mercado Pago van directo a la
+                    cuenta del negocio; la app solo registra el cobro.
+                  </li>
+                  <li>
+                    La terminal debe estar en modo punto de venta (PDV). La
+                    Point Air 2 solo funciona en modo autoservicio.
+                  </li>
+                  <li>
+                    El cobro se envía desde el POS y, cuando el cliente paga,
+                    el pago se confirma solo y el saldo de la cuenta baja.
+                  </li>
+                  <li>
+                    Si la terminal queda en “revisar terminal”, confirma el
+                    cobro en el dispositivo y vuelve a sincronizar.
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
           </>
         }
         catalog={

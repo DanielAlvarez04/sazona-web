@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { ReportsView } from "@/components/reports/reports-view"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
+import type { CashSessionList, ChargesReport } from "@/lib/cash"
 import type {
   InventoryReport,
   KitchenReport,
@@ -40,7 +41,7 @@ export default async function ReportsPage({
 
   const { from, to } = range(days)
 
-  const [salesResponse, inventoryResponse, kitchenResponse, branch] =
+  const [salesResponse, inventoryResponse, kitchenResponse, sessionsResponse, chargesResponse, branch] =
     await Promise.all([
       money
         ? apiFetch(`/reports/sales?from=${from}&to=${to}`)
@@ -50,6 +51,12 @@ export default async function ReportsPage({
         : Promise.resolve(null),
       operations
         ? apiFetch(`/reports/kitchen?from=${from}&to=${to}`)
+        : Promise.resolve(null),
+      money
+        ? apiFetch(`/cash/sessions?from=${from}&to=${to}&limit=50`)
+        : Promise.resolve(null),
+      money
+        ? apiFetch(`/cash/reports/charges?from=${from}&to=${to}`)
         : Promise.resolve(null),
       getActiveBranch(),
     ])
@@ -66,6 +73,14 @@ export default async function ReportsPage({
     kitchenResponse && kitchenResponse.ok
       ? ((await kitchenResponse.json()) as KitchenReport)
       : null
+  const sessions =
+    sessionsResponse && sessionsResponse.ok
+      ? ((await sessionsResponse.json()) as CashSessionList)
+      : null
+  const charges =
+    chargesResponse && chargesResponse.ok
+      ? ((await chargesResponse.json()) as ChargesReport)
+      : null
 
   return (
     <ReportsView
@@ -73,6 +88,8 @@ export default async function ReportsPage({
       sales={sales}
       inventory={inventory}
       kitchen={kitchen}
+      sessions={sessions}
+      charges={charges}
       branch={branch}
     />
   )

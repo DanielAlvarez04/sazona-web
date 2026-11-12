@@ -185,6 +185,7 @@ export async function createBranch(
       name,
       address: text(formData, "address") ?? "",
       phone: text(formData, "phone") ?? "",
+      defaultTipPercent: Number(formData.get("defaultTipPercent") ?? 0),
     },
     BRANCH_PATHS
   )
@@ -195,6 +196,7 @@ export interface BranchUpdateInput {
   name?: string
   address?: string
   phone?: string
+  defaultTipPercent?: number
   isActive?: boolean
 }
 

@@ -14,6 +14,9 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/verify-email",
+  "/pair",
+  "/pos/unlock",
+  "/display",
 ]
 
 const API_BASE_URL =
@@ -129,7 +132,11 @@ function lockRefresh(response: NextResponse): NextResponse {
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
-  const response = NextResponse.redirect(new URL("/login", request.url))
+  // Una caja vinculada por QR entra con PIN en lugar de contraseña.
+  const hasDevice = Boolean(request.cookies.get("np_pos_device")?.value)
+  const response = NextResponse.redirect(
+    new URL(hasDevice ? "/pos/unlock" : "/login", request.url)
+  )
   response.cookies.delete(ACCESS_TOKEN_COOKIE)
   response.cookies.delete(REFRESH_TOKEN_COOKIE)
   return response
@@ -200,7 +207,17 @@ export async function proxy(request: NextRequest) {
   // Rutas públicas: si hay una sesión válida se entra directo al dashboard;
   // si el token está vigente pero la sesión ya no existe, se limpian las
   // cookies y se deja ver el formulario (evita el bucle de redirecciones).
-  if (PUBLIC_PATHS.includes(pathname)) {
+  const isPublic = PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  )
+
+  if (isPublic) {
+    // La pantalla del cliente se abre en un monitor sin sesión y nunca debe
+    // redirigirse al panel.
+    if (pathname.startsWith("/display")) {
+      return NextResponse.next()
+    }
+
     if (!accessToken || isJwtExpired(accessToken)) {
       return NextResponse.next()
     }

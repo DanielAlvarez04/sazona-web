@@ -130,6 +130,7 @@ import {
   uploadItemImage,
   uploadRecipeImage,
   uploadVariantImage,
+  waitForImageJobs,
 } from "@/lib/uploads"
 
 /** Imagen del diálogo: la guardada en R2 o un archivo local sin subir. */
@@ -142,11 +143,26 @@ type DialogImage =
     }
   | { kind: "pending"; file: File; url: string }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100
+/** Inicia la subida de una imagen y devuelve el id del job de optimización. */
+type ImageUpload = () => Promise<{
+  ok: boolean
+  message?: string
+  jobId?: string
+}>
+
+async function startImageJob(start: ImageUpload): Promise<string> {
+  const uploaded = await start()
+
+  if (!uploaded.ok || !uploaded.jobId) {
+    throw new Error(uploaded.message ?? "No se pudo subir la imagen.")
+  }
+
+  return uploaded.jobId
 }
 
-function toNumber(value: string): number {
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}function toNumber(value: string): number {
   return Number(value.replace(",", "."))
 }
 
@@ -409,6 +425,39 @@ export function ProductDialog({
     if (isNew) onSaved?.(saveAs)
     onOpenChange(false)
   })
+
+  /**
+   * Lanza las subidas en segundo plano y las sigue con un solo toast.
+   *
+   * El diálogo puede cerrarse: el trabajo pesado vive en la API y el toast
+   * avisa cuando las variantes están listas.
+   */
+  function showImageJobsToast(jobs: Array<Promise<string>>) {
+    if (jobs.length === 0) return
+
+    toast.promise(
+      (async () => {
+        const jobIds = await Promise.all(jobs)
+        await waitForImageJobs(jobIds)
+      })(),
+      {
+        loading:
+          jobs.length === 1
+            ? "Subiendo y optimizando imagen…"
+            : `Subiendo y optimizando ${jobs.length} imágenes…`,
+        success: () => {
+          router.refresh()
+          return jobs.length === 1
+            ? "Imagen optimizada"
+            : "Imágenes optimizadas"
+        },
+        error: (error) =>
+          error instanceof Error
+            ? error.message
+            : "No se pudo optimizar la imagen",
+      }
+    )
+  }
 
   // Campos marcados con `aria-invalid`/`data-invalid` en lugar de mostrar un
   // texto rojo cuando falta un valor obligatorio.
@@ -1109,6 +1158,7 @@ export function ProductDialog({
     form.run(async () => {
       let itemId = article?.id ?? null
       let changed = false
+      const imageUploads: ImageUpload[] = []
 
       if (!itemId) {
         const created = await createArticle({
@@ -1204,21 +1254,17 @@ export function ProductDialog({
       const hasStoredImage = Boolean(article?.imageKey)
 
       if (imagePending && image) {
-        const uploaded = await uploadItemImage(itemId, image.file)
-
-        if (uploaded.ok) {
-          const saved = await updateArticleImage(itemId, uploaded.key ?? null)
-          if (!saved.ok) return saved
-          changed = true
-        } else {
-          toast.error(
-            uploaded.message ?? "Los datos se guardaron, pero la imagen no se pudo subir."
-          )
-        }
+        const file = image.file
+        const targetId = itemId
+        imageUploads.push(() => uploadItemImage(targetId, file))
       } else if (!image && hasStoredImage) {
         const saved = await updateArticleImage(itemId, null)
         if (!saved.ok) return saved
         changed = true
+      }
+
+      if (imageUploads.length > 0) {
+        showImageJobsToast(imageUploads.map(startImageJob))
       }
 
       if (!changed && !imagePending) {
@@ -1411,6 +1457,7 @@ export function ProductDialog({
       let articleVariants: ArticleListItem["variants"] =
         article?.variants ?? []
       let changed = false
+      const imageUploads: ImageUpload[] = []
       const isActiveArticle = Boolean(article && !article.isArchived)
 
       function resolveRecipeRows(
@@ -1901,28 +1948,18 @@ export function ProductDialog({
       const hasStoredImage = Boolean(recipe?.imageKey || article?.imageKey)
 
       if (imagePending && image) {
-        const uploaded = imageRecipeId
-          ? await uploadRecipeImage(imageRecipeId, image.file)
-          : imageItemId
-            ? await uploadItemImage(imageItemId, image.file)
-            : null
+        const file = image.file
 
-        if (!uploaded) {
-          imageWarning =
-            "Guarda el producto antes de subir la imagen."
-        } else if (uploaded.ok) {
-          const saved = imageRecipeId
-            ? await updateRecipe(imageRecipeId, {
-                imageKey: uploaded.key ?? null,
-              })
-            : await updateArticleImage(imageItemId!, uploaded.key ?? null)
-
-          if (!saved.ok) return saved
+        if (imageRecipeId) {
+          const targetId = imageRecipeId
+          imageUploads.push(() => uploadRecipeImage(targetId, file))
+          changed = true
+        } else if (imageItemId) {
+          const targetId = imageItemId
+          imageUploads.push(() => uploadItemImage(targetId, file))
           changed = true
         } else {
-          imageWarning =
-            uploaded.message ??
-            "Los datos se guardaron, pero la imagen no se pudo subir."
+          imageWarning = "Guarda el producto antes de subir la imagen."
         }
       } else if (!image && hasStoredImage) {
         const saved = imageRecipeId
@@ -1951,28 +1988,13 @@ export function ProductDialog({
           if (!variant) continue
 
           if (row.imageFile) {
-            const uploaded = await uploadVariantImage(
-              itemId,
-              variant.id,
-              row.imageFile
+            const file = row.imageFile
+            const variantId = variant.id
+            const targetItemId = itemId
+
+            imageUploads.push(() =>
+              uploadVariantImage(targetItemId, variantId, file)
             )
-
-            if (!uploaded.ok) {
-              imageWarning = [
-                imageWarning,
-                uploaded.message ??
-                  `No se pudo subir la imagen de «${row.name.trim() || "la presentación"}».`,
-              ]
-                .filter(Boolean)
-                .join(" ")
-              continue
-            }
-
-            const saved = await updateVariant(itemId, variant.id, {
-              imageKey: uploaded.key ?? null,
-            })
-
-            if (!saved.ok) return saved
             changed = true
             continue
           }
@@ -1987,6 +2009,10 @@ export function ProductDialog({
             changed = true
           }
         }
+      }
+
+      if (imageUploads.length > 0) {
+        showImageJobsToast(imageUploads.map(startImageJob))
       }
 
       if (imageWarning) {

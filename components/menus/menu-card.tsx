@@ -12,13 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
-  formatMenuAvailabilityHint,
   formatMenuSchedule,
   formatMenuTimeRange,
   menuStatusKind,
   type Menu,
 } from "@/lib/menus"
-import { cn } from "@/lib/utils"
 
 import { MenuActionsMenu, type MenuRowActions } from "./menus-columns"
 import { MenuCover, MenuStatusBadge, type MenuImageMap } from "./menu-visuals"
@@ -82,17 +80,6 @@ export function MenuCard({
           <CalendarClockIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
           <span className="line-clamp-2">{formatMenuSchedule(menu)}</span>
         </p>
-
-        <span
-          className={cn(
-            "truncate text-xs",
-            kind === "available" || kind === "always"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground"
-          )}
-        >
-          {formatMenuAvailabilityHint(menu, now)}
-        </span>
 
         <div className="mt-auto flex flex-wrap items-center gap-1">
           {menu.isGlobal ? (

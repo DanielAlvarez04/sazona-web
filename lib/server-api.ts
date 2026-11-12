@@ -29,6 +29,45 @@ function parseBody(text: string): unknown {
 }
 
 /**
+ * Consulta autenticada a la API desde una Server Action o componente servidor.
+ *
+ * No revalida rutas: úsala para lecturas puntuales (estado de un trabajo,
+ * sondeos, etc.) que no cambian datos.
+ */
+export async function readApi<T = unknown>(
+  path: string
+): Promise<ActionResult<T>> {
+  await requireUser()
+
+  try {
+    const response = await apiFetch(path)
+    const payload = parseBody(await response.text())
+
+    if (response.status === 401) {
+      redirect("/login")
+    }
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: apiErrorMessage(
+          payload,
+          `La consulta falló (${response.status})`
+        ),
+      }
+    }
+
+    return { ok: true, data: payload as T }
+  } catch {
+    return {
+      ok: false,
+      message: "No se pudo contactar con la API. Inténtalo de nuevo.",
+      network: true,
+    }
+  }
+}
+
+/**
  * Llama a la API desde una Server Action reenviando la sesión y el `Origin`.
  *
  * `paths` se revalidan cuando la mutación tiene éxito para que el árbol de

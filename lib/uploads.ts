@@ -4,9 +4,11 @@ import {
   finalizeItemImage,
   finalizeRecipeImage,
   finalizeVariantImage,
+  getImageJobs,
   presignItemImage,
   presignRecipeImage,
   presignVariantImage,
+  type ImageJobStarted,
 } from "@/app/(app)/catalog/actions"
 
 /** Límite por archivo: 5 MB (la API y el bucket lo repiten). */
@@ -46,14 +48,11 @@ interface PresignResult {
   }
 }
 
-/** Respuesta de la API al optimizar el temporal. */
+/** Respuesta de la API al encolar la optimización. */
 interface FinalizeResult {
   ok: boolean
   message?: string
-  data?: {
-    key: string
-    url: string
-  }
+  data?: ImageJobStarted
 }
 
 type Presign = (input: {
@@ -63,19 +62,84 @@ type Presign = (input: {
 
 type Finalize = (key: string) => Promise<FinalizeResult>
 
+export interface UploadImageResult {
+  ok: boolean
+  message?: string
+  jobId?: string
+}
+
+/** Intervalo y límite del sondeo de optimización. */
+const JOB_POLL_INTERVAL = 1000
+const JOB_TIMEOUT = 120_000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /**
- * Sube una imagen directo a R2 y deja que la API la optimice.
+ * Espera a que terminen los trabajos de imagen.
+ *
+ * Se usa dentro de `toast.promise`; lanza un error con el mensaje del job
+ * cuando alguna imagen falla.
+ */
+export async function waitForImageJobs(jobIds: string[]): Promise<void> {
+  if (jobIds.length === 0) return
+
+  const pending = new Set(jobIds)
+  const deadline = Date.now() + JOB_TIMEOUT
+
+  while (pending.size > 0) {
+    const result = await getImageJobs([...pending])
+
+    if (!result.ok || !result.data) {
+      throw new Error(
+        result.message ?? "No se pudo consultar el estado de la imagen."
+      )
+    }
+
+    const found = new Set(result.data.map((job) => job.id))
+
+    for (const id of pending) {
+      if (!found.has(id)) {
+        throw new Error("No se encontró el trabajo de la imagen.")
+      }
+    }
+
+    for (const job of result.data) {
+      if (job.status === "FAILED") {
+        throw new Error(job.error || "No se pudo optimizar la imagen.")
+      }
+
+      if (job.status === "DONE") pending.delete(job.id)
+    }
+
+    if (pending.size === 0) return
+
+    if (Date.now() > deadline) {
+      throw new Error(
+        "La optimización tardó demasiado. Inténtalo de nuevo."
+      )
+    }
+
+    await sleep(JOB_POLL_INTERVAL)
+  }
+}
+
+/**
+ * Sube una imagen directo a R2 y encola su optimización.
  *
  * 1. La API firma una URL para subir el original a `{org}/tmp/`.
  * 2. El navegador hace el PUT (el archivo no pasa por nuestros servidores).
- * 3. `finalize` descarga el temporal, genera AVIF/JPEG, guarda las variantes y
- *    borra el original. La clave que se guarda en la base es la optimizada.
+ * 3. `finalize` crea un job en segundo plano y responde con su id.
+ *
+ * La API aplica las variantes a la entidad cuando termina; el cliente solo
+ * espera el `jobId` para mostrar el progreso con `toast.promise`.
  */
 async function uploadImage(
   file: File,
   presign: Presign,
   finalize: Finalize
-): Promise<{ ok: boolean; message?: string; key?: string; url?: string }> {
+): Promise<UploadImageResult> {
   const problem = validateImageFile(file)
 
   if (problem) {
@@ -119,11 +183,11 @@ async function uploadImage(
       ok: false,
       message:
         finalized.message ??
-        "No se pudo optimizar la imagen. Inténtalo de nuevo.",
+        "No se pudo preparar la optimización de la imagen.",
     }
   }
 
-  return { ok: true, key: finalized.data.key, url: finalized.data.url }
+  return { ok: true, jobId: finalized.data.jobId }
 }
 
 /** Sube la imagen de un artículo ya guardado. */

@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { formatMoney, formatQuantity } from "@/lib/catalog"
 import type { Branch } from "@/lib/branches"
+import type { CashSessionList, ChargesReport } from "@/lib/cash"
 import type {
   InventoryReport,
   KitchenReport,
@@ -37,7 +38,9 @@ import {
   type RoundStatus,
 } from "@/lib/orders"
 
-const REPORT_TABS = ["sales", "inventory", "kitchen"] as const
+import { CashReport } from "./cash-report"
+
+const REPORT_TABS = ["sales", "inventory", "kitchen", "cash"] as const
 
 const MOVEMENT_LABELS: Record<string, string> = {
   ADJUSTMENT: "Ajuste",
@@ -54,25 +57,28 @@ export function ReportsView({
   sales,
   inventory,
   kitchen,
+  sessions,
+  charges,
   branch,
 }: {
   days: number
   sales: SalesReport | null
   inventory: InventoryReport | null
   kitchen: KitchenReport | null
+  sessions: CashSessionList | null
+  charges: ChargesReport | null
   /** Sucursal activa; `null` = vista consolidada. */
   branch: Branch | null
 }) {
   const availableTabs = useMemo(
     () =>
-      REPORT_TABS.filter((tab) =>
-        tab === "sales"
-          ? Boolean(sales)
-          : tab === "inventory"
-            ? Boolean(inventory)
-            : Boolean(kitchen)
-      ),
-    [sales, inventory, kitchen]
+      REPORT_TABS.filter((tab) => {
+        if (tab === "sales") return Boolean(sales)
+        if (tab === "inventory") return Boolean(inventory)
+        if (tab === "kitchen") return Boolean(kitchen)
+        return Boolean(sessions || charges)
+      }),
+    [sales, inventory, kitchen, sessions, charges]
   )
   const defaultTab = availableTabs[0] ?? "sales"
   const [tab, setTab] = usePersistentTab(
@@ -112,6 +118,9 @@ export function ReportsView({
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
           ) : null}
           {kitchen ? <TabsTrigger value="kitchen">Cocina</TabsTrigger> : null}
+          {sessions || charges ? (
+            <TabsTrigger value="cash">Caja</TabsTrigger>
+          ) : null}
         </TabsList>
 
         {sales ? (
@@ -480,6 +489,12 @@ export function ReportsView({
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+        ) : null}
+
+        {sessions || charges ? (
+          <TabsContent value="cash" className="flex flex-col gap-4">
+            <CashReport sessions={sessions} charges={charges} />
           </TabsContent>
         ) : null}
       </Tabs>

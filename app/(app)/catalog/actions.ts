@@ -11,7 +11,7 @@ import type {
   Recipe,
   UnitCode,
 } from "@/lib/catalog"
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 
 const CATALOG_PATHS = ["/catalog"]
 const productPaths = (itemId: string) => ["/catalog", `/catalog/${itemId}`]
@@ -481,18 +481,17 @@ export interface PresignedImage {
   maxBytes: number
 }
 
-/** Resultado de optimizar el temporal: clave base + variantes públicas. */
-export interface FinalizedImage {
-  key: string
-  url: string
-  width: number
-  height: number
-  variants: Array<{
-    width: number
-    height: number
-    avif: string
-    jpg: string
-  }>
+/** Resultado de encolar la optimización de una imagen. */
+export interface ImageJobStarted {
+  jobId: string
+  status: string
+}
+
+/** Estado de un trabajo de optimización de imagen. */
+export interface ImageJobState {
+  id: string
+  status: "PENDING" | "PROCESSING" | "DONE" | "FAILED"
+  error?: string | null
 }
 
 /**
@@ -513,12 +512,12 @@ export async function presignItemImage(
   )
 }
 
-/** Optimiza el temporal recién subido para un artículo o receta. */
+/** Encola la optimización del temporal recién subido para un artículo o receta. */
 export async function finalizeItemImage(
   itemId: string,
   key: string
-): Promise<ActionResult<FinalizedImage>> {
-  return mutateApi<FinalizedImage>(
+): Promise<ActionResult<ImageJobStarted>> {
+  return mutateApi<ImageJobStarted>(
     `/uploads/catalog/items/${itemId}/finalize`,
     "POST",
     { key }
@@ -539,8 +538,8 @@ export async function presignRecipeImage(
 export async function finalizeRecipeImage(
   recipeId: string,
   key: string
-): Promise<ActionResult<FinalizedImage>> {
-  return mutateApi<FinalizedImage>(
+): Promise<ActionResult<ImageJobStarted>> {
+  return mutateApi<ImageJobStarted>(
     `/uploads/catalog/recipes/${recipeId}/finalize`,
     "POST",
     { key }
@@ -563,11 +562,22 @@ export async function finalizeVariantImage(
   itemId: string,
   variantId: string,
   key: string
-): Promise<ActionResult<FinalizedImage>> {
-  return mutateApi<FinalizedImage>(
+): Promise<ActionResult<ImageJobStarted>> {
+  return mutateApi<ImageJobStarted>(
     `/uploads/catalog/items/${itemId}/variants/${variantId}/finalize`,
     "POST",
     { key }
+  )
+}
+
+/** Estado de uno o varios trabajos de imagen (sondeo del toast). */
+export async function getImageJobs(
+  ids: string[]
+): Promise<ActionResult<ImageJobState[]>> {
+  if (ids.length === 0) return { ok: true, data: [] }
+
+  return readApi<ImageJobState[]>(
+    `/uploads/jobs?ids=${encodeURIComponent(ids.join(","))}`
   )
 }
 

@@ -14,15 +14,20 @@ import type { Menu } from "@/lib/menus"
 import {
   canConfirmPayments,
   canDraftOrders,
+  canManageCash,
   canRefundPayments,
   canRegisterPayments,
   canSendOrders,
   type Order,
 } from "@/lib/orders"
+import type { CashSessionPayload } from "@/lib/cash"
+import type { PosDisplayInfo } from "@/lib/pos-display"
+import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import { requireUser } from "@/lib/session"
 
 export default async function PointOfSalePage() {
   const user = await requireUser()
+  const canRegister = canRegisterPayments(user.roles)
 
   const [
     productsResponse,
@@ -30,12 +35,20 @@ export default async function PointOfSalePage() {
     ordersResponse,
     menusResponse,
     branch,
+    cashResponse,
+    displaysResponse,
+    pointConfigResponse,
   ] = await Promise.all([
     apiFetch("/catalog/items"),
     apiFetch("/catalog/categories"),
     apiFetch("/orders?status=OPEN"),
     apiFetch("/catalog/menus"),
     getActiveBranch(),
+    apiFetch("/cash/sessions/current"),
+    apiFetch("/pos/displays"),
+    canRegister
+      ? apiFetch("/mercadopago/point-config")
+      : Promise.resolve(null),
   ])
 
   if (
@@ -67,6 +80,27 @@ export default async function PointOfSalePage() {
     menusResponse.json() as Promise<Menu[]>,
   ])
 
+  const pointConfigRaw: MercadoPagoPointConfig = pointConfigResponse?.ok
+    ? ((await pointConfigResponse.json()) as MercadoPagoPointConfig)
+    : { enabled: false, terminals: [] }
+
+  const pointTerminals = pointConfigRaw.terminals.filter(
+    (terminal) =>
+      !terminal.branchId || !branch || terminal.branchId === branch.id
+  )
+  const pointConfig: MercadoPagoPointConfig = {
+    enabled: pointConfigRaw.enabled && pointTerminals.length > 0,
+    terminals: pointTerminals,
+  }
+
+  const cash: CashSessionPayload = cashResponse.ok
+    ? ((await cashResponse.json()) as CashSessionPayload)
+    : { session: null, summary: null }
+
+  const displays: PosDisplayInfo[] = displaysResponse.ok
+    ? ((await displaysResponse.json()) as PosDisplayInfo[])
+    : []
+
   return (
     <PosView
       products={products}
@@ -75,10 +109,15 @@ export default async function PointOfSalePage() {
       menus={menus}
       canDraft={canDraftOrders(user.roles)}
       canSend={canSendOrders(user.roles)}
-      canRegister={canRegisterPayments(user.roles)}
+      canRegister={canRegister}
       canConfirm={canConfirmPayments(user.roles)}
       canRefund={canRefundPayments(user.roles)}
       branch={branch}
+      mercadoPago={pointConfig}
+      cash={cash}
+      canManageCash={canManageCash(user.roles)}
+      displays={displays}
+      taxRate={user.organizationTaxRate ?? "0.16"}
     />
   )
 }

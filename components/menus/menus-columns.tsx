@@ -155,15 +155,17 @@ export function MenuActionsMenu({
           )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => actions.onDelete(menu)}
-          >
-            <Trash2Icon />
-            Eliminar
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+        {menu.isGlobal ? null : (
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => actions.onDelete(menu)}
+            >
+              <Trash2Icon />
+              Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

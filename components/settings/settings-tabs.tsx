@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useEffect, type ReactNode } from "react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
@@ -8,6 +8,7 @@ import { usePersistentTab } from "@/hooks/use-persistent-tab"
 const SETTINGS_TABS = [
   "account",
   "business",
+  "payments",
   "catalog",
   "inventory",
   "personalization",
@@ -22,21 +23,30 @@ const SETTINGS_TABS = [
 export function SettingsTabs({
   account,
   business,
+  payments,
   catalog,
   inventory,
   personalization,
+  initialTab,
 }: {
   account: ReactNode
   business: ReactNode
+  payments: ReactNode
   catalog: ReactNode
   inventory: ReactNode
   personalization: ReactNode
+  /** Pestaña que debe abrirse al entrar (p. ej. al volver de Mercado Pago). */
+  initialTab?: (typeof SETTINGS_TABS)[number]
 }) {
   const [tab, setTab] = usePersistentTab(
     "settings-tab",
     SETTINGS_TABS,
     "account"
   )
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab)
+  }, [initialTab, setTab])
 
   return (
     <Tabs
@@ -51,6 +61,7 @@ export function SettingsTabs({
       >
         <TabsTrigger value="account">Cuenta</TabsTrigger>
         <TabsTrigger value="business">Negocio</TabsTrigger>
+        <TabsTrigger value="payments">Pagos</TabsTrigger>
         <TabsTrigger value="catalog">Catálogo</TabsTrigger>
         <TabsTrigger value="inventory">Inventario</TabsTrigger>
         <TabsTrigger value="personalization">Personalización</TabsTrigger>
@@ -61,6 +72,9 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent value="business" className="flex min-w-0 flex-col gap-6">
         {business}
+      </TabsContent>
+      <TabsContent value="payments" className="flex min-w-0 flex-col gap-6">
+        {payments}
       </TabsContent>
       <TabsContent
         value="catalog"
