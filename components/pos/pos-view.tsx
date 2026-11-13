@@ -3,15 +3,19 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
+  ArrowUpDownIcon,
   CakeIcon,
+  CheckIcon,
   CreditCardIcon,
   GroupIcon,
   LayoutGridIcon,
   Loader2Icon,
   MinusIcon,
+  NotebookTextIcon,
   PencilLineIcon,
   PlusIcon,
   SearchIcon,
+  SlidersHorizontalIcon,
   SoupIcon,
   SparklesIcon,
   Trash2Icon,
@@ -48,6 +52,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -67,6 +79,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
 import { ArticleCardVisual, type ArticleCardTextSize } from "@/components/catalog/article-card-visual"
+import {
+  ArticlePriceFilter,
+  type PriceRange,
+} from "@/components/catalog/article-price-filter"
 import { useShake } from "@/hooks/use-shake"
 import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
 import { usePersistentNumber } from "@/hooks/use-persistent-number"
@@ -123,7 +139,24 @@ const TABLE_OPTIONS = Array.from({ length: 25 }, (_, index) =>
 )
 
 /** Escalas de texto de las cards del catálogo (1 = chico, 4 = extra grande). */
-const CARD_TEXT_SCALES = ["sm", "md", "lg", "xl"] as const
+const CARD_TEXT_SCALES = ["md", "lg", "xl", "2xl"] as const
+
+/** Orden de las cards del catálogo del POS. */
+type PosSortOrder = "default" | "az" | "za" | "price-asc" | "price-desc"
+
+const SORT_OPTIONS: ReadonlyArray<{ value: PosSortOrder; label: string }> = [
+  { value: "default", label: "Default" },
+  { value: "az", label: "a-z" },
+  { value: "za", label: "z-a" },
+  { value: "price-asc", label: "menor a mayor precio" },
+  { value: "price-desc", label: "mayor a menor precio" },
+]
+
+/** Orden alfabético en español, insensible a mayúsculas y acentos. */
+const PRODUCT_NAME_COLLATOR = new Intl.Collator("es", {
+  sensitivity: "base",
+  numeric: true,
+})
 
 interface CartExtra {
   id: string
@@ -460,6 +493,8 @@ export function PosView({
     4
   )
   const cardTextScale = CARD_TEXT_SCALES[cardTextSize - 1] ?? "md"
+  const [priceRange, setPriceRange] = React.useState<PriceRange | null>(null)
+  const [sortOrder, setSortOrder] = React.useState<PosSortOrder>("default")
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [selectedProduct, setSelectedProduct] =
     React.useState<ItemListItem | null>(null)
@@ -592,20 +627,17 @@ export function PosView({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Con un solo cliente en mesa no se muestra «General»: ese cliente queda
-  // activo. En mostrador los artículos van siempre a General.
+  // activo. Con varios clientes, «General» es la selección por defecto. En
+  // mostrador los artículos van siempre a General.
+  const guestCount = guests.length
+  const onlyGuestKey = guestCount === 1 ? guests[0].key : null
+
   /* eslint-disable react-hooks/set-state-in-effect */
   React.useEffect(() => {
-    if (!isDineIn) {
-      setActiveGuestKey((current) => (current === null ? current : null))
-      return
-    }
+    const next = isDineIn && guestCount === 1 ? onlyGuestKey : null
 
-    if (guests.length !== 1) return
-
-    const onlyKey = guests[0].key
-
-    setActiveGuestKey((current) => (current === onlyKey ? current : onlyKey))
-  }, [guests, isDineIn])
+    setActiveGuestKey((current) => (current === next ? current : next))
+  }, [guestCount, isDineIn, onlyGuestKey])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Publica el carrito en la pantalla de cliente (debounce corto).
@@ -771,12 +803,29 @@ export function PosView({
     applyComboMatch(match, previousCart)
   }
 
+  const priceBounds = React.useMemo(() => {
+    const prices = products
+      .map((product) => Number(product.price))
+      .filter((price) => Number.isFinite(price))
+
+    if (prices.length === 0) return null
+
+    return {
+      min: Math.floor(Math.min(...prices)),
+      max: Math.ceil(Math.max(...prices)),
+    }
+  }, [products])
+
   const filtered = React.useMemo(() => {
     const needle = deferredSearch.trim().toLowerCase()
     const activeMenu = menus.find((menu) => menu.id === menuId)
 
-    return products.filter((product) => {
+    const matches = products.filter((product) => {
       if (categoryId && product.category?.id !== categoryId) return false
+      if (priceRange) {
+        const price = Number(product.price)
+        if (price < priceRange[0] || price > priceRange[1]) return false
+      }
       // El menú global contiene todo el catálogo: no hace falta filtrar.
       if (
         activeMenu &&
@@ -793,7 +842,51 @@ export function PosView({
         (product.sku ?? "").toLowerCase().includes(needle)
       )
     })
-  }, [products, deferredSearch, categoryId, menuId, menus])
+
+    if (sortOrder === "default") return matches
+
+    const sorted = [...matches]
+
+    switch (sortOrder) {
+      case "az":
+        sorted.sort((left, right) =>
+          PRODUCT_NAME_COLLATOR.compare(left.name, right.name)
+        )
+        break
+      case "za":
+        sorted.sort((left, right) =>
+          PRODUCT_NAME_COLLATOR.compare(right.name, left.name)
+        )
+        break
+      case "price-asc":
+        sorted.sort(
+          (left, right) =>
+            Number(left.price) - Number(right.price) ||
+            PRODUCT_NAME_COLLATOR.compare(left.name, right.name)
+        )
+        break
+      case "price-desc":
+        sorted.sort(
+          (left, right) =>
+            Number(right.price) - Number(left.price) ||
+            PRODUCT_NAME_COLLATOR.compare(left.name, right.name)
+        )
+        break
+    }
+
+    return sorted
+  }, [
+    products,
+    deferredSearch,
+    categoryId,
+    menuId,
+    menus,
+    priceRange,
+    sortOrder,
+  ])
+
+  const activeFilterCount =
+    (categoryId ? 1 : 0) + (priceRange ? 1 : 0)
 
   const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
@@ -1431,7 +1524,10 @@ export function PosView({
                   className="w-full sm:w-44"
                   aria-label="Filtrar por menú"
                 >
-                  <SelectValue placeholder="Menú" />
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Menú" />
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {menus.map((menu) => (
@@ -1443,38 +1539,97 @@ export function PosView({
                 </SelectContent>
               </Select>
 
-              <Select
-                value={categoryId || "all"}
-                onValueChange={(value) =>
-                  setCategoryId(value === "all" ? "" : (value ?? ""))
-                }
-                items={[
-                  { value: "all", label: "Todas las categorías" },
-                  ...categories.map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  })),
-                ]}
-              >
-                <SelectTrigger
-                  data-active={Boolean(categoryId)}
-                  className={cn(
-                    "w-full sm:w-44",
-                    categoryId && ACTIVE_FILTER_OUTLINE
-                  )}
-                  aria-label="Filtrar por categoría"
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-active={activeFilterCount > 0}
+                      className={cn(
+                        activeFilterCount > 0 && ACTIVE_FILTER_OUTLINE
+                      )}
+                      aria-label="Filtros"
+                    >
+                      <SlidersHorizontalIcon />
+                      Filtros
+                      {activeFilterCount > 0 ? (
+                        <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                          {activeFilterCount}
+                        </span>
+                      ) : null}
+                    </Button>
+                  }
+                />
+                <PopoverContent
+                  align="start"
+                  className="w-80 max-w-[calc(100vw-2rem)]"
                 >
-                  <SelectValue placeholder="Todas las categorías" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las categorías</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <div className="flex flex-col gap-3">
+                    {priceBounds ? (
+                      <ArticlePriceFilter
+                        min={priceBounds.min}
+                        max={priceBounds.max}
+                        value={priceRange}
+                        onChange={setPriceRange}
+                      />
+                    ) : null}
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Categoría
+                      </span>
+                      <div className="-mx-1 flex max-h-56 flex-col gap-0.5 overflow-y-auto px-1">
+                        <Button
+                          type="button"
+                          variant={categoryId ? "ghost" : "secondary"}
+                          size="sm"
+                          className="w-full justify-between font-normal"
+                          aria-pressed={!categoryId}
+                          onClick={() => setCategoryId("")}
+                        >
+                          <span className="truncate">Todas las categorías</span>
+                          {!categoryId ? <CheckIcon className="size-4" /> : null}
+                        </Button>
+                        {categories.map((category) => {
+                          const selected = categoryId === category.id
+
+                          return (
+                            <Button
+                              key={category.id}
+                              type="button"
+                              variant={selected ? "secondary" : "ghost"}
+                              size="sm"
+                              className="w-full justify-between font-normal"
+                              aria-pressed={selected}
+                              onClick={() => setCategoryId(category.id)}
+                            >
+                              <span className="truncate">{category.name}</span>
+                              {selected ? <CheckIcon className="size-4" /> : null}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {activeFilterCount > 0 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="self-start"
+                        onClick={() => {
+                          setCategoryId("")
+                          setPriceRange(null)
+                        }}
+                      >
+                        Limpiar filtros
+                      </Button>
+                    ) : null}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -1574,6 +1729,40 @@ export function PosView({
                   </div>
                 </PopoverContent>
               </Popover>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="Ordenar artículos"
+                    >
+                      <ArrowUpDownIcon />
+                      Ordenar
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={sortOrder}
+                    onValueChange={(value) =>
+                      setSortOrder(value as PosSortOrder)
+                    }
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <DropdownMenuRadioItem
+                        key={option.value}
+                        value={option.value}
+                      >
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <CashSessionActions
                 session={cash.session}

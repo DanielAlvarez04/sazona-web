@@ -10,7 +10,7 @@ import { EntityImage } from "@/components/ui/entity-image"
 import { CARD_IMAGE_SIZES, type ImageAssets } from "@/lib/images"
 
 /** Escala del texto sobre la card (nombre, precio y detalle). */
-export type ArticleCardTextSize = "sm" | "md" | "lg" | "xl"
+export type ArticleCardTextSize = "sm" | "md" | "lg" | "xl" | "2xl"
 
 const CARD_TEXT_CLASSES: Record<
   ArticleCardTextSize,
@@ -39,6 +39,12 @@ const CARD_TEXT_CLASSES: Record<
     name: "text-[16px]",
     nameLeading: "leading-[1.1]",
     subtitle: "text-[13px]",
+  },
+  "2xl": {
+    price: "text-[16px]",
+    name: "text-[18px]",
+    nameLeading: "leading-[1.05]",
+    subtitle: "text-sm",
   },
 }
 
