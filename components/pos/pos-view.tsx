@@ -2423,6 +2423,7 @@ export function PosView({
           splitByGuest={isDineIn}
           cart={cart}
           cardTextSize={cardTextScale}
+          onSelectGuest={setActiveGuestKey}
           onClose={() => {
             setSelectedProduct(null)
             setPendingProductId(null)
@@ -2625,6 +2626,7 @@ function AddItemDialog({
   splitByGuest,
   cart,
   cardTextSize,
+  onSelectGuest,
   onClose,
   onSave,
 }: {
@@ -2635,6 +2637,8 @@ function AddItemDialog({
   splitByGuest: boolean
   cart: CartLine[]
   cardTextSize: ArticleCardTextSize
+  /** Refleja en la comanda el cliente elegido en el diálogo. */
+  onSelectGuest: (guestKey: string | null) => void
   onClose: () => void
   onSave: (
     configurations: Array<{
@@ -3051,7 +3055,12 @@ function AddItemDialog({
                       size="sm"
                       aria-pressed={active}
                       className={jalapenoChipClass(active)}
-                      onClick={() => setActiveKey(tab.key)}
+                      onClick={() => {
+                        setActiveKey(tab.key)
+                        onSelectGuest(
+                          tab.key === GENERAL_GUEST_KEY ? null : tab.key
+                        )
+                      }}
                     >
                       {tab.label}
                       {hasContent ? (
