@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import {
   ArrowUpDownIcon,
   CakeIcon,
-  CheckIcon,
   CreditCardIcon,
   GroupIcon,
   LayoutGridIcon,
@@ -44,7 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
+import { ButtonGroup } from "@/components/ui/button-group"
 import {
   Dialog,
   DialogContent,
@@ -419,9 +418,11 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
                 {product.isCombo ? (
                   <Badge
                     variant="outline"
-                    className="border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
+                    title="Combo"
+                    aria-label="Combo"
+                    className="border-sky-400 bg-sky-400/10 text-sky-400 backdrop-blur-sm"
                   >
-                    Combo
+                    <GroupIcon />
                   </Badge>
                 ) : null}
                 {promotion ? (
@@ -1661,87 +1662,83 @@ export function PosView({
                 />
                 <PopoverContent align="end" className="w-72">
                   <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Tamaño de tarjetas
-                      </span>
-                      <ButtonGroup aria-label="Tamaño de las tarjetas">
-                        <ButtonGroupText className="h-8 flex-1 px-2 text-xs">
-                          Tamaño
-                        </ButtonGroupText>
-                        {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Tarjetas más pequeñas"
-                          title="Tarjetas más pequeñas"
-                          disabled={cardColumns >= 7}
-                          onClick={() =>
-                            setCardColumns((current) =>
-                              Math.min(7, current + 1)
-                            )
-                          }
-                        >
-                          <MinusIcon className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Tarjetas más grandes"
-                          title="Tarjetas más grandes"
-                          disabled={cardColumns <= 4}
-                          onClick={() =>
-                            setCardColumns((current) =>
-                              Math.max(4, current - 1)
-                            )
-                          }
-                        >
-                          <PlusIcon className="size-4" />
-                        </Button>
-                      </ButtonGroup>
-                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Tamaño de tarjetas
+                        </span>
+                        <ButtonGroup aria-label="Tamaño de las tarjetas">
+                          {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Tarjetas más pequeñas"
+                            title="Tarjetas más pequeñas"
+                            disabled={cardColumns >= 7}
+                            onClick={() =>
+                              setCardColumns((current) =>
+                                Math.min(7, current + 1)
+                              )
+                            }
+                          >
+                            <MinusIcon className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Tarjetas más grandes"
+                            title="Tarjetas más grandes"
+                            disabled={cardColumns <= 4}
+                            onClick={() =>
+                              setCardColumns((current) =>
+                                Math.max(4, current - 1)
+                              )
+                            }
+                          >
+                            <PlusIcon className="size-4" />
+                          </Button>
+                        </ButtonGroup>
+                      </div>
 
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Tamaño del texto
-                      </span>
-                      <ButtonGroup aria-label="Tamaño del texto de las tarjetas">
-                        <ButtonGroupText className="h-8 flex-1 px-2 text-xs">
-                          Texto
-                        </ButtonGroupText>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Texto más pequeño"
-                          title="Texto más pequeño"
-                          disabled={cardTextSize <= 1}
-                          onClick={() =>
-                            setCardTextSize((current) =>
-                              Math.max(1, current - 1)
-                            )
-                          }
-                        >
-                          <MinusIcon className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Texto más grande"
-                          title="Texto más grande"
-                          disabled={cardTextSize >= 4}
-                          onClick={() =>
-                            setCardTextSize((current) =>
-                              Math.min(4, current + 1)
-                            )
-                          }
-                        >
-                          <PlusIcon className="size-4" />
-                        </Button>
-                      </ButtonGroup>
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Tamaño del texto
+                        </span>
+                        <ButtonGroup aria-label="Tamaño del texto de las tarjetas">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Texto más pequeño"
+                            title="Texto más pequeño"
+                            disabled={cardTextSize <= 1}
+                            onClick={() =>
+                              setCardTextSize((current) =>
+                                Math.max(1, current - 1)
+                              )
+                            }
+                          >
+                            <MinusIcon className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Texto más grande"
+                            title="Texto más grande"
+                            disabled={cardTextSize >= 4}
+                            onClick={() =>
+                              setCardTextSize((current) =>
+                                Math.min(4, current + 1)
+                              )
+                            }
+                          >
+                            <PlusIcon className="size-4" />
+                          </Button>
+                        </ButtonGroup>
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -1757,9 +1754,6 @@ export function PosView({
                           className={jalapenoChipClass(showImages)}
                           onClick={() => setShowImages((current) => !current)}
                         >
-                          {showImages ? (
-                            <CheckIcon className="size-3.5" />
-                          ) : null}
                           Imágenes
                         </Button>
                         <Button
@@ -1770,9 +1764,6 @@ export function PosView({
                           className={jalapenoChipClass(showGroups)}
                           onClick={() => setShowGroups((current) => !current)}
                         >
-                          {showGroups ? (
-                            <CheckIcon className="size-3.5" />
-                          ) : null}
                           Grupos
                         </Button>
                       </div>

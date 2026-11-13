@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { LayersIcon, SoupIcon, XIcon } from "lucide-react"
+import { GroupIcon, SoupIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -111,7 +111,7 @@ export function ArticleCardVisual({
 }) {
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
   const showFallback = !showImage || !imageUrl || failedSrc === imageUrl
-  const FallbackIcon = isCombo ? LayersIcon : SoupIcon
+  const FallbackIcon = isCombo ? GroupIcon : SoupIcon
   const topLeft =
     badge ??
     (groupLabel ? (
