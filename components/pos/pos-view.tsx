@@ -78,6 +78,7 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
+import * as posCapture from "@/components/pos/pos-capture"
 import { ArticleCardVisual, type ArticleCardTextSize } from "@/components/catalog/article-card-visual"
 import {
   ArticlePriceFilter,
@@ -510,6 +511,8 @@ export function PosView({
   // «Información disponible»: qué se muestra sobre las cards del catálogo.
   const [showImages, setShowImages] = React.useState(true)
   const [showGroups, setShowGroups] = React.useState(true)
+  const dialogOpenedAtRef = React.useRef<number | null>(null)
+  const dialogSavedRef = React.useRef(false)
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [selectedProduct, setSelectedProduct] =
     React.useState<ItemListItem | null>(null)
@@ -900,6 +903,16 @@ export function PosView({
     sortOrder,
   ])
 
+  // Una búsqueda sin resultados es señal de catálogo incompleto o de nombres
+  // que no coinciden con lo que escribe el mesero.
+  React.useEffect(() => {
+    const query = deferredSearch.trim()
+
+    if (!query || filtered.length > 0) return
+
+    posCapture.noteEmptySearch(query)
+  }, [deferredSearch, filtered])
+
   const activeFilterCount =
     (categoryId ? 1 : 0) + (priceRange ? 1 : 0)
 
@@ -918,6 +931,9 @@ export function PosView({
   // Identidad estable para que `PosCatalogCard` memoizada no se re-renderice
   // con cada cambio del carrito.
   const handleOpenProduct = React.useCallback((product: ItemListItem) => {
+    posCapture.noteItemOpened(product.id)
+    dialogOpenedAtRef.current = Date.now()
+    dialogSavedRef.current = false
     setPendingProductId(product.id)
     setSelectedProduct(product)
   }, [])
@@ -969,6 +985,11 @@ export function PosView({
     )
     const nextCart = [...remaining, ...nextLines]
     setCart(nextCart)
+    posCapture.noteCart(
+      nextCart.reduce((total, line) => total + line.quantity, 0),
+      nextCart.length,
+      guests.length
+    )
 
     const trigger = nextLines.find(isPlainLine)
 
@@ -1010,6 +1031,11 @@ export function PosView({
           )
 
     setCart(nextCart)
+    posCapture.noteCart(
+      nextCart.reduce((total, line) => total + line.quantity, 0),
+      nextCart.length,
+      guests.length
+    )
 
     if (delta > 0 && isPlainLine(line)) {
       runComboDetection(nextCart, {
@@ -1020,10 +1046,33 @@ export function PosView({
   }
 
   const removeLine = (key: string) => {
-    setCart((current) => current.filter((line) => line.key !== key))
+    const nextCart = cart.filter((line) => line.key !== key)
+    setCart(nextCart)
+    posCapture.noteCart(
+      nextCart.reduce((total, line) => total + line.quantity, 0),
+      nextCart.length,
+      guests.length
+    )
   }
 
   const selectOrder = (value: string) => {
+    if (value !== orderId) {
+      const items = cart.reduce((count, line) => count + line.quantity, 0)
+
+      if (items > 0) {
+        posCapture.finish("switched", {
+          orderId,
+          items,
+          lines: cart.length,
+          guests: guests.length,
+          amount: total,
+          channel,
+        })
+      } else {
+        posCapture.discard()
+      }
+    }
+
     setOrderId(value)
     setCart([])
     setActiveGuestKey(null)
@@ -1077,6 +1126,7 @@ export function PosView({
         : ORDER_CHANNEL_LABELS[channel]
 
     const items = cart.map(lineToInput)
+    const cartItems = cart.reduce((count, line) => count + line.quantity, 0)
     const lineLabel = `${cart.length} línea${cart.length === 1 ? "" : "s"}`
     const label = orderId
       ? `${activeOrder ? orderLabel(activeOrder) : "Cuenta abierta"} · ${lineLabel}`
@@ -1134,6 +1184,15 @@ export function PosView({
       toast.success("Comanda guardada en este dispositivo", {
         description:
           "Se enviará al recuperar la conexión. Cocina todavía no la ha recibido.",
+      })
+      posCapture.finish("sent", {
+        orderId: targetOrderId ?? orderId,
+        items: cartItems,
+        lines: cart.length,
+        guests: guests.length,
+        amount: total,
+        channel,
+        offline: true,
       })
       resetDraft()
     }
@@ -1277,6 +1336,14 @@ export function PosView({
         )
       }
 
+      posCapture.finish("sent", {
+        orderId: targetId,
+        items: cartItems,
+        lines: cart.length,
+        guests: guests.length,
+        amount: total,
+        channel,
+      })
       resetDraft()
       router.refresh()
     } catch {
@@ -1510,7 +1577,12 @@ export function PosView({
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setSearch(value)
+                    if (value.trim()) posCapture.noteSearch(value)
+                    else posCapture.endSearch()
+                  }}
                   placeholder="Buscar artículo"
                   className="pl-8"
                   aria-label="Buscar artículos"
@@ -1525,6 +1597,7 @@ export function PosView({
                   if (!next) return
 
                   setMenuId(next)
+                  posCapture.noteFilter()
                   trackEvent({
                     name: "pos.menu_filtered",
                     menuId: next,
@@ -1600,9 +1673,10 @@ export function PosView({
                       </span>
                       <Select
                         value={categoryId || "all"}
-                        onValueChange={(value) =>
+                        onValueChange={(value) => {
                           setCategoryId(value === "all" ? "" : (value ?? ""))
-                        }
+                          posCapture.noteFilter()
+                        }}
                         items={[
                           { value: "all", label: "Todas las categorías" },
                           ...categories.map((category) => ({
@@ -2424,11 +2498,27 @@ export function PosView({
           cart={cart}
           cardTextSize={cardTextScale}
           onSelectGuest={setActiveGuestKey}
+          onValidationError={(group) =>
+            posCapture.noteValidationError("required_option", group)
+          }
           onClose={() => {
+            if (!dialogSavedRef.current) {
+              posCapture.noteDialogCancelled(
+                selectedProduct.id,
+                dialogOpenedAtRef.current === null
+                  ? null
+                  : Date.now() - dialogOpenedAtRef.current
+              )
+            }
+
+            dialogOpenedAtRef.current = null
+            dialogSavedRef.current = false
             setSelectedProduct(null)
             setPendingProductId(null)
           }}
           onSave={(configurations) => {
+            dialogSavedRef.current = true
+            dialogOpenedAtRef.current = null
             applyItemOrder(selectedProduct.id, configurations)
             setSelectedProduct(null)
             setPendingProductId(null)
@@ -2627,6 +2717,7 @@ function AddItemDialog({
   cart,
   cardTextSize,
   onSelectGuest,
+  onValidationError,
   onClose,
   onSave,
 }: {
@@ -2639,6 +2730,8 @@ function AddItemDialog({
   cardTextSize: ArticleCardTextSize
   /** Refleja en la comanda el cliente elegido en el diálogo. */
   onSelectGuest: (guestKey: string | null) => void
+  /** Validación fallida antes de guardar (opción obligatoria, sin cantidad…). */
+  onValidationError: (group: string) => void
   onClose: () => void
   onSave: (
     configurations: Array<{
@@ -2907,6 +3000,7 @@ function AddItemDialog({
 
       if (missing) {
         setActiveKey(key)
+        onValidationError(missing.group.name)
 
         const min = Math.max(1, missing.minSelect ?? 1)
         toast.error(
@@ -2997,6 +3091,7 @@ function AddItemDialog({
     }
 
     if (configurations.length === 0) {
+      onValidationError("empty")
       toast.info("Sin cambios")
       onClose()
       return

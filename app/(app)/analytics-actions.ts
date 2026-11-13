@@ -6,6 +6,7 @@ export interface ClientAnalyticsEventInput {
   name: string
   itemId?: string
   menuId?: string
+  orderId?: string
   subjectId?: string
   subjectName?: string
   quantity?: number

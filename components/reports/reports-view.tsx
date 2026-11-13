@@ -30,6 +30,7 @@ import type { CashSessionList, ChargesReport } from "@/lib/cash"
 import type {
   InventoryReport,
   KitchenReport,
+  PosOperationsReport,
   SalesReport,
 } from "@/lib/dashboard"
 import {
@@ -39,8 +40,9 @@ import {
 } from "@/lib/orders"
 
 import { CashReport } from "./cash-report"
+import { OperationsReport } from "./operations-report"
 
-const REPORT_TABS = ["sales", "inventory", "kitchen", "cash"] as const
+const REPORT_TABS = ["sales", "operations", "inventory", "kitchen", "cash"] as const
 
 const MOVEMENT_LABELS: Record<string, string> = {
   ADJUSTMENT: "Ajuste",
@@ -57,6 +59,7 @@ export function ReportsView({
   sales,
   inventory,
   kitchen,
+  operations,
   sessions,
   charges,
   branch,
@@ -65,6 +68,7 @@ export function ReportsView({
   sales: SalesReport | null
   inventory: InventoryReport | null
   kitchen: KitchenReport | null
+  operations: PosOperationsReport | null
   sessions: CashSessionList | null
   charges: ChargesReport | null
   /** Sucursal activa; `null` = vista consolidada. */
@@ -74,11 +78,12 @@ export function ReportsView({
     () =>
       REPORT_TABS.filter((tab) => {
         if (tab === "sales") return Boolean(sales)
+        if (tab === "operations") return Boolean(operations)
         if (tab === "inventory") return Boolean(inventory)
         if (tab === "kitchen") return Boolean(kitchen)
         return Boolean(sessions || charges)
       }),
-    [sales, inventory, kitchen, sessions, charges]
+    [sales, operations, inventory, kitchen, sessions, charges]
   )
   const defaultTab = availableTabs[0] ?? "sales"
   const [tab, setTab] = usePersistentTab(
@@ -114,6 +119,9 @@ export function ReportsView({
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           {sales ? <TabsTrigger value="sales">Ventas</TabsTrigger> : null}
+          {operations ? (
+            <TabsTrigger value="operations">Operación</TabsTrigger>
+          ) : null}
           {inventory ? (
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
           ) : null}
@@ -292,6 +300,12 @@ export function ReportsView({
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+        ) : null}
+
+        {operations ? (
+          <TabsContent value="operations" className="flex flex-col gap-4">
+            <OperationsReport report={operations} />
           </TabsContent>
         ) : null}
 

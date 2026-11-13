@@ -112,6 +112,78 @@ export interface KitchenReport {
   byDay: { date: string; count: number }[]
 }
 
+/**
+ * Reporte de operación del POS: tiempos de captura, fricción del catálogo y
+ * consumo por cliente/mesa (con y sin IVA).
+ */
+export interface PosOperationsReport {
+  from: string
+  to: string
+  capture: {
+    samples: number
+    sent: number
+    abandoned: number
+    switched: number
+    activeMedianMs: number | null
+    activeP90Ms: number | null
+    wallMedianMs: number | null
+    wallP90Ms: number | null
+    browseMedianMs: number | null
+    assemblyMedianMs: number | null
+    averageItems: number | null
+    averageLines: number | null
+    averageInteractions: number | null
+    averageGuests: number | null
+    itemsPerMinute: number | null
+    searches: number
+    emptySearches: number
+    emptySearchRate: number | null
+    itemDialogs: number
+    validationErrors: number
+    byDay: {
+      date: string
+      samples: number
+      activeMedianMs: number | null
+    }[]
+  }
+  friction: {
+    opened: number
+    added: number
+    cancelled: number
+    cancelRate: number | null
+    validationErrors: number
+    emptySearches: number
+    topEmptySearches: { query: string; count: number }[]
+  }
+  guests: {
+    orders: number
+    ordersWithGuests: number
+    seats: number
+    guestsWithItems: number
+    lines: number
+    guestLines: number
+    assignedLineShare: number | null
+    assignedAmountShare: number | null
+    averageGrossPerGuest: number | null
+    averageNetPerGuest: number | null
+    averageGrossPerSeat: number | null
+    averageNetPerSeat: number | null
+    totalGross: number
+    totalNet: number
+    guestGross: number
+    guestNet: number
+    generalGross: number
+    generalNet: number
+  }
+  data: {
+    firstCaptureAt: string | null
+    days: number
+    autoAfterDays: number
+    autoEnabled: boolean
+    samples: number
+  }
+}
+
 export interface PaymentRow {
   id: string
   method: PaymentMethod
