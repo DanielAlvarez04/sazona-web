@@ -24,8 +24,15 @@ const TIP_OPTIONS = [0, 10, 15, 20]
  * Se actualiza sola con el carrito del POS, permite elegir propina y confirmar
  * el pedido. Sin pedido muestra los menús activos como banners.
  */
-export function CustomerDisplay({ token }: { token: string }) {
-  const [data, setData] = React.useState<PosDisplayPublic | null>(null)
+export function CustomerDisplay({
+  token,
+  initialData = null,
+}: {
+  token: string
+  /** Datos ya cargados en el servidor para pintar sin esperar al primer poll. */
+  initialData?: PosDisplayPublic | null
+}) {
+  const [data, setData] = React.useState<PosDisplayPublic | null>(initialData)
   const [error, setError] = React.useState<string | null>(null)
   const [savingTip, setSavingTip] = React.useState<number | null>(null)
   const [confirming, setConfirming] = React.useState(false)
@@ -34,8 +41,14 @@ export function CustomerDisplay({ token }: { token: string }) {
     if (!token) return
 
     let cancelled = false
+    let inFlight = false
 
     const load = async () => {
+      // Evita que un sondeo lento se solape con el siguiente y que el último
+      // en responder pise un estado más reciente.
+      if (inFlight) return
+      inFlight = true
+
       try {
         const response = await fetch(
           `${API_BASE_URL}/pos/display/${encodeURIComponent(token)}`,
@@ -56,15 +69,31 @@ export function CustomerDisplay({ token }: { token: string }) {
         if (!cancelled) {
           setError("No se pudo contactar con el servidor.")
         }
+      } finally {
+        inFlight = false
       }
     }
 
     void load()
-    const timer = setInterval(() => void load(), 1500)
+
+    // Una pantalla de cliente no cambia cada segundo: 3 s bastan y reducen a la
+    // mitad las peticiones frente al sondeo anterior.
+    const timer = setInterval(() => {
+      if (document.hidden) return
+      void load()
+    }, 3_000)
+
+    // Al volver a la pestaña se refresca de inmediato en lugar de esperar.
+    const onVisibilityChange = () => {
+      if (!document.hidden) void load()
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
       cancelled = true
       clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [token])
 

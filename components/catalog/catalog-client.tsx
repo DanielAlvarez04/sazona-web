@@ -11,6 +11,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import dynamic from "next/dynamic"
+
 import {
   activateItem,
   deactivateItem,
@@ -20,10 +22,7 @@ import {
   unpublishRecipe,
   updateRecipe,
 } from "@/app/(app)/catalog/actions"
-import {
-  ProductDialog,
-  type ProductSaveAs,
-} from "@/components/catalog/product-dialog"
+import type { ProductSaveAs } from "@/components/catalog/product-dialog"
 import { ArticlesTable } from "@/components/catalog/articles-table"
 import { CatalogSummary } from "@/components/catalog/catalog-summary"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
@@ -59,6 +58,20 @@ import type {
 } from "@/lib/catalog"
 
 const CATALOG_TABS = ["articulos", "recetas", "combos"] as const
+
+/**
+ * El diálogo de artículo es el componente más pesado del panel (~99 KB) y solo
+ * se necesita al abrirlo: cargarlo aparte deja la tabla y los filtros listos
+ * antes. Se usa `ssr: false` porque es un modal que nunca se pinta en el HTML
+ * inicial.
+ */
+const ProductDialog = dynamic(
+  () =>
+    import("@/components/catalog/product-dialog").then(
+      (mod) => mod.ProductDialog
+    ),
+  { ssr: false }
+)
 
 export function CatalogClient({
   recipes,
