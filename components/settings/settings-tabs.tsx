@@ -10,6 +10,7 @@ const SETTINGS_TABS = [
   "business",
   "payments",
   "catalog",
+  "kitchen",
   "inventory",
   "personalization",
 ] as const
@@ -25,6 +26,7 @@ export function SettingsTabs({
   business,
   payments,
   catalog,
+  kitchen,
   inventory,
   personalization,
   initialTab,
@@ -33,6 +35,7 @@ export function SettingsTabs({
   business: ReactNode
   payments: ReactNode
   catalog: ReactNode
+  kitchen: ReactNode
   inventory: ReactNode
   personalization: ReactNode
   /** Pestaña que debe abrirse al entrar (p. ej. al volver de Mercado Pago). */
@@ -63,6 +66,7 @@ export function SettingsTabs({
         <TabsTrigger value="business">Negocio</TabsTrigger>
         <TabsTrigger value="payments">Pagos</TabsTrigger>
         <TabsTrigger value="catalog">Catálogo</TabsTrigger>
+        <TabsTrigger value="kitchen">Cocina</TabsTrigger>
         <TabsTrigger value="inventory">Inventario</TabsTrigger>
         <TabsTrigger value="personalization">Personalización</TabsTrigger>
       </TabsList>
@@ -82,6 +86,12 @@ export function SettingsTabs({
         className="flex min-w-0 flex-col gap-6"
       >
         {catalog}
+      </TabsContent>
+      <TabsContent
+        value="kitchen"
+        className="flex min-w-0 flex-col gap-6"
+      >
+        {kitchen}
       </TabsContent>
       <TabsContent
         value="inventory"

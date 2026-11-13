@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import {
   BellIcon,
   BellOffIcon,
+  ListOrderedIcon,
   Loader2Icon,
   Maximize2Icon,
   Minimize2Icon,
   RefreshCwIcon,
+  SparklesIcon,
   TimerIcon,
   WifiIcon,
   WifiOffIcon,
@@ -26,10 +28,13 @@ import { transitionRound } from "@/lib/order-actions"
 import {
   formatDuration,
   orderLabel,
+  PREP_PRIORITY_LABELS,
+  prepPriority,
   roundTimings,
   ROUND_ACTIONS,
   ROUND_STATUS_LABELS,
   type KitchenRound,
+  type PrepPriority,
   type RoundStatus,
 } from "@/lib/orders"
 import { cn } from "cn"
@@ -42,8 +47,13 @@ const COLUMN_HINTS: Record<string, string> = {
   READY: "Listas para llevar a la mesa.",
 }
 
-/** Minutos a partir de los que una comanda se considera retrasada. */
-const DELAY_MINUTES = 15
+/** Estilo de la insignia según la urgencia. */
+const PRIORITY_BADGE: Record<PrepPriority, string> = {
+  on_time: "",
+  at_risk:
+    "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  late: "border-destructive/50 bg-destructive/10 text-destructive",
+}
 
 /** Aviso sonoro de comanda nueva (Web Audio, sin archivos). */
 function playNewOrderSound() {
@@ -129,11 +139,14 @@ export function KitchenView({
   rounds,
   canWork,
   branch,
+  suggestedByDefault = true,
 }: {
   rounds: KitchenRound[]
   canWork: boolean
   /** Sucursal activa; `null` = vista consolidada. */
   branch: Branch | null
+  /** Preferencia guardada del negocio para ordenar por urgencia. */
+  suggestedByDefault?: boolean
 }) {
   const router = useRouter()
   const [pendingId, setPendingId] = React.useState<string | null>(null)
@@ -142,6 +155,7 @@ export function KitchenView({
   const [sound, setSound] = React.useState(true)
   const [fullscreen, setFullscreen] = React.useState(false)
   const [onlyDelayed, setOnlyDelayed] = React.useState(false)
+  const [suggested, setSuggested] = React.useState(suggestedByDefault)
   const knownRounds = React.useRef<Set<string> | null>(null)
 
   // Aviso sonoro solo cuando entra una comanda nueva al tablero.
@@ -280,6 +294,26 @@ export function KitchenView({
     }
   }
 
+  /**
+   * Prioridad recalculada en el cliente con los minutos al día.
+   *
+   * La API manda su propia prioridad, pero el tablero repinta cada 30 s; usar
+   * el tiempo local evita que una comanda siga «a tiempo» con el reloj viejo.
+   */
+  const priorityOf = (round: KitchenRound): PrepPriority =>
+    prepPriority(
+      (roundTimings(round).stage?.minutes ?? 0) /
+        Math.max(1, round.estimateMinutes)
+    )
+
+  const actionable = rounds
+    .filter((round) => round.suggestedRank !== null)
+    .sort(
+      (left, right) =>
+        (left.suggestedRank ?? 0) - (right.suggestedRank ?? 0)
+    )
+  const topSuggestion = suggested ? actionable[0] ?? null : null
+
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <PageHeader
@@ -303,6 +337,20 @@ export function KitchenView({
               )}
               {connected ? "Tiempo real" : "Sondeo cada 15 s"}
             </Badge>
+            <Button
+              variant={suggested ? "secondary" : "outline"}
+              size="sm"
+              aria-pressed={suggested}
+              title={
+                suggested
+                  ? "Ordenando por urgencia; cambia a orden de llegada"
+                  : "Ordenando por llegada; cambia a orden sugerido"
+              }
+              onClick={() => setSuggested((value) => !value)}
+            >
+              <ListOrderedIcon />
+              {suggested ? "Sugerido" : "Llegada"}
+            </Button>
             <Button
               variant={onlyDelayed ? "secondary" : "outline"}
               size="sm"
@@ -343,14 +391,65 @@ export function KitchenView({
         }
       />
 
+      {topSuggestion ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <SparklesIcon className="size-4 shrink-0 text-primary" />
+            <span className="font-medium">
+              Empezar por {orderLabel(topSuggestion.order)}
+            </span>
+            <span className="text-muted-foreground">
+              ·{" "}
+              {topSuggestion.reasons[0] ??
+                `lleva ${roundTimings(topSuggestion).stage?.minutes ?? 0} min`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={PRIORITY_BADGE[priorityOf(topSuggestion)]}>
+              {PREP_PRIORITY_LABELS[priorityOf(topSuggestion)]}
+            </Badge>
+            {canWork && topSuggestion.status === "PENDING" ? (
+              <Button
+                size="sm"
+                disabled={pendingId === topSuggestion.id}
+                onClick={() =>
+                  handleTransition(topSuggestion, "PREPARING")
+                }
+              >
+                {pendingId === topSuggestion.id ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : null}
+                Empezar
+              </Button>
+            ) : null}
+            {canWork && topSuggestion.status === "PREPARING" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pendingId === topSuggestion.id}
+                onClick={() => handleTransition(topSuggestion, "READY")}
+              >
+                Marcar lista
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 lg:grid-cols-3">
         {COLUMNS.map((status) => {
-          const columnRounds = rounds.filter(
-            (round) =>
-              round.status === status &&
-              (!onlyDelayed ||
-                (roundTimings(round).stage?.minutes ?? 0) >= DELAY_MINUTES)
-          )
+          const columnRounds = rounds
+            .filter(
+              (round) =>
+                round.status === status &&
+                (!onlyDelayed || priorityOf(round) === "late")
+            )
+            .sort((left, right) =>
+              suggested
+                ? (left.suggestedRank ?? 999) -
+                  (right.suggestedRank ?? 999)
+                : 0
+            )
 
           return (
             <section
@@ -379,7 +478,8 @@ export function KitchenView({
                   {columnRounds.map((round) => {
                     const timings = roundTimings(round)
                     const stageMinutes = timings.stage?.minutes ?? 0
-                    const delayed = stageMinutes >= DELAY_MINUTES
+                    const priority = priorityOf(round)
+                    const delayed = priority === "late"
 
                     return (
                       <li
@@ -389,6 +489,11 @@ export function KitchenView({
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="flex flex-wrap items-center gap-1.5">
+                              {suggested && round.suggestedRank ? (
+                                <Badge variant="outline" className="tabular-nums">
+                                  #{round.suggestedRank}
+                                </Badge>
+                              ) : null}
                               <p className="font-medium">
                                 {orderLabel(round.order)}
                               </p>
@@ -406,17 +511,29 @@ export function KitchenView({
                                 : round.order.customerName
                                   ? ` · ${round.order.customerName}`
                                   : ""}
+                              {` · estimado ${formatDuration(round.estimateMinutes)}`}
+                              {round.status !== "READY"
+                                ? ` · listo ≈ ${formatTime(round.estimatedReadyAt)}`
+                                : ""}
                               {timings.totalMinutes !== null
                                 ? ` · ciclo ${formatDuration(timings.totalMinutes)}`
                                 : ""}
                             </p>
                           </div>
-                          <Badge
-                            variant={delayed ? "destructive" : "secondary"}
-                            title={`Tiempo en la etapa actual (${ROUND_STATUS_LABELS[round.status]})`}
-                          >
-                            {formatDuration(stageMinutes)}
-                          </Badge>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <Badge
+                              variant={delayed ? "destructive" : "secondary"}
+                              title={`Tiempo en la etapa actual (${ROUND_STATUS_LABELS[round.status]})`}
+                            >
+                              {formatDuration(stageMinutes)}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={PRIORITY_BADGE[priority]}
+                            >
+                              {PREP_PRIORITY_LABELS[priority]}
+                            </Badge>
+                          </div>
                         </div>
 
                         <RoundTimeline round={round} />

@@ -107,6 +107,14 @@ export interface KitchenReport {
     averagePrepMinutes: number | null
     averageDeliveryMinutes: number | null
     averageTotalMinutes: number | null
+    /** Promedio de los estimados congelados al enviar. */
+    averageEstimatedMinutes: number | null
+    /** Real − estimado; positivo = tardó más de lo prometido. */
+    averageDeviationMinutes: number | null
+    /** Rondas con estimado y tiempo real comparables. */
+    estimateSamples: number
+    /** Proporción de rondas dentro del estimado (+10 %). */
+    withinEstimateRate: number | null
   }
   byStatus: { status: RoundStatus; count: number }[]
   byDay: { date: string; count: number }[]

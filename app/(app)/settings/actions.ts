@@ -268,3 +268,24 @@ export async function setBranchActive(
 
   return result
 }
+
+/**
+ * Actualiza la configuración de cocina.
+ *
+ * Recibe solo los campos que cambiaron: la tarjeta calcula el diff y no llama
+ * a la API si no hay nada nuevo.
+ */
+export async function updateKitchenSettings(input: {
+  prepMinutes?: number
+  source?: "MANUAL" | "HISTORICAL"
+  suggestOrder?: boolean
+}): Promise<ActionResult> {
+  if (Object.keys(input).length === 0) {
+    return { ok: true }
+  }
+
+  return mutateApi("/kitchen/settings", "PATCH", input, [
+    "/settings",
+    "/kitchen",
+  ])
+}

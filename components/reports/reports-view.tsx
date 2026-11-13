@@ -425,9 +425,33 @@ export function ReportsView({
                 value={formatMinutes(kitchen.totals.averageTotalMinutes)}
               />
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Metric
+                label="Estimado medio"
+                value={formatMinutes(kitchen.totals.averageEstimatedMinutes)}
+              />
+              <Metric
+                label="Desviación media"
+                value={formatMinutes(kitchen.totals.averageDeviationMinutes)}
+              />
+              <Metric
+                label="Dentro del estimado"
+                value={
+                  kitchen.totals.withinEstimateRate === null
+                    ? "—"
+                    : `${Math.round(kitchen.totals.withinEstimateRate * 100)} %`
+                }
+              />
+            </div>
+
             <p className="text-xs text-muted-foreground">
               Espera: enviada → empezada. Preparación: empezada → lista.
-              Entrega: lista → entregada. Ciclo: enviada → entregada.
+              Entrega: lista → entregada. Ciclo: enviada → entregada. El
+              estimado es el que se congeló al enviar la ronda y la desviación
+              es real − estimado ({kitchen.totals.estimateSamples} muestra
+              {kitchen.totals.estimateSamples === 1 ? "" : "s"}); «dentro del
+              estimado» tolera un 10 % de más.
             </p>
 
             <div className="grid gap-4 lg:grid-cols-2">

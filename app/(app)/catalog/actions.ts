@@ -248,6 +248,8 @@ export interface RecipePublishInput {
   sku?: string
   categoryId?: string
   taxRate?: number | null
+  /** Minutos de preparación del artículo publicado. */
+  prepMinutes?: number | null
   variants?: Array<{
     id?: string
     name: string
@@ -401,6 +403,8 @@ export interface ArticleInput {
   /** Clave del objeto en R2; `null` quita la imagen. */
   imageKey?: string | null
   isCombo?: boolean
+  /** Minutos de preparación propios; `null` hereda el tiempo del negocio. */
+  prepMinutes?: number | null
   variants?: Array<{
     /** Presentación existente; permite renombrarla sin perder su imagen. */
     id?: string

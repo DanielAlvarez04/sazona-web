@@ -504,6 +504,10 @@ export function ProductDialog({
   const [price, setPrice] = useState(
     article?.price ?? recipe?.item?.price ?? ""
   )
+  /** Minutos de preparación; vacío = hereda el tiempo del negocio. */
+  const [prepMinutes, setPrepMinutes] = useState(() =>
+    article?.prepMinutes != null ? String(article.prepMinutes) : ""
+  )
   const [image, setImage] = useState<DialogImage | null>(() => {
     const key = article?.imageKey ?? recipe?.imageKey
     const url = article?.imageUrl ?? recipe?.imageUrl
@@ -663,6 +667,18 @@ export function ProductDialog({
   const yieldVisible = saveAs === "ingredient"
   const notesVisible =
     saveAs !== "combo" && (saveAs !== "article" || effectiveRecipeEnabled)
+
+  /**
+   * Tiempo de preparación propio.
+   *
+   * Vacío = hereda el tiempo del negocio. Se limita a 1–180 min para que un
+   * error de captura no produzca estimados absurdos.
+   */
+  const prepValue =
+    prepMinutes.trim() === "" ? null : Math.round(Number(prepMinutes))
+  const prepValid =
+    prepValue === null ||
+    (Number.isInteger(prepValue) && prepValue >= 1 && prepValue <= 180)
 
   /** El nombre arrastra a las filas que no se editaron a mano. */
   function handleNameChange(value: string) {
@@ -1167,6 +1183,7 @@ export function ProductDialog({
           price: numericPrice,
           isCombo: true,
           categoryId: null,
+          prepMinutes: prepValue,
           comboComponents: components,
           promotions: promotion ? [promotion] : [],
         })
@@ -1191,6 +1208,9 @@ export function ProductDialog({
           ...(sameNumber(article.price, numericPrice)
             ? {}
             : { price: numericPrice }),
+          ...((article.prepMinutes ?? null) === prepValue
+            ? {}
+            : { prepMinutes: prepValue }),
           ...(article.category ? { categoryId: null } : {}),
         }
 
@@ -1336,6 +1356,11 @@ export function ProductDialog({
       (!Number.isFinite(basePrice) || basePrice < 0)
     ) {
       markInvalid("price")
+      return
+    }
+
+    if (!prepValid) {
+      markInvalid("prepMinutes")
       return
     }
 
@@ -1541,6 +1566,10 @@ export function ProductDialog({
           !sameNumber(article.price, priceBase)
             ? { price: priceBase }
             : {}),
+          ...(saveAs !== "ingredient" &&
+          (article.prepMinutes ?? null) !== prepValue
+            ? { prepMinutes: prepValue }
+            : {}),
           ...(saveAs !== "ingredient" && variantsChanged(article, variants)
             ? { variants }
             : {}),
@@ -1633,6 +1662,7 @@ export function ProductDialog({
           const published = await publishRecipe(recipeId, {
             price: priceBase,
             categoryId: articleCategoryId,
+            prepMinutes: prepValue,
             ...(variants.length > 0 ? { variants } : {}),
           })
 
@@ -1673,6 +1703,7 @@ export function ProductDialog({
             description: description.trim() || null,
             categoryId: articleCategoryId,
             price: priceBase,
+            prepMinutes: prepValue,
             variants,
             ...(optionsEnabled && savedGroups.length > 0
               ? { optionGroups: optionGroupPayload(savedGroups) }
@@ -2428,6 +2459,37 @@ export function ProductDialog({
               </div>
             </div>
           </div>
+
+          {saveAs !== "ingredient" ? (
+            <Field
+              data-invalid={
+                invalidFields.has("prepMinutes") ? "true" : undefined
+              }
+            >
+              <FieldLabel htmlFor="product-prep-minutes">
+                Tiempo de preparación (min)
+              </FieldLabel>
+              <Input
+                id="product-prep-minutes"
+                type="number"
+                min="1"
+                max="180"
+                step="1"
+                value={prepMinutes}
+                aria-invalid={invalidFields.has("prepMinutes") || undefined}
+                onChange={(event) => {
+                  clearInvalid("prepMinutes")
+                  setPrepMinutes(event.target.value)
+                }}
+                placeholder="Hereda el tiempo del negocio"
+                className="max-w-52"
+              />
+              <p className="text-xs text-muted-foreground">
+                Vacío = usa el tiempo del negocio. Sirve para ordenar la cola
+                de cocina y estimar cuándo estará lista la ronda.
+              </p>
+            </Field>
+          ) : null}
 
           <Field>
             <FieldLabel htmlFor="product-description">Descripción</FieldLabel>

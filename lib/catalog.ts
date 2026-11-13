@@ -382,6 +382,8 @@ export interface ItemListItem {
   /** Despublicado como artículo: no aparece en Artículos ni en menús. */
   isArchived: boolean
   isCombo: boolean
+  /** Minutos de preparación propios; `null` hereda el tiempo del negocio. */
+  prepMinutes: number | null
   sortOrder: number
   category: { id: string; name: string } | null
   variants: Variant[]

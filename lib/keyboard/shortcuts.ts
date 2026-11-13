@@ -13,7 +13,10 @@
  * 3. En el componente: `useShortcut("<id>", handler)`.
  */
 
-export type ShortcutId = "theme.toggle"
+export type ShortcutId =
+  | "theme.toggle"
+  | "pos.previousOrder"
+  | "pos.nextOrder"
 
 /** Grupos usados para ordenar la futura ayuda/panel de comandos. */
 export type ShortcutGroup = "Apariencia" | "Navegación" | "Operación" | "Edición"
@@ -52,6 +55,22 @@ export const SHORTCUTS: readonly ShortcutDefinition[] = [
     // emiten un `keydown` propio. La combinación capturable más cercana es
     // Shift + L (⇧ + L en macOS).
     combos: [{ key: "l", shift: true }],
+  },
+  {
+    id: "pos.previousOrder",
+    label: "Comanda anterior",
+    description:
+      "En el punto de venta, cambia a la comanda anterior (o a «Nueva cuenta»).",
+    group: "Operación",
+    combos: [{ key: "arrowleft", alt: true }],
+  },
+  {
+    id: "pos.nextOrder",
+    label: "Comanda siguiente",
+    description:
+      "En el punto de venta, cambia a la siguiente comanda activa.",
+    group: "Operación",
+    combos: [{ key: "arrowright", alt: true }],
   },
 ]
 

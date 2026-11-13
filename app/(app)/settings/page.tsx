@@ -9,6 +9,10 @@ import {
 } from "lucide-react"
 
 import { OrganizationCard } from "@/components/settings/organization-card"
+import {
+  KitchenOrderCard,
+  KitchenPrepCard,
+} from "@/components/settings/kitchen-settings-card"
 import { PracticeModeCard } from "@/components/settings/practice-mode-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
@@ -49,6 +53,7 @@ import {
 } from "@/lib/catalog"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
+import type { KitchenSettings } from "@/lib/kitchen"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { PosPairedDevice } from "@/lib/pos-device"
 import type { PosDisplayInfo } from "@/lib/pos-display"
@@ -193,6 +198,11 @@ export default async function SettingsPage({
     : null
   const mpStatus: MercadoPagoStatus | null = mpStatusResponse?.ok
     ? ((await mpStatusResponse.json()) as MercadoPagoStatus)
+    : null
+
+  const kitchenSettingsResponse = await apiFetch("/kitchen/settings")
+  const kitchenSettings: KitchenSettings | null = kitchenSettingsResponse.ok
+    ? ((await kitchenSettingsResponse.json()) as KitchenSettings)
     : null
 
   // Inventario actual: sirve para marcar los insumos core que ya existen y
@@ -555,6 +565,26 @@ export default async function SettingsPage({
               active={user.organizationUseCoreOptionGroups}
               canManage={canManageCatalog(user.roles)}
             />
+          </>
+        }
+        kitchen={
+          <>
+            {kitchenSettings ? (
+              <>
+                <KitchenPrepCard
+                  settings={kitchenSettings}
+                  canManage={admin}
+                />
+                <KitchenOrderCard
+                  settings={kitchenSettings}
+                  canManage={admin}
+                />
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No se pudo cargar la configuración de cocina.
+              </p>
+            )}
           </>
         }
         inventory={

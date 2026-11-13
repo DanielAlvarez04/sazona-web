@@ -15,9 +15,10 @@ import { requireUser } from "@/lib/session"
 export default async function KitchenPage() {
   const user = await requireUser()
 
-  const [response, branch] = await Promise.all([
+  const [response, branch, settingsResponse] = await Promise.all([
     apiFetch("/kitchen/rounds"),
     getActiveBranch(),
+    apiFetch("/kitchen/settings"),
   ])
 
   if (!response.ok) {
@@ -38,12 +39,16 @@ export default async function KitchenPage() {
   }
 
   const rounds = (await response.json()) as KitchenRound[]
+  const settings = settingsResponse.ok
+    ? ((await settingsResponse.json()) as { suggestOrder?: boolean })
+    : null
 
   return (
     <KitchenView
       rounds={rounds}
       canWork={canWorkKitchen(user.roles)}
       branch={branch}
+      suggestedByDefault={settings?.suggestOrder ?? true}
     />
   )
 }

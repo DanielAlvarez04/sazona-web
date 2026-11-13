@@ -177,6 +177,8 @@ export interface OrderRound {
   readyAt: string | null
   deliveredAt: string | null
   cancelledAt: string | null
+  /** Estimado de preparación congelado al enviar la ronda. */
+  estimatedMinutes?: number | null
   createdAt: string
   items: OrderItem[]
   statusHistory?: StatusHistoryEntry[]
@@ -257,6 +259,31 @@ export interface Order {
   balance?: string
 }
 
+export type PrepPriority = "on_time" | "at_risk" | "late"
+
+export const PREP_PRIORITY_LABELS: Record<PrepPriority, string> = {
+  on_time: "A tiempo",
+  at_risk: "En riesgo",
+  late: "Atrasada",
+}
+
+/**
+ * Prioridad de una ronda según su urgencia (tiempo en etapa / estimado).
+ *
+ * Misma regla que la API: 100 % o más es atrasada, 75 % es riesgo.
+ */
+export function prepPriority(urgency: number): PrepPriority {
+  if (urgency >= 1) return "late"
+  if (urgency >= 0.75) return "at_risk"
+  return "on_time"
+}
+
+/**
+ * Ronda de cocina con el estimado y la prioridad calculados por la API.
+ *
+ * `stageMinutes`, `urgency` y `suggestedRank` llegan con la hora del servidor;
+ * el tablero los refresca por SSE o sondeo.
+ */
 export interface KitchenRound extends OrderRound {
   order: {
     id: string
@@ -271,6 +298,25 @@ export interface KitchenRound extends OrderRound {
     createdAt: string
     branch?: { id: string; name: string } | null
   }
+  /** Minutos estimados que se están usando (snapshot o respaldo actual). */
+  estimateMinutes: number
+  /** `true` si el estimado quedó congelado al enviar la ronda. */
+  estimateFromSnapshot: boolean
+  /** Minutos transcurridos en la etapa actual. */
+  stageMinutes: number
+  /** Minutos desde el envío. */
+  waitMinutes: number
+  /** Unidades de la ronda (suma de cantidades). */
+  itemCount: number
+  /** `stageMinutes / estimateMinutes`. */
+  urgency: number
+  priority: PrepPriority
+  score: number
+  /** Motivos cortos y legibles de la prioridad. */
+  reasons: string[]
+  estimatedReadyAt: string
+  /** Posición en la cola sugerida (solo PENDING/PREPARING). */
+  suggestedRank: number | null
 }
 
 export interface ConsumptionWarning {

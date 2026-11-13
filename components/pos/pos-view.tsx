@@ -78,7 +78,9 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
+import { useShortcut } from "@/components/keyboard/keyboard-shortcuts-provider"
 import * as posCapture from "@/components/pos/pos-capture"
+import { OrderDeck, adjacentOrderId } from "@/components/pos/order-deck"
 import { ArticleCardVisual, type ArticleCardTextSize } from "@/components/catalog/article-card-visual"
 import {
   ArticlePriceFilter,
@@ -199,6 +201,28 @@ interface GuestDraft {
   /** Último nombre confirmado en el servidor. */
   savedName: string
   title: GuestTitle | null
+}
+
+/**
+ * Comanda capturada que todavía no se envió.
+ *
+ * Se guarda por cuenta al cambiar de comanda para no perder la captura si el
+ * mesero revisa otra mesa. Vive solo en memoria: al recargar se pierde, igual
+ * que antes.
+ */
+interface OrderDraft {
+  cart: CartLine[]
+  channel: OrderChannel
+  tableNumber: string
+  customerName: string
+  customerTitle: GuestTitle | null
+  customerPhone: string
+  deliveryAddress: string
+  deliveryFee: string
+  guests: GuestDraft[]
+  partySize: number
+  partySizeDraft: string
+  activeGuestKey: string | null
 }
 
 function newGuestKey() {
@@ -556,6 +580,22 @@ export function PosView({
   const displaySession = React.useRef<string | null>(null)
   const [sending, setSending] = React.useState(false)
 
+  /** Borradores por cuenta: no se pierden al revisar otra mesa. */
+  const draftsRef = React.useRef(new Map<string, OrderDraft>())
+  /** Evita que el efecto de sincronización pise un borrador restaurado. */
+  const restoringRef = React.useRef<string | null>(null)
+
+  /** Cuentas abiertas de la más antigua a la más reciente (prioridad). */
+  const deckOrders = React.useMemo(
+    () =>
+      [...orders].sort(
+        (left, right) =>
+          new Date(left.createdAt).getTime() -
+          new Date(right.createdAt).getTime()
+      ),
+    [orders]
+  )
+
   const activeOrder = orders.find((order) => order.id === orderId) ?? null
   const activeGuest =
     activeGuestKey === null
@@ -601,6 +641,7 @@ export function PosView({
   /* eslint-disable react-hooks/set-state-in-effect */
   React.useEffect(() => {
     if (!activeOrder) {
+      restoringRef.current = null
       setGuests((current) =>
         current.length > 0
           ? current
@@ -610,10 +651,22 @@ export function PosView({
       return
     }
 
+    // Al volver a una comanda con borrador, el estado restaurado manda sobre
+    // el que viene del servidor (que puede ser más viejo).
+    if (restoringRef.current === activeOrder.id) {
+      restoringRef.current = null
+      return
+    }
+
     const serverGuests = activeOrder.guests ?? []
 
     setChannel(activeOrder.channel ?? "DINE_IN")
     setTableNumber(activeOrder.tableNumber ?? "1")
+    // Los datos de contacto no deben arrastrarse de otra cuenta.
+    setCustomerName(activeOrder.customerName ?? "")
+    setCustomerPhone(activeOrder.customerPhone ?? "")
+    setDeliveryAddress(activeOrder.deliveryAddress ?? "")
+    setDeliveryFee(activeOrder.deliveryFee ?? "0")
     setGuests(
       serverGuests.map((guest) => ({
         key: guest.id,
@@ -643,6 +696,40 @@ export function PosView({
     setPartySizeDraft(String(partySize))
   }, [partySize])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Cuentas que ya se vieron en esta pestaña: si una desaparece de la lista es
+  // porque se cobró o canceló en otro dispositivo, no porque el refresh aún no
+  // traiga la recién creada.
+  const knownOrderIds = React.useRef(new Set<string>())
+
+  React.useEffect(() => {
+    for (const order of orders) knownOrderIds.current.add(order.id)
+  }, [orders])
+
+  React.useEffect(() => {
+    if (!orderId) return
+    if (orders.some((order) => order.id === orderId)) return
+    if (!knownOrderIds.current.has(orderId)) return
+
+    knownOrderIds.current.delete(orderId)
+    draftsRef.current.delete(orderId)
+    setOrderId("")
+    setCart([])
+    setChannel("DINE_IN")
+    setTableNumber("1")
+    setCustomerName("")
+    setCustomerTitle(null)
+    setCustomerPhone("")
+    setDeliveryAddress("")
+    setDeliveryFee("0")
+    setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
+    setPartySize(1)
+    setPartySizeDraft("1")
+    setActiveGuestKey(null)
+    setPendingProductId(null)
+    dismissComboNotice()
+    setComboConflict(null)
+  }, [orders, orderId])
 
   // Con un solo cliente en mesa no se muestra «General»: ese cliente queda
   // activo. Con varios clientes, «General» es la selección por defecto. En
@@ -1056,27 +1143,71 @@ export function PosView({
   }
 
   const selectOrder = (value: string) => {
-    if (value !== orderId) {
-      const items = cart.reduce((count, line) => count + line.quantity, 0)
+    if (value === orderId) return
 
-      if (items > 0) {
-        posCapture.finish("switched", {
-          orderId,
-          items,
-          lines: cart.length,
-          guests: guests.length,
-          amount: total,
-          channel,
-        })
-      } else {
-        posCapture.discard()
-      }
+    // Guarda lo capturado en la comanda actual antes de cambiar. El borrador
+    // de «Nueva cuenta» usa la clave vacía.
+    draftsRef.current.set(orderId, {
+      cart,
+      channel,
+      tableNumber,
+      customerName,
+      customerTitle,
+      customerPhone,
+      deliveryAddress,
+      deliveryFee,
+      guests,
+      partySize,
+      partySizeDraft,
+      activeGuestKey,
+    })
+
+    const items = cart.reduce((count, line) => count + line.quantity, 0)
+
+    if (items > 0) {
+      posCapture.finish("switched", {
+        orderId,
+        items,
+        lines: cart.length,
+        guests: guests.length,
+        amount: total,
+        channel,
+      })
+    } else {
+      posCapture.discard()
     }
 
-    setOrderId(value)
-    setCart([])
-    setActiveGuestKey(null)
     setPendingProductId(null)
+    setComboConflict(null)
+    dismissComboNotice()
+
+    const draft = draftsRef.current.get(value)
+
+    setOrderId(value)
+    setActiveGuestKey(draft?.activeGuestKey ?? null)
+
+    if (draft) {
+      // La comanda vuelve tal como se dejó: carrito, clientes y canal.
+      restoringRef.current = value || "__new__"
+      setCart(draft.cart)
+      setChannel(draft.channel)
+      setTableNumber(draft.tableNumber)
+      setCustomerName(draft.customerName)
+      setCustomerTitle(draft.customerTitle)
+      setCustomerPhone(draft.customerPhone)
+      setDeliveryAddress(draft.deliveryAddress)
+      setDeliveryFee(draft.deliveryFee)
+      setGuests(
+        draft.guests.length > 0
+          ? draft.guests
+          : [{ key: newGuestKey(), name: "", savedName: "", title: null }]
+      )
+      setPartySize(Math.max(1, draft.partySize))
+      setPartySizeDraft(draft.partySizeDraft)
+      return
+    }
+
+    setCart([])
 
     if (!value) {
       setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
@@ -1089,10 +1220,19 @@ export function PosView({
       setDeliveryAddress("")
       setDeliveryFee("0")
     }
-
-    dismissComboNotice()
-    setComboConflict(null)
   }
+
+  // Atajos para moverse por la pila sin depender del gesto.
+  useShortcut("pos.nextOrder", () => {
+    const next = adjacentOrderId(deckOrders, orderId, 1)
+
+    if (next !== null) selectOrder(next)
+  })
+  useShortcut("pos.previousOrder", () => {
+    const previous = adjacentOrderId(deckOrders, orderId, -1)
+
+    if (previous !== null) selectOrder(previous)
+  })
 
   const handleSend = async () => {
     if (cart.length === 0) {
@@ -1344,6 +1484,8 @@ export function PosView({
         amount: total,
         channel,
       })
+      draftsRef.current.delete(targetId)
+      draftsRef.current.delete("")
       resetDraft()
       router.refresh()
     } catch {
@@ -1921,7 +2063,14 @@ export function PosView({
           )}
         </div>
 
-        <Card className="flex h-fit flex-col gap-3 border p-4 ring-0 lg:sticky lg:top-4">
+        <div className="lg:sticky lg:top-4">
+          <OrderDeck
+            orders={deckOrders}
+            activeId={orderId}
+            onSelect={selectOrder}
+            branch={!branch}
+          >
+            <Card className="flex flex-col gap-3 border p-4 ring-0">
           <CardHeader className="flex flex-row items-center justify-between gap-2 p-0">
             <CardTitle className="flex items-center gap-2">
               <PencilLineIcon className="size-4" />
@@ -2457,7 +2606,9 @@ export function PosView({
             </p>
           ) : null}
           </CardContent>
-        </Card>
+            </Card>
+          </OrderDeck>
+        </div>
       </div>
 
       <AlertDialog
