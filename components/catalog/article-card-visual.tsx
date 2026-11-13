@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { SoupIcon, XIcon } from "lucide-react"
+import { LayersIcon, SoupIcon, XIcon } from "lucide-react"
 import { cn } from "cn"
 
 import { Badge } from "@/components/ui/badge"
@@ -75,12 +75,18 @@ export function ArticleCardVisual({
   className,
   textSize = "md",
   compact = false,
+  showImage = true,
+  isCombo = false,
 }: {
   name: string
   price: string
   imageUrl?: string | null
   imageVariants?: ImageAssets | null
   isActive?: boolean
+  /** Si es `false`, se oculta la imagen y la card pasa a relación 5:3. */
+  showImage?: boolean
+  /** Cambia el icono de respaldo (combo vs. artículo). */
+  isCombo?: boolean
   selected?: boolean
   /** Grupo donde vive el artículo (solo en cards del catálogo de menús). */
   groupLabel?: string | null
@@ -104,7 +110,8 @@ export function ArticleCardVisual({
   compact?: boolean
 }) {
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
-  const showFallback = !imageUrl || failedSrc === imageUrl
+  const showFallback = !showImage || !imageUrl || failedSrc === imageUrl
+  const FallbackIcon = isCombo ? LayersIcon : SoupIcon
   const topLeft =
     badge ??
     (groupLabel ? (
@@ -142,7 +149,8 @@ export function ArticleCardVisual({
   return (
     <div
       className={cn(
-        "relative aspect-square w-full overflow-hidden rounded-xl border bg-muted text-left select-none",
+        "relative w-full overflow-hidden rounded-xl border bg-muted text-left select-none",
+        showImage ? "aspect-square" : "aspect-[5/3]",
         selected && "ring-2 ring-primary",
         !isActive && "opacity-80",
         className
@@ -151,7 +159,7 @@ export function ArticleCardVisual({
       <div className="absolute inset-0 bg-muted">
         {showFallback ? (
           <div className="flex size-full items-center justify-center text-muted-foreground">
-            <SoupIcon className="size-8" aria-hidden />
+            <FallbackIcon className="size-8" aria-hidden />
             <span className="sr-only">Sin imagen</span>
           </div>
         ) : (

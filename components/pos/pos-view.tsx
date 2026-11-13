@@ -363,18 +363,24 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   product,
   selected,
   textSize,
+  showImages,
+  showGroups,
   onOpen,
 }: {
   product: ItemListItem
   selected: boolean
   textSize: ArticleCardTextSize
+  showImages: boolean
+  showGroups: boolean
   onOpen: (product: ItemListItem) => void
 }) {
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
   useShake(shakeRef, selected)
 
   const promotion = product.promotions?.find((entry) => entry.isActive)
-  const hasBadges = Boolean(product.category || product.isCombo || promotion)
+  const hasBadges = Boolean(
+    (showGroups && product.category) || product.isCombo || promotion
+  )
 
   return (
     <div ref={shakeRef} className={cn(selected && "np-menu-card-shake")}>
@@ -393,17 +399,21 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
           selected={selected}
           compact
           textSize={textSize}
+          showImage={showImages}
+          isCombo={product.isCombo}
           className="transition-shadow group-hover:ring-2 group-hover:ring-ring/60"
           badge={
             hasBadges ? (
               <div className="flex min-w-0 flex-col items-start gap-1">
-                {product.category ? (
+                {showGroups && product.category ? (
                   <Badge
                     variant="outline"
                     title={product.category.name}
-                    className="max-w-full truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
+                    className="max-w-full min-w-0 truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
                   >
-                    {product.category.name}
+                    <span className="min-w-0 truncate">
+                      {product.category.name}
+                    </span>
                   </Badge>
                 ) : null}
                 {product.isCombo ? (
@@ -496,6 +506,9 @@ export function PosView({
   const cardTextScale = CARD_TEXT_SCALES[cardTextSize - 1] ?? "md"
   const [priceRange, setPriceRange] = React.useState<PriceRange | null>(null)
   const [sortOrder, setSortOrder] = React.useState<PosSortOrder>("default")
+  // «Información disponible»: qué se muestra sobre las cards del catálogo.
+  const [showImages, setShowImages] = React.useState(true)
+  const [showGroups, setShowGroups] = React.useState(true)
   const [cart, setCart] = React.useState<CartLine[]>([])
   const [selectedProduct, setSelectedProduct] =
     React.useState<ItemListItem | null>(null)
@@ -918,6 +931,8 @@ export function PosView({
         product={product}
         selected={selected}
         textSize={cardTextScale}
+        showImages={showImages}
+        showGroups={showGroups}
         onOpen={handleOpenProduct}
       />
     )
@@ -1570,6 +1585,7 @@ export function PosView({
                   <div className="flex flex-col gap-3">
                     {priceBounds ? (
                       <ArticlePriceFilter
+                        bare
                         min={priceBounds.min}
                         max={priceBounds.max}
                         value={priceRange}
@@ -1581,56 +1597,56 @@ export function PosView({
                       <span className="text-xs font-medium text-muted-foreground">
                         Categoría
                       </span>
-                      <div className="-mx-1 flex max-h-56 flex-col gap-0.5 overflow-y-auto px-1">
-                        <Button
-                          type="button"
-                          variant={categoryId ? "ghost" : "secondary"}
-                          size="sm"
-                          className="w-full justify-between font-normal"
-                          aria-pressed={!categoryId}
-                          onClick={() => setCategoryId("")}
-                        >
-                          <span className="truncate">Todas las categorías</span>
-                          {!categoryId ? <CheckIcon className="size-4" /> : null}
-                        </Button>
-                        {categories.map((category) => {
-                          const selected = categoryId === category.id
-
-                          return (
-                            <Button
-                              key={category.id}
-                              type="button"
-                              variant={selected ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-between font-normal"
-                              aria-pressed={selected}
-                              onClick={() => setCategoryId(category.id)}
-                            >
-                              <span className="truncate">{category.name}</span>
-                              {selected ? <CheckIcon className="size-4" /> : null}
-                            </Button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {activeFilterCount > 0 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="self-start"
-                        onClick={() => {
-                          setCategoryId("")
-                          setPriceRange(null)
-                        }}
+                      <Select
+                        value={categoryId || "all"}
+                        onValueChange={(value) =>
+                          setCategoryId(value === "all" ? "" : (value ?? ""))
+                        }
+                        items={[
+                          { value: "all", label: "Todas las categorías" },
+                          ...categories.map((category) => ({
+                            value: category.id,
+                            label: category.name,
+                          })),
+                        ]}
                       >
-                        Limpiar filtros
-                      </Button>
-                    ) : null}
+                        <SelectTrigger
+                          className="w-full"
+                          aria-label="Filtrar por categoría"
+                        >
+                          <SelectValue placeholder="Todas las categorías" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            Todas las categorías
+                          </SelectItem>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {activeFilterCount > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCategoryId("")
+                    setPriceRange(null)
+                  }}
+                  aria-label="Limpiar filtros"
+                >
+                  <XIcon />
+                  Limpiar
+                </Button>
+              ) : null}
             </div>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -1726,6 +1742,40 @@ export function PosView({
                           <PlusIcon className="size-4" />
                         </Button>
                       </ButtonGroup>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Información disponible
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-pressed={showImages}
+                          className={jalapenoChipClass(showImages)}
+                          onClick={() => setShowImages((current) => !current)}
+                        >
+                          {showImages ? (
+                            <CheckIcon className="size-3.5" />
+                          ) : null}
+                          Imágenes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-pressed={showGroups}
+                          className={jalapenoChipClass(showGroups)}
+                          onClick={() => setShowGroups((current) => !current)}
+                        >
+                          {showGroups ? (
+                            <CheckIcon className="size-3.5" />
+                          ) : null}
+                          Grupos
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </PopoverContent>

@@ -22,6 +22,7 @@ export function ArticlePriceFilter({
   max,
   value,
   onChange,
+  bare = false,
 }: {
   /** Precio más bajo disponible (incluido). */
   min: number
@@ -29,6 +30,11 @@ export function ArticlePriceFilter({
   max: number
   value: PriceRange | null
   onChange: (value: PriceRange | null) => void
+  /**
+   * Modo básico para popovers: solo la etiqueta y el slider, sin borde, fondo,
+   * icono ni botón de limpiar. `/catalog` mantiene el diseño completo.
+   */
+  bare?: boolean
 }) {
   const range = value ?? [min, max]
   const active = value !== null
@@ -44,30 +50,43 @@ export function ArticlePriceFilter({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-md border border-input px-2.5 py-2 shadow-xs dark:bg-input/30",
-        active && "border-primary/70 dark:border-primary/70"
+        "flex flex-col gap-2",
+        !bare &&
+          "rounded-md border border-input px-2.5 py-2 shadow-xs dark:bg-input/30",
+        !bare && active && "border-primary/70 dark:border-primary/70"
       )}
     >
       <div className="flex h-6 items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
-          <CircleDollarSignIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span
+          className={cn(
+            "flex min-w-0 items-center gap-1.5",
+            bare
+              ? "text-xs font-medium text-muted-foreground"
+              : "text-sm font-medium"
+          )}
+        >
+          {bare ? null : (
+            <CircleDollarSignIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
           Precio
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={!active}
-          aria-hidden={!active}
-          tabIndex={active ? undefined : -1}
-          className={cn(
-            "h-6 px-1.5 text-xs text-muted-foreground",
-            !active && "invisible"
-          )}
-          onClick={() => onChange(null)}
-        >
-          Limpiar
-        </Button>
+        {bare ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={!active}
+            aria-hidden={!active}
+            tabIndex={active ? undefined : -1}
+            className={cn(
+              "h-6 px-1.5 text-xs text-muted-foreground",
+              !active && "invisible"
+            )}
+            onClick={() => onChange(null)}
+          >
+            Limpiar
+          </Button>
+        )}
       </div>
 
       <Slider
