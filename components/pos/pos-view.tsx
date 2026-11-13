@@ -2068,7 +2068,6 @@ export function PosView({
             orders={deckOrders}
             activeId={orderId}
             onSelect={selectOrder}
-            branch={!branch}
           >
             <Card className="flex flex-col gap-3 border p-4 ring-0">
           <CardHeader className="flex flex-row items-center justify-between gap-2 p-0">

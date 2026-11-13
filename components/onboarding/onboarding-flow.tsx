@@ -227,7 +227,7 @@ export function OnboardingFlow({
       ref={questionnaireRef}
       defaultItem="businessType"
       items={ONBOARDING_ITEMS}
-      className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/25 p-4 md:p-8"
+      className="relative h-svh overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-secondary/25"
     >
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,var(--primary),transparent_45%)] opacity-10" />
 
@@ -242,7 +242,8 @@ export function OnboardingFlow({
         Naranja Pimienta
       </Link>
 
-      <div className="w-full max-w-3xl">
+      <div className="flex min-h-full items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-3xl">
         <QuestionnaireProgress
           render={(props, state) => (
             <div {...props} className="w-full">
@@ -590,6 +591,7 @@ export function OnboardingFlow({
             </QuestionnaireActions>
           </div>
         </QuestionnaireItem>
+        </div>
       </div>
     </Questionnaire>
   )

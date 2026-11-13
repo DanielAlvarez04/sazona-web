@@ -98,7 +98,7 @@ export function PairDeviceForm({ code }: { code: string }) {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4">
+    <main className="flex h-dvh items-center justify-center overflow-y-auto bg-muted/30 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <MonitorSmartphoneIcon className="size-6 text-muted-foreground" />

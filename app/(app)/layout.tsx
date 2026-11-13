@@ -62,9 +62,11 @@ export default async function AppLayout({
             role: user.roles[0],
           }}
         />
-        <SidebarInset className="ml-0!">
+        <SidebarInset className="ml-0! h-svh overflow-hidden">
           <SiteHeader branchName={activeBranch?.name ?? null} />
-          <div className="flex flex-1 flex-col">{children}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {children}
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </OfflineProvider>

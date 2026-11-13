@@ -130,6 +130,8 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    /* El scroll vive en el contenedor de cada layout, no en la página. */
+    overflow: hidden;
     @apply bg-background text-foreground;
   }
   html {

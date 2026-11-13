@@ -139,7 +139,7 @@ export function CustomerDisplay({
 
   if (!token || error) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-6 text-center">
+      <main className="flex h-dvh items-center justify-center bg-muted/30 p-6 text-center">
         <div className="flex max-w-sm flex-col items-center gap-2">
           <UtensilsCrossedIcon className="size-8 text-muted-foreground" />
           <p className="text-lg font-medium">Pantalla no disponible</p>
@@ -153,7 +153,7 @@ export function CustomerDisplay({
 
   if (!data) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-6">
+      <main className="flex h-dvh items-center justify-center bg-muted/30 p-6">
         <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
       </main>
     )
@@ -167,7 +167,7 @@ export function CustomerDisplay({
   const confirmed = Boolean(state?.confirmedAt)
 
   return (
-    <main className="flex min-h-dvh flex-col bg-background">
+    <main className="flex h-dvh flex-col overflow-hidden bg-background">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b px-6 py-4">
         <div>
           <p className="text-lg font-semibold">{data.organizationName}</p>

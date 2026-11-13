@@ -1,20 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { formatMoney } from "@/lib/catalog"
-import { elapsedMinutes, orderLabel, type Order } from "@/lib/orders"
+import type { Order } from "@/lib/orders"
 import { cn } from "@/lib/utils"
 
 /** Minutos que debe arrastrarse para cambiar de comanda. */
 const SWIPE_THRESHOLD_PX = 64
 /** Distancia mínima para considerar que el gesto es horizontal. */
 const SWIPE_START_PX = 8
-
-/** Tarjetas que se ven detrás de la activa (máximo 3 en total). */
-const BACK_CARDS = 2
+/** Solo debajo de este ancho (el mismo corte que usa la rejilla del POS). */
+const MOBILE_QUERY = "(max-width: 1023px)"
 
 /**
  * Devuelve el id de la comanda vecina o `null` si no hay movimiento.
@@ -41,61 +37,50 @@ export function adjacentOrderId(
   return orders[index - 1].id
 }
 
-/** Resumen compacto de una tarjeta que asoma detrás de la activa. */
-function peekSummary(order: Order): string {
-  const lines = order.rounds.reduce(
-    (sum, round) =>
-      sum + ("_count" in round ? round._count.items : round.items.length),
-    0
-  )
-  const minutes = elapsedMinutes(order.createdAt)
+/** `true` si el viewport usa la disposición móvil del POS. */
+function useMobileSwipe(): boolean {
+  const [mobile, setMobile] = React.useState(false)
 
-  return [
-    lines > 0
-      ? `${lines} línea${lines === 1 ? "" : "s"}`
-      : "sin artículos",
-    order.partySize > 1 ? `${order.partySize} comensales` : null,
-    minutes > 0 ? `${minutes} min` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ")
+  React.useEffect(() => {
+    const query = window.matchMedia(MOBILE_QUERY)
+    const update = () => setMobile(query.matches)
+
+    update()
+    query.addEventListener("change", update)
+
+    return () => query.removeEventListener("change", update)
+  }, [])
+
+  return mobile
 }
 
 /**
- * Pila de comandas activas.
+ * Deslizamiento horizontal entre comandas activas.
  *
- * La tarjeta frontal es la comanda editable; detrás asoman hasta dos cuentas
- * más con su mesa, total y antigüedad. Se cambia tocando una tarjeta, con las
- * flechas del encabezado o deslizando la tarjeta frontal.
+ * La pila ya no se dibuja: en escritorio se cambia de cuenta con el selector
+ * del encabezado y los atajos. En móvil se conserva el gesto de tarjeta para
+ * pasar a la comanda anterior o siguiente.
  *
- * El gesto usa Pointer Events, así que funciona con dedo, mouse y lápiz. Se
- * ignora si empieza en un control (botón, campo, selector) y convive con el
- * scroll vertical de la página.
+ * Usa Pointer Events (dedo, mouse o lápiz), ignora los gestos que empiezan en
+ * un control y convive con el scroll vertical de la página.
  */
 export function OrderDeck({
   orders,
   activeId,
   onSelect,
   children,
-  branch,
 }: {
   /** Cuentas abiertas ordenadas de la más antigua a la más reciente. */
   orders: Order[]
   /** `""` = comanda nueva. */
   activeId: string
   onSelect: (id: string) => void
-  /** Comanda editable (la tarjeta frontal). */
+  /** Comanda editable. */
   children: React.ReactNode
-  /** `true` en la vista consolidada: muestra la sucursal en las tarjetas. */
-  branch?: boolean
 }) {
-  const index = orders.findIndex((order) => order.id === activeId)
+  const mobile = useMobileSwipe()
   const nextId = adjacentOrderId(orders, activeId, 1)
   const previousId = adjacentOrderId(orders, activeId, -1)
-  const backOrders =
-    index === -1
-      ? orders.slice(0, BACK_CARDS)
-      : orders.slice(index + 1, index + 1 + BACK_CARDS)
 
   const surfaceRef = React.useRef<HTMLDivElement | null>(null)
   const startRef = React.useRef<{
@@ -155,6 +140,7 @@ export function OrderDeck({
   }
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!mobile) return
     if (event.pointerType === "mouse" && event.button !== 0) return
     if (isInteractive(event.target)) return
     if (leaving) return
@@ -225,11 +211,6 @@ export function OrderDeck({
     setOffset(0)
   }
 
-  const counter =
-    index === -1
-      ? `Nueva comanda · ${orders.length} abierta${orders.length === 1 ? "" : "s"}`
-      : `Comanda ${index + 1} de ${orders.length}`
-
   const style: React.CSSProperties = dragging
     ? {
         transform: `translateX(${offset}px) rotate(${offset / 80}deg)`,
@@ -240,85 +221,22 @@ export function OrderDeck({
       ? {
           transform: `translateX(${leaving * 60}%) rotate(${leaving * 8}deg)`,
           opacity: 0,
-          transition:
-            "transform 160ms ease, opacity 160ms ease",
+          transition: "transform 160ms ease, opacity 160ms ease",
           touchAction: "pan-y",
         }
       : { touchAction: "pan-y" }
 
   return (
-    <div className="relative">
-      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="tabular-nums" aria-live="polite">
-          {counter}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Comanda anterior"
-            disabled={previousId === null}
-            onClick={() => go(previousId, -1)}
-          >
-            <ChevronLeftIcon />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Comanda siguiente"
-            disabled={nextId === null}
-            onClick={() => go(nextId, 1)}
-          >
-            <ChevronRightIcon />
-          </Button>
-        </div>
-      </div>
-
-      <div
-        ref={surfaceRef}
-        role="group"
-        aria-roledescription="pila de comandas"
-        aria-label={counter}
-        style={style}
-        className={cn(
-          "relative z-20 rounded-xl",
-          dragging && "cursor-grabbing select-none"
-        )}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-      >
-        {children}
-      </div>
-
-      {backOrders.map((order, position) => (
-        <button
-          key={order.id}
-          type="button"
-          aria-label={`Abrir ${orderLabel(order)}, ${formatMoney(order.total)}`}
-          onClick={() => onSelect(order.id)}
-          className={cn(
-            "relative flex w-full items-center gap-2 border border-t-0 bg-card px-4 text-left text-xs text-muted-foreground shadow-sm transition-colors hover:bg-muted/60 hover:text-foreground",
-            position === 0
-              ? "z-10 mx-1 -mt-2 rounded-b-xl pt-3 pb-2"
-              : "z-0 mx-2 -mt-2 rounded-b-xl pt-2.5 pb-2"
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium text-foreground">
-              {orderLabel(order)}
-            </span>
-            {branch && order.branch ? ` · ${order.branch.name}` : ""}
-            <span className="ml-1.5">{peekSummary(order)}</span>
-          </span>
-          <span className="shrink-0 font-medium tabular-nums text-foreground">
-            {formatMoney(order.total)}
-          </span>
-        </button>
-      ))}
+    <div
+      ref={surfaceRef}
+      style={style}
+      className={cn("rounded-xl", dragging && "cursor-grabbing select-none")}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+    >
+      {children}
     </div>
   )
 }
