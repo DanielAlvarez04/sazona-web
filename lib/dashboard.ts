@@ -113,48 +113,65 @@ export interface KitchenReport {
 }
 
 /**
+ * Fricción del catálogo en el POS.
+ */
+export interface PosFrictionMetrics {
+  opened: number
+  added: number
+  cancelled: number
+  cancelRate: number | null
+  validationErrors: number
+  emptySearches: number
+  topEmptySearches: { query: string; count: number }[]
+}
+
+/**
+ * Métricas de una ventana de capturas. `capture` excluye la calibración y
+ * `captureAll` la incluye.
+ */
+export interface PosCaptureMetrics {
+  samples: number
+  sent: number
+  abandoned: number
+  switched: number
+  stale: number
+  activeMedianMs: number | null
+  activeP90Ms: number | null
+  wallMedianMs: number | null
+  wallP90Ms: number | null
+  browseMedianMs: number | null
+  setupMedianMs: number | null
+  assemblyMedianMs: number | null
+  totalMedianMs: number | null
+  averageItems: number | null
+  averageLines: number | null
+  averageInteractions: number | null
+  averageGuests: number | null
+  itemsPerMinute: number | null
+  searches: number
+  emptySearches: number
+  emptySearchRate: number | null
+  itemDialogs: number
+  validationErrors: number
+  byDay: {
+    date: string
+    samples: number
+    activeMedianMs: number | null
+  }[]
+  friction: PosFrictionMetrics
+}
+
+/**
  * Reporte de operación del POS: tiempos de captura, fricción del catálogo y
  * consumo por cliente/mesa (con y sin IVA).
  */
 export interface PosOperationsReport {
   from: string
   to: string
-  capture: {
-    samples: number
-    sent: number
-    abandoned: number
-    switched: number
-    activeMedianMs: number | null
-    activeP90Ms: number | null
-    wallMedianMs: number | null
-    wallP90Ms: number | null
-    browseMedianMs: number | null
-    assemblyMedianMs: number | null
-    averageItems: number | null
-    averageLines: number | null
-    averageInteractions: number | null
-    averageGuests: number | null
-    itemsPerMinute: number | null
-    searches: number
-    emptySearches: number
-    emptySearchRate: number | null
-    itemDialogs: number
-    validationErrors: number
-    byDay: {
-      date: string
-      samples: number
-      activeMedianMs: number | null
-    }[]
-  }
-  friction: {
-    opened: number
-    added: number
-    cancelled: number
-    cancelRate: number | null
-    validationErrors: number
-    emptySearches: number
-    topEmptySearches: { query: string; count: number }[]
-  }
+  /** Sin el periodo de calibración; es lo que se muestra por defecto. */
+  capture: PosCaptureMetrics
+  /** Todo el periodo, incluida la calibración. */
+  captureAll: PosCaptureMetrics
   guests: {
     orders: number
     ordersWithGuests: number
@@ -179,6 +196,14 @@ export interface PosOperationsReport {
     firstCaptureAt: string | null
     days: number
     autoAfterDays: number
+    autoAfterRounds: number
+    calibration: {
+      active: boolean
+      endsAt: string | null
+      endedBy: "days" | "rounds" | null
+      days: number
+      rounds: number
+    }
     autoEnabled: boolean
     samples: number
   }

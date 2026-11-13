@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
+import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
@@ -34,6 +35,10 @@ export default async function AppLayout({
 
   return (
     <OfflineProvider userId={user.id}>
+      <PracticeModeWatcher
+        active={user.organizationPracticeMode}
+        until={user.organizationPracticeUntil}
+      />
       <SidebarProvider
         defaultOpen={sidebarOpen}
         style={

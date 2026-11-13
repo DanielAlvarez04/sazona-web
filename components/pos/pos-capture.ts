@@ -5,23 +5,32 @@ import { trackEvent } from "@/lib/analytics"
 /**
  * Medición implícita de la captura de un pedido en el POS.
  *
- * No hay botones de «iniciar» ni «terminar»: la sesión empieza con la primera
- * interacción real sobre el catálogo (buscar, filtrar o abrir una card) y
- * termina cuando la ronda se envía a cocina, se cambia de cuenta o se descarta.
+ * La medición **no** arranca con cualquier interacción. Primero hay una fase
+ * de navegación (buscar, filtrar, abrir cards) que solo se usa como ventana
+ * candidata. La captura arranca cuando el usuario:
  *
- * Se guarda en `sessionStorage` para sobrevivir a una recarga de la pestaña.
- * El tiempo activo descarta pausas mayores a `IDLE_CAP_MS`, porque el POS puede
- * quedar abierto mientras el mesero atiende otra mesa.
+ * - agrega el primer artículo a la comanda, o
+ * - empieza a configurar la comanda: elige canal/mesa, ajusta comensales,
+ *   agrega o selecciona clientes, les cambia el nombre o el rango de edad.
+ *
+ * La navegación previa solo se reporta si fue continua (sin pausas mayores a
+ * 90 segundos y dentro de una ventana de 5 minutos). Así las pruebas y la
+ * exploración no se mezclan con pedidos reales.
+ *
+ * La sesión se guarda en `sessionStorage` y se descarta después de 2 horas.
  */
 
-const STORAGE_KEY = "pos-capture-session-v1"
+const STORAGE_KEY = "pos-capture-session-v2"
 const IDLE_CAP_MS = 90_000
-const MAX_SESSION_MS = 8 * 60 * 60 * 1000
+const BROWSE_MAX_MS = 5 * 60_000
+const PRODUCT_WINDOW_MS = 5 * 60_000
+const MAX_CAPTURE_MS = 2 * 60 * 60_000
 
 type CaptureOutcome = "sent" | "abandoned" | "switched"
+type CaptureStartReason = "item" | "comanda"
 
 interface CaptureState {
-  startedAt: number
+  captureStartedAt: number | null
   lastTouchAt: number
   activeMs: number
   interactions: number
@@ -35,6 +44,12 @@ interface CaptureState {
   itemDialogs: number
   validationErrors: number
   searchActive: boolean
+  startReason: CaptureStartReason | null
+  browseStartedAt: number | null
+  lastBrowseAt: number | null
+  browseActiveMs: number
+  itemOpenedAt: number | null
+  browseMs: number | null
 }
 
 let state: CaptureState | null = null
@@ -49,6 +64,31 @@ function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback
 }
 
+function freshState(): CaptureState {
+  return {
+    captureStartedAt: null,
+    lastTouchAt: now(),
+    activeMs: 0,
+    interactions: 0,
+    firstItemAt: null,
+    items: 0,
+    lines: 0,
+    guests: 0,
+    searches: 0,
+    emptySearches: 0,
+    filters: 0,
+    itemDialogs: 0,
+    validationErrors: 0,
+    searchActive: false,
+    startReason: null,
+    browseStartedAt: null,
+    lastBrowseAt: null,
+    browseActiveMs: 0,
+    itemOpenedAt: null,
+    browseMs: null,
+  }
+}
+
 function readStorage(): CaptureState | null {
   if (typeof window === "undefined") return null
 
@@ -59,19 +99,44 @@ function readStorage(): CaptureState | null {
 
     const parsed = JSON.parse(raw) as Partial<CaptureState>
 
+    if (!parsed || typeof parsed !== "object") return null
+
+    const stamp = now()
+    const captureStartedAt =
+      typeof parsed.captureStartedAt === "number"
+        ? parsed.captureStartedAt
+        : null
+    const browseStartedAt =
+      typeof parsed.browseStartedAt === "number" ? parsed.browseStartedAt : null
+
     if (
       !parsed ||
-      typeof parsed.startedAt !== "number" ||
-      typeof parsed.lastTouchAt !== "number"
+      (captureStartedAt === null && browseStartedAt === null)
     ) {
       return null
     }
 
-    if (now() - parsed.startedAt > MAX_SESSION_MS) return null
+    if (
+      captureStartedAt !== null &&
+      stamp - captureStartedAt > MAX_CAPTURE_MS
+    ) {
+      return null
+    }
+
+    if (
+      captureStartedAt === null &&
+      browseStartedAt !== null &&
+      stamp - browseStartedAt > BROWSE_MAX_MS
+    ) {
+      return null
+    }
 
     return {
-      startedAt: parsed.startedAt,
-      lastTouchAt: Math.min(parsed.lastTouchAt, now()),
+      captureStartedAt,
+      lastTouchAt: Math.min(
+        numberOr(parsed.lastTouchAt, stamp),
+        stamp
+      ),
       activeMs: numberOr(parsed.activeMs, 0),
       interactions: numberOr(parsed.interactions, 0),
       firstItemAt:
@@ -84,8 +149,21 @@ function readStorage(): CaptureState | null {
       filters: numberOr(parsed.filters, 0),
       itemDialogs: numberOr(parsed.itemDialogs, 0),
       validationErrors: numberOr(parsed.validationErrors, 0),
-      // Tras una recarga no se arrastra una búsqueda a medias.
       searchActive: false,
+      startReason:
+        parsed.startReason === "item" || parsed.startReason === "comanda"
+          ? parsed.startReason
+          : null,
+      browseStartedAt,
+      lastBrowseAt:
+        typeof parsed.lastBrowseAt === "number"
+          ? Math.min(parsed.lastBrowseAt, stamp)
+          : null,
+      browseActiveMs: numberOr(parsed.browseActiveMs, 0),
+      itemOpenedAt:
+        typeof parsed.itemOpenedAt === "number" ? parsed.itemOpenedAt : null,
+      browseMs:
+        typeof parsed.browseMs === "number" ? parsed.browseMs : null,
     }
   } catch {
     return null
@@ -97,6 +175,17 @@ function ensureLoaded(): void {
 
   loaded = true
   state = readStorage()
+}
+
+function ensureState(): CaptureState {
+  ensureLoaded()
+
+  if (!state) {
+    state = freshState()
+    persist()
+  }
+
+  return state
 }
 
 function persist(): void {
@@ -122,36 +211,8 @@ function clear(): void {
   }
 }
 
-function ensureStarted(): CaptureState {
-  ensureLoaded()
-
-  if (!state) {
-    const stamp = now()
-
-    state = {
-      startedAt: stamp,
-      lastTouchAt: stamp,
-      activeMs: 0,
-      interactions: 0,
-      firstItemAt: null,
-      items: 0,
-      lines: 0,
-      guests: 0,
-      searches: 0,
-      emptySearches: 0,
-      filters: 0,
-      itemDialogs: 0,
-      validationErrors: 0,
-      searchActive: false,
-    }
-    persist()
-  }
-
-  return state
-}
-
 function touch(): CaptureState {
-  const current = ensureStarted()
+  const current = ensureState()
   const stamp = now()
   const gap = stamp - current.lastTouchAt
 
@@ -164,12 +225,9 @@ function touch(): CaptureState {
   return current
 }
 
-/**
- * Actualiza el tiempo activo sin contar una interacción nueva. Se usa al
- * teclear en el buscador para no inflar el conteo con cada letra.
- */
+/** Extiende el tiempo activo sin contar una interacción nueva. */
 function bump(): void {
-  const current = ensureStarted()
+  const current = ensureState()
   const stamp = now()
   const gap = stamp - current.lastTouchAt
 
@@ -179,18 +237,46 @@ function bump(): void {
   persist()
 }
 
+/** Actualiza la ventana candidata de navegación (sin iniciar la captura). */
+function noteBrowsing(): void {
+  const current = ensureState()
+
+  if (current.captureStartedAt !== null) return
+
+  const stamp = now()
+  const last = current.lastBrowseAt
+
+  if (
+    current.browseStartedAt === null ||
+    last === null ||
+    stamp - last > BROWSE_MAX_MS
+  ) {
+    current.browseStartedAt = stamp
+    current.browseActiveMs = 0
+  } else {
+    current.browseActiveMs = Math.min(
+      BROWSE_MAX_MS,
+      current.browseActiveMs + Math.min(stamp - last, IDLE_CAP_MS)
+    )
+  }
+
+  current.lastBrowseAt = stamp
+  persist()
+}
+
 /** Primera tecla de una búsqueda: cuenta una búsqueda por sesión. */
 export function noteSearch(query: string): void {
-  const current = ensureStarted()
+  const current = ensureState()
 
   if (!current.searchActive && query.trim()) {
     current.searches += 1
     current.searchActive = true
-    touch()
+    noteBrowsing()
     return
   }
 
-  bump()
+  if (current.captureStartedAt === null) noteBrowsing()
+  else bump()
 }
 
 /** El buscador quedó vacío: la próxima escritura cuenta como nueva búsqueda. */
@@ -215,9 +301,11 @@ export function noteEmptySearch(query: string): void {
 
   seenEmptySearches.add(key)
 
-  const current = ensureStarted()
+  const current = ensureState()
   current.emptySearches += 1
-  touch()
+
+  if (current.captureStartedAt === null) noteBrowsing()
+  else touch()
 
   trackEvent({
     name: "pos.search_no_results",
@@ -228,16 +316,25 @@ export function noteEmptySearch(query: string): void {
 
 /** Cambio de menú, categoría o cualquier filtro del popover. */
 export function noteFilter(): void {
-  const current = ensureStarted()
+  const current = ensureState()
   current.filters += 1
-  touch()
+
+  if (current.captureStartedAt === null) noteBrowsing()
+  else touch()
 }
 
-/** Se abrió el diálogo de configuración de un platillo. */
+/**
+ * Se abrió una card para configurar el artículo. No inicia la captura: el
+ * tiempo del diálogo se suma a la ventana de navegación y solo se reporta si
+ * luego se agrega el artículo.
+ */
 export function noteItemOpened(itemId: string): void {
-  const current = ensureStarted()
+  const current = ensureState()
   current.itemDialogs += 1
-  touch()
+  current.itemOpenedAt = now()
+
+  if (current.captureStartedAt === null) noteBrowsing()
+  else bump()
 
   trackEvent({
     name: "pos.item_opened",
@@ -247,9 +344,11 @@ export function noteItemOpened(itemId: string): void {
 
 /** Validación fallida dentro del diálogo (opción obligatoria, sin cantidad…). */
 export function noteValidationError(reason: string, group?: string): void {
-  const current = ensureStarted()
+  const current = ensureState()
   current.validationErrors += 1
-  touch()
+
+  if (current.captureStartedAt === null) noteBrowsing()
+  else touch()
 
   trackEvent({
     name: "pos.validation_error",
@@ -263,7 +362,10 @@ export function noteDialogCancelled(
   itemId: string,
   durationMs: number | null
 ): void {
-  touch()
+  const current = ensureState()
+
+  if (current.captureStartedAt === null) noteBrowsing()
+  else touch()
 
   trackEvent({
     name: "pos.item_dialog_cancelled",
@@ -272,20 +374,91 @@ export function noteDialogCancelled(
   })
 }
 
+function commitCapture(reason: CaptureStartReason): boolean {
+  const current = ensureState()
+
+  if (current.captureStartedAt !== null) {
+    touch()
+    return false
+  }
+
+  const stamp = now()
+  const lastBrowse = current.lastBrowseAt
+  const continuousBrowse =
+    lastBrowse !== null && stamp - lastBrowse <= IDLE_CAP_MS
+  let browse: number | null = null
+
+  if (
+    reason === "item" &&
+    current.itemOpenedAt !== null &&
+    stamp - current.itemOpenedAt <= PRODUCT_WINDOW_MS
+  ) {
+    // Incluye el tiempo dentro del diálogo del platillo, que no genera
+    // interacciones propias.
+    browse =
+      current.browseActiveMs + Math.max(0, stamp - current.itemOpenedAt)
+  } else if (continuousBrowse) {
+    browse =
+      current.browseActiveMs +
+      Math.max(0, stamp - (lastBrowse ?? stamp))
+  }
+
+  current.captureStartedAt = stamp
+  current.startReason = reason
+  current.lastTouchAt = stamp
+  current.activeMs = 0
+  current.browseMs =
+    browse === null ? null : Math.min(BROWSE_MAX_MS, browse)
+  current.browseStartedAt = null
+  current.lastBrowseAt = null
+  current.browseActiveMs = 0
+  current.itemOpenedAt = null
+
+  touch()
+
+  return true
+}
+
+/**
+ * Interacción explícita con la comanda: canal, mesa, comensales, alta/baja de
+ * cliente, selección de cliente o rango de edad.
+ */
+export function noteComandaInteraction(): void {
+  commitCapture("comanda")
+}
+
+/**
+ * Actividad de texto en la comanda (nombre del cliente). Inicia la captura en
+ * la primera tecla, pero no cuenta cada letra como interacción.
+ */
+export function noteComandaActivity(): void {
+  const current = ensureState()
+
+  if (current.captureStartedAt === null) commitCapture("comanda")
+  else bump()
+}
+
 /** Actualiza el estado de la comanda (artículos, líneas y clientes). */
 export function noteCart(items: number, lines: number, guests: number): void {
-  ensureLoaded()
+  const current = ensureState()
 
-  if (!state && items <= 0) return
+  const started =
+    items > 0 && current.captureStartedAt === null
+      ? commitCapture("item")
+      : false
 
-  const current = ensureStarted()
+  const next = ensureState()
 
-  if (current.firstItemAt === null && items > 0) current.firstItemAt = now()
+  if (next.captureStartedAt === null) return
 
-  current.items = Math.max(0, items)
-  current.lines = Math.max(0, lines)
-  current.guests = Math.max(0, guests)
-  touch()
+  if (items > 0 && next.firstItemAt === null) next.firstItemAt = now()
+
+  next.items = Math.max(0, items)
+  next.lines = Math.max(0, lines)
+  next.guests = Math.max(0, guests)
+
+  if (!started) touch()
+  else persist()
 }
 
 /** Descarta una sesión sin emitir evento (p. ej. solo se navegó el catálogo). */
@@ -309,21 +482,40 @@ export function finish(
 ): void {
   ensureLoaded()
 
-  if (!state) return
+  if (!state) {
+    clear()
+    return
+  }
+
+  const current = state
+  const captureStartedAt = current.captureStartedAt
+
+  if (captureStartedAt === null) {
+    clear()
+    return
+  }
 
   const stamp = now()
-  const gap = stamp - state.lastTouchAt
-  const wallMs = Math.max(0, stamp - state.startedAt)
+  const wallMs = Math.max(0, stamp - captureStartedAt)
+  const gap = stamp - current.lastTouchAt
   const activeMs = Math.max(
     0,
-    Math.min(state.activeMs + Math.max(0, Math.min(gap, IDLE_CAP_MS)), wallMs)
+    Math.min(
+      current.activeMs + Math.max(0, Math.min(gap, IDLE_CAP_MS)),
+      wallMs
+    )
   )
   const idleMs = Math.max(0, wallMs - activeMs)
-  const firstItemAt = state.firstItemAt
-  const browseMs =
-    firstItemAt === null ? null : Math.max(0, firstItemAt - state.startedAt)
+  const firstItemAt = current.firstItemAt
+  const setupMs =
+    firstItemAt === null
+      ? null
+      : Math.max(0, firstItemAt - captureStartedAt)
   const assemblyMs =
     firstItemAt === null ? null : Math.max(0, stamp - firstItemAt)
+  const browseMs = current.browseMs
+  const totalMs = browseMs === null ? null : browseMs + wallMs
+  const finalOutcome = wallMs > MAX_CAPTURE_MS ? "stale" : outcome
 
   trackEvent({
     name: "pos.order_capture_finished",
@@ -331,21 +523,24 @@ export function finish(
     quantity: extras.items,
     amount: extras.amount,
     metadata: {
-      outcome,
+      outcome: finalOutcome,
+      startReason: current.startReason,
       wallMs,
       activeMs,
       idleMs,
       browseMs,
+      setupMs,
       assemblyMs,
-      interactions: state.interactions,
+      totalMs,
+      interactions: current.interactions,
       items: extras.items,
       lines: extras.lines,
       guests: extras.guests,
-      searches: state.searches,
-      emptySearches: state.emptySearches,
-      filters: state.filters,
-      itemDialogs: state.itemDialogs,
-      validationErrors: state.validationErrors,
+      searches: current.searches,
+      emptySearches: current.emptySearches,
+      filters: current.filters,
+      itemDialogs: current.itemDialogs,
+      validationErrors: current.validationErrors,
       offline: Boolean(extras.offline),
       channel: extras.channel ?? null,
     },

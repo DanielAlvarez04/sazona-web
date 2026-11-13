@@ -1369,17 +1369,26 @@ export function PosView({
     return index >= 0 ? guestDisplayName(guests[index], index) : null
   }
 
-  const setGuestNameLocal = (guest: GuestDraft, name: string) =>
+  const setGuestNameLocal = (guest: GuestDraft, name: string) => {
+    posCapture.noteComandaActivity()
     setGuests((current) =>
       current.map((entry) =>
         entry.key === guest.key ? { ...entry, name } : entry
       )
     )
+  }
+
+  /** Selecciona el cliente activo y, si aplica, inicia la captura. */
+  const selectGuest = (guestKey: string | null) => {
+    posCapture.noteComandaInteraction()
+    setActiveGuestKey(guestKey)
+  }
 
   const updateGuest = async (
     guest: GuestDraft,
     changes: { name?: string; title?: GuestTitle | null }
   ) => {
+    posCapture.noteComandaInteraction()
     setGuests((current) =>
       current.map((entry) =>
         entry.key === guest.key ? { ...entry, ...changes } : entry
@@ -1430,6 +1439,8 @@ export function PosView({
     const target = Math.min(20, Math.max(1, next))
 
     if (target === partySize) return
+
+    posCapture.noteComandaInteraction()
 
     if (target > partySize) {
       const additions = target - partySize
@@ -1527,6 +1538,7 @@ export function PosView({
       return
     }
 
+    posCapture.noteComandaInteraction()
     setGuestRemoving(guest)
   }
 
@@ -1968,7 +1980,10 @@ export function PosView({
                         ? "Disponible próximamente"
                         : undefined
                     }
-                    onClick={() => setChannel(value)}
+                    onClick={() => {
+                      posCapture.noteComandaInteraction()
+                      setChannel(value)
+                    }}
                   >
                     {ORDER_CHANNEL_LABELS[value]}
                   </Button>
@@ -1982,7 +1997,10 @@ export function PosView({
                   <div className="flex flex-col gap-2">
                     <Select
                       value={activeOrder?.tableNumber ?? tableNumber}
-                      onValueChange={(value) => setTableNumber(value ?? "1")}
+                      onValueChange={(value) => {
+                        posCapture.noteComandaInteraction()
+                        setTableNumber(value ?? "1")
+                      }}
                       disabled={Boolean(activeOrder)}
                       items={TABLE_OPTIONS.map((value) => ({
                         value,
@@ -2020,11 +2038,12 @@ export function PosView({
                         inputMode="numeric"
                         className="h-8 w-12 min-w-12 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                         value={partySizeDraft}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          posCapture.noteComandaActivity()
                           setPartySizeDraft(
                             event.target.value.replace(/\D/g, "").slice(0, 2)
                           )
-                        }
+                        }}
                         onBlur={() =>
                           void changePartySize(Number(partySizeDraft) || 1)
                         }
@@ -2062,7 +2081,7 @@ export function PosView({
                         size="sm"
                         className={jalapenoChipClass(activeGuestKey === null)}
                         aria-pressed={activeGuestKey === null}
-                        onClick={() => setActiveGuestKey(null)}
+                        onClick={() => selectGuest(null)}
                       >
                         General
                       </Button>
@@ -2079,7 +2098,7 @@ export function PosView({
                             "max-w-40 rounded-r-none"
                           )}
                           aria-pressed={activeGuestKey === guest.key}
-                          onClick={() => setActiveGuestKey(guest.key)}
+                          onClick={() => selectGuest(guest.key)}
                         >
                           <span className="truncate">
                             {guestDisplayName(guest, index)}
@@ -2163,14 +2182,20 @@ export function PosView({
                   <Input
                     id="pos-customer"
                     value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
+                    onChange={(event) => {
+                      posCapture.noteComandaActivity()
+                      setCustomerName(event.target.value)
+                    }}
                     maxLength={120}
                     placeholder="Nombre"
                   />
                 </div>
                 <AgeRangePopover
                   value={customerTitle}
-                  onChange={setCustomerTitle}
+                  onChange={(title) => {
+                    posCapture.noteComandaInteraction()
+                    setCustomerTitle(title)
+                  }}
                 />
               </div>
             ) : null}
@@ -2497,7 +2522,7 @@ export function PosView({
           splitByGuest={isDineIn}
           cart={cart}
           cardTextSize={cardTextScale}
-          onSelectGuest={setActiveGuestKey}
+          onSelectGuest={selectGuest}
           onValidationError={(group) =>
             posCapture.noteValidationError("required_option", group)
           }

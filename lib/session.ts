@@ -24,6 +24,12 @@ export interface SessionUser {
   organizationUseCoreSuggestions: boolean
   /** La organización usa los grupos de opciones core sugeridos. */
   organizationUseCoreOptionGroups: boolean
+  /** Modo práctica: no se registra analítica de operación. */
+  organizationPracticeMode: boolean
+  /** `true` si el modo práctica está vigente (no expiró). */
+  organizationPracticeActive: boolean
+  /** Fin automático del modo práctica; `null` = manual o inactivo. */
+  organizationPracticeUntil: string | null
 }
 
 interface MeResponse {
@@ -45,6 +51,9 @@ interface MeResponse {
     taxRate?: string | null
     useCoreSuggestions?: boolean | null
     useCoreOptionGroups?: boolean | null
+    practiceMode?: boolean | null
+    practiceActive?: boolean | null
+    practiceUntil?: string | null
   } | null
 }
 
@@ -83,6 +92,9 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
         data.organization?.useCoreSuggestions ?? true,
       organizationUseCoreOptionGroups:
         data.organization?.useCoreOptionGroups ?? true,
+      organizationPracticeMode: data.organization?.practiceMode ?? false,
+      organizationPracticeActive: data.organization?.practiceActive ?? false,
+      organizationPracticeUntil: data.organization?.practiceUntil ?? null,
     }
   } catch {
     return null

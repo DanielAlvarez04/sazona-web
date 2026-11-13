@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { GalleryVerticalEndIcon, SparklesIcon } from "lucide-react"
+import { ClockIcon, GalleryVerticalEndIcon, SparklesIcon } from "lucide-react"
 
 import {
   finishOnboarding,
@@ -523,6 +523,18 @@ export function OnboardingFlow({
                 </span>
                 .
               </p>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 px-5 py-4 text-left text-sm">
+              <ClockIcon className="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-400" />
+              <div className="flex flex-col gap-1">
+                <p className="font-medium">Modo práctica activo por 48 horas</p>
+                <p className="text-muted-foreground">
+                  Durante las próximas 48 horas tus pruebas no contarán en los
+                  reportes de operación. Puedes desactivarlo antes en
+                  Configuración → Negocio.
+                </p>
+              </div>
             </div>
 
             <dl className="space-y-3 text-base">

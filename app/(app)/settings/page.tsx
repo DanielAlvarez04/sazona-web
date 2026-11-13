@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { OrganizationCard } from "@/components/settings/organization-card"
+import { PracticeModeCard } from "@/components/settings/practice-mode-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
 import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
@@ -167,6 +168,10 @@ export default async function SettingsPage({
   const mp = first(params.mp)
   const mpNotice = mercadoPagoNotice(mp)
   const admin = isAdmin(user)
+  const practiceExpired =
+    user.organizationPracticeMode &&
+    user.organizationPracticeUntil !== null &&
+    !user.organizationPracticeActive
 
   const branchesResponse = admin ? await apiFetch("/branches") : null
   const branches: Branch[] = branchesResponse?.ok
@@ -441,6 +446,12 @@ export default async function SettingsPage({
                 <OrganizationCard
                   name={user.organizationName ?? "Sin organización activa"}
                   domain={user.organizationDomain ?? null}
+                  canManage={admin}
+                />
+                <PracticeModeCard
+                  active={user.organizationPracticeActive}
+                  expired={practiceExpired}
+                  until={user.organizationPracticeUntil}
                   canManage={admin}
                 />
                 <div className="flex flex-col gap-1 text-sm">

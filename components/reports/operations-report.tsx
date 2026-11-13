@@ -90,9 +90,10 @@ function getServerVisibility(): boolean | null {
 /**
  * Reporte de operación del POS.
  *
- * La visibilidad automática se activa a los 14 días de datos; mientras tanto
- * el interruptor permite mostrarlo u ocultarlo manualmente. La preferencia se
- * guarda por navegador para no imponerla a otros usuarios de la sucursal.
+ * La visibilidad automática se activa cuando termina la calibración (14 días
+ * o 20 rondas enviadas, lo que ocurra primero); mientras tanto el interruptor
+ * permite mostrarlo u ocultarlo manualmente. La preferencia se guarda por
+ * navegador para no imponerla a otros usuarios de la sucursal.
  */
 export function OperationsReport({
   report,
@@ -112,13 +113,16 @@ export function OperationsReport({
 
   const autoEnabled = report.data.autoEnabled
   const visible = manual ?? autoEnabled
-  const remainingDays = Math.max(
-    0,
-    report.data.autoAfterDays - report.data.days
-  )
+  const calibration = report.data.calibration
+  const [includeCalibration, setIncludeCalibration] = React.useState<
+    boolean | null
+  >(null)
+  const showCalibration = includeCalibration ?? calibration.active
+  const capture = showCalibration ? report.captureAll : report.capture
+  const friction = capture.friction
   const toggle = writeVisibility
 
-  const chartData = report.capture.byDay.map((row) => ({
+  const chartData = capture.byDay.map((row) => ({
     date: formatDay(row.date),
     minutos:
       row.activeMedianMs === null
@@ -133,14 +137,16 @@ export function OperationsReport({
           <div className="flex flex-col gap-1">
             <CardTitle>Análisis de operación</CardTitle>
             <CardDescription>
-              {autoEnabled
-                ? `Activo automáticamente: ya hay ${report.data.autoAfterDays} días o más de datos.`
-                : report.data.days === 0
-                  ? `Se activará automáticamente cuando el POS acumule ${report.data.autoAfterDays} días de datos.`
-                  : `Se activará automáticamente en ${remainingDays} ${
-                      remainingDays === 1 ? "día" : "días"
-                    }.`}{" "}
-              Puedes mostrarlo u ocultarlo manualmente cuando quieras.
+              {calibration.active
+                ? `Calibración activa: día ${calibration.days} de ${report.data.autoAfterDays} y ${calibration.rounds} de ${report.data.autoAfterRounds} rondas. Termina con lo que ocurra primero.`
+                : report.data.firstCaptureAt
+                  ? `Calibración completada ${
+                      calibration.endedBy === "rounds"
+                        ? "al enviar 20 rondas"
+                        : "al cumplir 14 días"
+                    }.`
+                  : "Se activará cuando el POS acumule datos."}{" "}
+              Puedes mostrarlo u ocultarlo manualmente.
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -158,10 +164,26 @@ export function OperationsReport({
 
       {visible ? (
         <>
-          {report.capture.samples < 20 ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium">Incluir calibración</p>
+              <p className="text-xs text-muted-foreground">
+                {calibration.active
+                  ? "La calibración sigue activa; estos datos todavía no son definitivos."
+                  : "Incluye los primeros días o las primeras 20 rondas para comparar."}
+              </p>
+            </div>
+            <Switch
+              checked={showCalibration}
+              onCheckedChange={setIncludeCalibration}
+              aria-label="Incluir calibración en las métricas"
+            />
+          </div>
+
+          {capture.samples < 20 ? (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              Datos preliminares: hay {report.capture.samples} captura
-              {report.capture.samples === 1 ? "" : "s"} en el periodo. Las
+              Datos preliminares: hay {capture.samples} captura
+              {capture.samples === 1 ? "" : "s"} en el periodo. Las
               medianas serán más estables con más rondas.
             </p>
           ) : null}
@@ -169,47 +191,54 @@ export function OperationsReport({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="Rondas enviadas"
-              value={String(report.capture.sent)}
+              value={String(capture.sent)}
             />
             <Metric
               label="Tiempo activo mediano"
-              value={formatDuration(report.capture.activeMedianMs)}
+              value={formatDuration(capture.activeMedianMs)}
             />
             <Metric
               label="Tiempo activo p90"
-              value={formatDuration(report.capture.activeP90Ms)}
+              value={formatDuration(capture.activeP90Ms)}
             />
             <Metric
               label="Tiempo total mediano"
-              value={formatDuration(report.capture.wallMedianMs)}
+              value={formatDuration(capture.wallMedianMs)}
             />
             <Metric
-              label="Hasta el primer artículo"
-              value={formatDuration(report.capture.browseMedianMs)}
+              label="Búsqueda y configuración previa"
+              value={formatDuration(capture.browseMedianMs)}
+            />
+            <Metric
+              label="Preparación de comanda"
+              value={formatDuration(capture.setupMedianMs)}
             />
             <Metric
               label="Del primer artículo al envío"
-              value={formatDuration(report.capture.assemblyMedianMs)}
+              value={formatDuration(capture.assemblyMedianMs)}
+            />
+            <Metric
+              label="Total con búsqueda"
+              value={formatDuration(capture.totalMedianMs)}
             />
             <Metric
               label="Artículos por minuto"
-              value={formatNumber(report.capture.itemsPerMinute, 1)}
+              value={formatNumber(capture.itemsPerMinute, 1)}
             />
             <Metric
               label="Interacciones por ronda"
-              value={formatNumber(report.capture.averageInteractions, 1)}
+              value={formatNumber(capture.averageInteractions, 1)}
             />
             <Metric
               label="Borradores no enviados"
-              value={String(
-                report.capture.abandoned + report.capture.switched
-              )}
+              value={String(capture.abandoned + capture.switched)}
             />
           </div>
 
           <p className="text-xs text-muted-foreground">
-            «Activo» descuenta las pausas de más de 90 segundos; «total» es el
-            tiempo real desde la primera interacción hasta el envío.
+            «Activo» descuenta las pausas de más de 90 segundos. La captura
+            empieza con la primera interacción de comanda o con el primer
+            artículo; la búsqueda previa solo cuenta si fue continua.
           </p>
 
           <Card>
@@ -283,45 +312,45 @@ export function OperationsReport({
                     <TableRow>
                       <TableCell>Búsquedas realizadas</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.capture.searches}
+                        {capture.searches}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Búsquedas sin resultado</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.capture.emptySearches} ·{" "}
-                        {formatPercent(report.capture.emptySearchRate)}
+                        {capture.emptySearches} ·{" "}
+                        {formatPercent(capture.emptySearchRate)}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Cards de platillo abiertas</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.friction.opened}
+                        {friction.opened}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Líneas agregadas a la comanda</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.friction.added}
+                        {friction.added}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Rondas enviadas</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.capture.sent}
+                        {capture.sent}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Diálogos cancelados</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.friction.cancelled} ·{" "}
-                        {formatPercent(report.friction.cancelRate)}
+                        {friction.cancelled} ·{" "}
+                        {formatPercent(friction.cancelRate)}
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell>Errores de validación</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.friction.validationErrors}
+                        {friction.validationErrors}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -345,7 +374,7 @@ export function OperationsReport({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {report.friction.topEmptySearches.length === 0 ? (
+                    {friction.topEmptySearches.length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={2}
@@ -355,7 +384,7 @@ export function OperationsReport({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      report.friction.topEmptySearches.map((row) => (
+                      friction.topEmptySearches.map((row) => (
                         <TableRow key={row.query}>
                           <TableCell className="max-w-[260px] truncate">
                             {row.query}
@@ -379,7 +408,7 @@ export function OperationsReport({
                 Cuentas de mesa no canceladas. «Con IVA» incluye impuestos;
                 «sin IVA» es el subtotal. Por mesa divide entre los comensales
                 declarados; por cliente, entre los clientes con consumo
-                asignado.
+                asignado. Incluye todo el periodo, sin filtrar calibración.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">

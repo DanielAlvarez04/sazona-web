@@ -63,6 +63,18 @@ export async function setCoreOptionGroupsActive(
   )
 }
 
+/** Activa/desactiva el modo práctica (pausa la analítica de operación). */
+export async function setPracticeMode(
+  enabled: boolean
+): Promise<ActionResult> {
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { practiceMode: enabled },
+    ["/settings", "/dashboard"]
+  )
+}
+
 export interface OrganizationNameInput {
   name?: string
   domain?: string
