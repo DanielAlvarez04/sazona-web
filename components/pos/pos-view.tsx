@@ -318,7 +318,14 @@ function lineToInput(line: CartLine): RoundItemInput {
   }
 }
 
-function PosCatalogCard({
+/**
+ * Tarjeta del catálogo del POS.
+ *
+ * Está memoizada porque el POS re-renderiza toda la grilla con cada cambio del
+ * carrito o del buscador; sin esto se reconcilian cientos de tarjetas aunque
+ * solo cambie una.
+ */
+const PosCatalogCard = React.memo(function PosCatalogCard({
   product,
   selected,
   textSize,
@@ -327,7 +334,7 @@ function PosCatalogCard({
   product: ItemListItem
   selected: boolean
   textSize: ArticleCardTextSize
-  onOpen: () => void
+  onOpen: (product: ItemListItem) => void
 }) {
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
   useShake(shakeRef, selected)
@@ -339,7 +346,7 @@ function PosCatalogCard({
     <div ref={shakeRef} className={cn(selected && "np-menu-card-shake")}>
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => onOpen(product)}
         aria-label={`Abrir ${product.name}`}
         className="group block w-full rounded-xl text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
@@ -388,7 +395,7 @@ function PosCatalogCard({
       </button>
     </div>
   )
-}
+})
 
 export function PosView({
   products,
@@ -433,6 +440,9 @@ export function PosView({
   const offline = useOfflineSync()
 
   const [search, setSearch] = React.useState("")
+  // El filtrado se hace con el valor diferido: escribir en el buscador no
+  // bloquea el pintado de la grilla.
+  const deferredSearch = React.useDeferredValue(search)
   const [categoryId, setCategoryId] = React.useState("")
   const [menuId, setMenuId] = React.useState(
     () => menus.find((menu) => menu.isGlobal)?.id ?? menus[0]?.id ?? ""
@@ -762,7 +772,7 @@ export function PosView({
   }
 
   const filtered = React.useMemo(() => {
-    const needle = search.trim().toLowerCase()
+    const needle = deferredSearch.trim().toLowerCase()
     const activeMenu = menus.find((menu) => menu.id === menuId)
 
     return products.filter((product) => {
@@ -783,7 +793,7 @@ export function PosView({
         (product.sku ?? "").toLowerCase().includes(needle)
       )
     })
-  }, [products, search, categoryId, menuId, menus])
+  }, [products, deferredSearch, categoryId, menuId, menus])
 
   const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
@@ -797,6 +807,13 @@ export function PosView({
     [cart, activeGuestKey]
   )
 
+  // Identidad estable para que `PosCatalogCard` memoizada no se re-renderice
+  // con cada cambio del carrito.
+  const handleOpenProduct = React.useCallback((product: ItemListItem) => {
+    setPendingProductId(product.id)
+    setSelectedProduct(product)
+  }, [])
+
   const renderProductCard = (product: ItemListItem) => {
     const selected =
       selectedItemIds.has(product.id) || pendingProductId === product.id
@@ -807,10 +824,7 @@ export function PosView({
         product={product}
         selected={selected}
         textSize={cardTextScale}
-        onOpen={() => {
-          setPendingProductId(product.id)
-          setSelectedProduct(product)
-        }}
+        onOpen={handleOpenProduct}
       />
     )
   }

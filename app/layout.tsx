@@ -1,6 +1,6 @@
 import "./globals.css";
 
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -12,8 +12,6 @@ import { ThemeScript } from "@/components/theme-script";
 import type { Metadata, Viewport } from "next";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Naranja Pimienta",
@@ -46,8 +44,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={cn(
         "h-full",
         "antialiased",
-        geistSans.variable,
-        geistMono.variable,
         "font-sans",
         inter.variable
       )}

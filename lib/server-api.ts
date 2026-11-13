@@ -3,7 +3,6 @@ import { redirect } from "next/navigation"
 
 import { apiFetch } from "./api"
 import { apiErrorMessage } from "./http-error"
-import { requireUser } from "./session"
 
 /** Origen que la API exige en las peticiones mutantes autenticadas por cookie. */
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://localhost:3000"
@@ -37,8 +36,6 @@ function parseBody(text: string): unknown {
 export async function readApi<T = unknown>(
   path: string
 ): Promise<ActionResult<T>> {
-  await requireUser()
-
   try {
     const response = await apiFetch(path)
     const payload = parseBody(await response.text())
@@ -79,8 +76,6 @@ export async function mutateApi<T = unknown>(
   body?: unknown,
   paths: string[] = []
 ): Promise<ActionResult<T>> {
-  await requireUser()
-
   try {
     const response = await apiFetch(path, {
       method,

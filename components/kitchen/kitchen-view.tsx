@@ -192,6 +192,23 @@ export function KitchenView({
       return
     }
 
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    // Los eventos llegan en ráfaga (una ronda con 20 líneas son varios). Se
+    // agrupan en un solo refresco cada 2 s para no re-renderizar el árbol
+    // completo por cada mensaje.
+    const scheduleRefresh = () => {
+      if (timer) return
+
+      timer = setTimeout(() => {
+        timer = null
+
+        if (document.hidden) return
+
+        router.refresh()
+      }, 2_000)
+    }
+
     const source = new EventSource(`${API_BASE_URL}/kitchen/stream`, {
       withCredentials: true,
     })
@@ -200,16 +217,26 @@ export function KitchenView({
     source.onerror = () => setConnected(false)
     source.onmessage = () => {
       setLastEvent(new Date().toISOString())
-      router.refresh()
+      scheduleRefresh()
     }
 
-    return () => source.close()
+    return () => {
+      source.close()
+
+      if (timer) clearTimeout(timer)
+    }
   }, [router])
 
   React.useEffect(() => {
     if (connected) return
 
-    const timer = setInterval(() => router.refresh(), 15_000)
+    const timer = setInterval(() => {
+      // Con la pantalla apagada o en otra pestaña no hay nada que actualizar.
+      if (document.hidden) return
+
+      router.refresh()
+    }, 15_000)
+
     return () => clearInterval(timer)
   }, [connected, router])
 

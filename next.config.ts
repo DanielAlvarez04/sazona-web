@@ -34,6 +34,15 @@ const nextConfig: NextConfig = {
   // Genera `.next/standalone`: un servidor Node autocontenido que solo
   // necesita `public/` y `.next/static/`. Es lo que copia el Dockerfile.
   output: "standalone",
+  experimental: {
+    // Todo el panel es dinámico (datos por usuario), y por defecto el cliente
+    // no reutiliza nada: cada ida y vuelta espera al servidor. Con 15 s, volver
+    // a una pestaña recién vista es instantáneo y las mutaciones siguen
+    // invalidando con `revalidatePath`.
+    staleTimes: {
+      dynamic: 15,
+    },
+  },
   images: {
     remotePatterns: r2RemotePatterns(),
   },

@@ -38,7 +38,7 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     headers.set("x-branch-id", branchId)
   }
 
-  return fetch(`${API_BASE_URL}${path}`, {
+  return fetch(`${SERVER_API_URL}${path}`, {
     ...init,
     headers,
     cache: "no-store",

@@ -2,18 +2,35 @@
 
 import type { ReactNode, Ref } from "react"
 import type { DateRange } from "react-day-picker"
+import dynamic from "next/dynamic"
 
 import { InfoHint } from "@/components/info-hint"
-import { MenuDateRangePicker } from "@/components/menus/menu-date-range-picker"
 import { MenuTimePicker } from "@/components/menus/menu-time-picker"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { jalapenoChipClass } from "@/lib/chips"
 import { MENU_DAY_LABELS, MENU_WEEK_DAYS } from "@/lib/menus"
+
+/**
+ * El calendario (react-day-picker + date-fns) solo se necesita cuando se abre
+ * el selector de vigencia. Cargarlo aparte saca ~44 KB gzip de la entrada de
+ * `/menus`.
+ */
+const MenuDateRangePicker = dynamic(
+  () =>
+    import("@/components/menus/menu-date-range-picker").then(
+      (mod) => mod.MenuDateRangePicker
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-9 w-full" />,
+  }
+)
 
 export type MenuDetailsVariant = "full" | "header" | "body"
 

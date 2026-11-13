@@ -9,7 +9,7 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
-import { SalesChart } from "@/components/dashboard/sales-chart"
+import { SalesChartLazy } from "@/components/dashboard/sales-chart-lazy"
 import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -145,7 +145,7 @@ export function DashboardView({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {data.money ? (
-          <SalesChart data={data.salesSeries} />
+          <SalesChartLazy data={data.salesSeries} />
         ) : (
           <Card>
             <CardHeader>

@@ -20,7 +20,9 @@ const PUBLIC_PATHS = [
 ]
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/v1"
+  process.env.API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:3001/v1"
 
 const WEB_ORIGIN =
   process.env.WEB_ORIGIN ??
