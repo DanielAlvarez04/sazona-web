@@ -47,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
+import { cardColumnsCssVar } from "@/lib/card-columns"
 import { ACTIVE_FILTER_OUTLINE } from "@/lib/utils"
 
 import {
@@ -253,6 +254,14 @@ export function DataTable<TData extends RowData>({
   const setCardColumns = cardColumnsStorageKey
     ? setStoredCardColumns
     : setLocalCardColumns
+  // Con persistencia, el valor real vive en una variable CSS del documento que
+  // `CardColumnsScript` aplica antes del primer pintado. La vista de tarjetas
+  // solo la referencia; así la hidratación no vuelve al tamaño por defecto.
+  const cardColumnsStyle = {
+    "--np-card-columns": cardColumnsStorageKey
+      ? `var(${cardColumnsCssVar(cardColumnsStorageKey)}, ${defaultCardColumns})`
+      : localCardColumns,
+  } as React.CSSProperties
   // La selección puede ser controlada por el consumidor o interna.
   const [internalRowSelection, setInternalRowSelection] =
     React.useState<RowSelectionState>({})
@@ -564,11 +573,7 @@ export function DataTable<TData extends RowData>({
   const content =
     viewMode === "cards" && cardsView ? (
       rows.length > 0 ? (
-        <div
-          style={
-            { "--np-card-columns": cardColumns } as React.CSSProperties
-          }
-        >
+        <div style={cardColumnsStyle}>
           {cardsView(rows.map((row) => row.original))}
         </div>
       ) : (

@@ -34,6 +34,17 @@ function readNumber(storageKey: string, fallback: number): number {
   return fallback
 }
 
+/** Lee y acota un valor persistido sin suscribirse a sus cambios. */
+export function readPersistentNumber(
+  storageKey: string,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const value = readNumber(storageKey, fallback)
+  return Math.min(max, Math.max(min, value))
+}
+
 /**
  * Valor numérico persistido en `localStorage` y acotado a un rango.
  *

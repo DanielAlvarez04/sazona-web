@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { KeyboardShortcutsProvider } from "@/components/keyboard/keyboard-shortcuts-provider";
 import { ThemeShortcut } from "@/components/keyboard/theme-shortcut";
+import { CardColumnsScript } from "@/components/card-columns-script";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeScript } from "@/components/theme-script";
 
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <ThemeScript defaultTheme="system" />
+        <CardColumnsScript />
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider defaultTheme="system" disableTransitionOnChange>

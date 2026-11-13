@@ -1596,14 +1596,7 @@ export function PosView({
               No hay artículos que coincidan con el filtro.
             </div>
           ) : (
-            <div
-              className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(var(--np-pos-card-columns,4),minmax(0,1fr))]"
-              style={
-                {
-                  "--np-pos-card-columns": cardColumns,
-                } as React.CSSProperties
-              }
-            >
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(var(--np-pos-card-columns,4),minmax(0,1fr))]">
               {filtered.map(renderProductCard)}
             </div>
           )}
